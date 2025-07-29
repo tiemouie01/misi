@@ -18,7 +18,6 @@ import {
   TrendingDown,
   DollarSign,
   Target,
-  FileText,
   CreditCard,
   ArrowRight,
   Plus,
@@ -29,7 +28,7 @@ import {
   calculateTotals,
   calculateLoanTotals,
 } from "~/lib/financial-utils";
-import { Transaction, Category, Loan } from "~/lib/types";
+import type { Transaction, Category, Loan } from "~/lib/types";
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);

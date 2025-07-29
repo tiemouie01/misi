@@ -4,48 +4,72 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { FinancialLayout } from "~/components/financial-layout";
 import { OverviewCardsGrid } from "~/components/overview-cards";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { Calendar } from "~/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { Progress } from "~/components/ui/progress";
-import { 
-  CalendarIcon, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Target 
+import {
+  CalendarIcon,
+  Plus,
+  Edit,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Target,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
-import { 
-  initializeData, 
-  saveToLocalStorage, 
-  calculateMonthlyPayment, 
+import {
+  initializeData,
+  saveToLocalStorage,
+  calculateMonthlyPayment,
   calculateLoanTotals,
   getAvailableRevenueStreams,
-  validateLoan
+  validateLoan,
 } from "~/lib/financial-utils";
-import { Loan, LoanPayment, Transaction, Category } from "~/lib/types";
+import type { Loan, LoanPayment, Transaction, Category } from "~/lib/types";
 
 export default function LoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  
+
   // Dialog states
   const [isAddLoanOpen, setIsAddLoanOpen] = useState(false);
   const [isLoanPaymentOpen, setIsLoanPaymentOpen] = useState(false);
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
-  const [selectedLoanForPayment, setSelectedLoanForPayment] = useState<Loan | null>(null);
+  const [selectedLoanForPayment, setSelectedLoanForPayment] =
+    useState<Loan | null>(null);
 
   // Loan form states
   const [loanType, setLoanType] = useState<"borrowed" | "lent">("borrowed");
@@ -84,7 +108,7 @@ export default function LoansPage() {
   useEffect(() => {
     saveToLocalStorage("financial-transactions", transactions);
     // Trigger event for other components to update
-    window.dispatchEvent(new CustomEvent('financialDataUpdate'));
+    window.dispatchEvent(new CustomEvent("financialDataUpdate"));
   }, [transactions]);
 
   const resetLoanForm = () => {
@@ -100,7 +124,17 @@ export default function LoansPage() {
   };
 
   const handleAddLoan = () => {
-    if (!validateLoan(loanType, loanName, principalAmount, interestRate, termMonths, loanRevenueStream)) return;
+    if (
+      !validateLoan(
+        loanType,
+        loanName,
+        principalAmount,
+        interestRate,
+        termMonths,
+        loanRevenueStream,
+      )
+    )
+      return;
 
     const principal = Number.parseFloat(principalAmount);
     const rate = Number.parseFloat(interestRate);
@@ -121,7 +155,8 @@ export default function LoansPage() {
       monthlyPayment,
       startDate,
       nextPaymentDate,
-      revenueStreamAllocation: loanType === "borrowed" ? loanRevenueStream : undefined,
+      revenueStreamAllocation:
+        loanType === "borrowed" ? loanRevenueStream : undefined,
       category: loanCategory,
       description: loanDescription,
     };
@@ -211,8 +246,12 @@ export default function LoansPage() {
     setIsLoanPaymentOpen(false);
   };
 
-  const availableRevenueStreams = getAvailableRevenueStreams(transactions, categories);
-  const { totalBorrowed, totalLent, monthlyPayments } = calculateLoanTotals(loans);
+  const availableRevenueStreams = getAvailableRevenueStreams(
+    transactions,
+    categories,
+  );
+  const { totalBorrowed, totalLent, monthlyPayments } =
+    calculateLoanTotals(loans);
 
   const overviewCards = [
     {
@@ -221,7 +260,7 @@ export default function LoansPage() {
       description: "Outstanding debts",
       icon: TrendingDown,
       iconColor: "bg-rose-400/20",
-      valueColor: "text-rose-400"
+      valueColor: "text-rose-400",
     },
     {
       title: "Total Lent",
@@ -229,7 +268,7 @@ export default function LoansPage() {
       description: "Money lent out",
       icon: TrendingUp,
       iconColor: "bg-emerald-400/20",
-      valueColor: "text-emerald-400"
+      valueColor: "text-emerald-400",
     },
     {
       title: "Monthly Payments",
@@ -237,7 +276,7 @@ export default function LoansPage() {
       description: "Monthly repayment flow",
       icon: DollarSign,
       iconColor: "bg-cyan-400/20",
-      valueColor: "text-cyan-400"
+      valueColor: "text-cyan-400",
     },
     {
       title: "Active Loans",
@@ -245,8 +284,8 @@ export default function LoansPage() {
       description: "Loans in the system",
       icon: Target,
       iconColor: "bg-indigo-400/20",
-      valueColor: "text-indigo-400"
-    }
+      valueColor: "text-indigo-400",
+    },
   ];
 
   return (
@@ -256,9 +295,9 @@ export default function LoansPage() {
     >
       <OverviewCardsGrid cards={overviewCards} />
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h3 className="gradient-text text-2xl font-semibold mb-2">
+          <h3 className="gradient-text mb-2 text-2xl font-semibold">
             Loan Portfolio
           </h3>
           <p className="text-muted-foreground">
@@ -415,10 +454,7 @@ export default function LoansPage() {
 
               <div>
                 <Label htmlFor="loanCategory">Category</Label>
-                <Select
-                  value={loanCategory}
-                  onValueChange={setLoanCategory}
-                >
+                <Select value={loanCategory} onValueChange={setLoanCategory}>
                   <SelectTrigger className="glass">
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
@@ -469,7 +505,9 @@ export default function LoansPage() {
           </CardHeader>
           <CardContent>
             {loans.filter((l) => l.type === "borrowed").length === 0 ? (
-              <p className="text-muted-foreground">No borrowed loans recorded.</p>
+              <p className="text-muted-foreground">
+                No borrowed loans recorded.
+              </p>
             ) : (
               <div className="space-y-4">
                 {loans
@@ -772,4 +810,4 @@ export default function LoansPage() {
       </Dialog>
     </FinancialLayout>
   );
-} 
+}

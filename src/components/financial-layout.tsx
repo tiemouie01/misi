@@ -1,18 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { ThemeToggle } from "~/components/theme-toggle";
+import { Waves } from "lucide-react";
+import { SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
+import { Separator } from "~/components/ui/separator";
 import {
-  Droplets,
-  Waves,
-  Home,
-  CreditCard,
-  Target,
-  FileText,
-} from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { usePathname } from "next/navigation";
-import { cn } from "~/lib/utils";
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb";
 
 interface FinancialLayoutProps {
   children: React.ReactNode;
@@ -25,17 +23,21 @@ export function FinancialLayout({
   title,
   description,
 }: FinancialLayoutProps) {
-  const pathname = usePathname();
+  // Create breadcrumbs based on title
+  const getBreadcrumbs = () => {
+    const breadcrumbs = [{ label: "Dashboard", href: "/" }];
 
-  const navigationItems = [
-    { href: "/", label: "Dashboard", icon: Home },
-    { href: "/revenue-streams", label: "Revenue Streams", icon: Target },
-    { href: "/transactions", label: "Transactions", icon: FileText },
-    { href: "/loans", label: "Loans", icon: CreditCard },
-  ];
+    if (title !== "Financial Dashboard") {
+      breadcrumbs.push({ label: title, href: "#" });
+    }
+
+    return breadcrumbs;
+  };
+
+  const breadcrumbs = getBreadcrumbs();
 
   return (
-    <div className="bg-background min-h-screen">
+    <SidebarInset>
       {/* Floating water droplets background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="float absolute top-20 left-10 h-4 w-4 rounded-full bg-cyan-400/20"></div>
@@ -53,68 +55,56 @@ export function FinancialLayout({
         ></div>
       </div>
 
-      <div className="relative z-10 container mx-auto max-w-7xl p-6">
-        {/* Header with frosted glass effect */}
-        <div className="frosted mb-8 rounded-2xl p-8">
-          <div className="mb-6 flex items-start justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 p-3 shadow-lg">
-                <Droplets className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="gradient-text mb-2 text-4xl font-bold">Misi</h1>
-                <p className="text-foreground/80 text-lg font-medium">
-                  Liquid Financial Flow
-                </p>
-              </div>
-            </div>
-            <ThemeToggle />
-          </div>
+      {/* Header with sidebar trigger and breadcrumbs */}
+      <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+        <div className="flex items-center gap-2 px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              {breadcrumbs.map((breadcrumb, index) => (
+                <div key={breadcrumb.label} className="flex items-center gap-2">
+                  <BreadcrumbItem className="hidden md:block">
+                    {index === breadcrumbs.length - 1 ? (
+                      <BreadcrumbPage>{breadcrumb.label}</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink href={breadcrumb.href}>
+                        {breadcrumb.label}
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                  {index < breadcrumbs.length - 1 && (
+                    <BreadcrumbSeparator className="hidden md:block" />
+                  )}
+                </div>
+              ))}
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+      </header>
 
-          <div className="text-foreground/70 flex items-center space-x-2">
-            <Waves className="h-4 w-4" />
-            <span className="text-sm font-medium">
+      <div className="relative z-10 flex flex-1 flex-col gap-4 p-4 pt-0">
+        {/* Page Header */}
+        <div className="frosted rounded-2xl p-6">
+          <div className="mb-4 flex items-center space-x-2">
+            <Waves className="text-foreground/70 h-5 w-5" />
+            <span className="text-foreground/70 text-sm font-medium">
               Track your revenue streams with the fluidity of water
             </span>
           </div>
-        </div>
-
-        {/* Navigation */}
-        <div className="frosted mb-8 rounded-xl p-2">
-          <nav className="flex space-x-2">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-
-              return (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      "flex items-center space-x-2 transition-all duration-200",
-                      isActive
-                        ? "bg-primary/20 text-primary"
-                        : "hover:bg-muted/50",
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Button>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Page Header */}
-        <div className="mb-8">
-          <h2 className="gradient-text mb-2 text-3xl font-semibold">{title}</h2>
-          <p className="text-muted-foreground text-lg">{description}</p>
+          <div>
+            <h1 className="gradient-text mb-2 text-3xl font-semibold">
+              {title}
+            </h1>
+            <p className="text-muted-foreground text-lg">{description}</p>
+          </div>
         </div>
 
         {/* Page Content */}
-        {children}
+        <div className="min-h-[100vh] flex-1 rounded-xl md:min-h-min">
+          {children}
+        </div>
       </div>
-    </div>
+    </SidebarInset>
   );
 }

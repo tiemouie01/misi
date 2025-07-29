@@ -3,22 +3,27 @@
 import { useState, useEffect } from "react";
 import { FinancialLayout } from "~/components/financial-layout";
 import { OverviewCardsGrid } from "~/components/overview-cards";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
   Target,
-  Droplets 
+  Droplets,
 } from "lucide-react";
-import { 
-  initializeData, 
-  calculateRevenueStreams, 
+import {
+  initializeData,
+  calculateRevenueStreams,
   calculateTotals,
-  saveToLocalStorage 
 } from "~/lib/financial-utils";
-import { Transaction, Category, RevenueStream } from "~/lib/types";
+import type { Transaction, Category, RevenueStream } from "~/lib/types";
 
 export default function RevenueStreamsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -46,18 +51,19 @@ export default function RevenueStreamsPage() {
       setCategories(data.categories);
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    
+    window.addEventListener("storage", handleStorageChange);
+
     // Also listen for custom events from other tabs/components
-    window.addEventListener('financialDataUpdate', handleStorageChange);
+    window.addEventListener("financialDataUpdate", handleStorageChange);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('financialDataUpdate', handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("financialDataUpdate", handleStorageChange);
     };
   }, []);
 
-  const { totalIncome, totalExpenses, totalRemaining } = calculateTotals(revenueStreams);
+  const { totalIncome, totalExpenses, totalRemaining } =
+    calculateTotals(revenueStreams);
 
   const overviewCards = [
     {
@@ -66,7 +72,7 @@ export default function RevenueStreamsPage() {
       description: "Flowing income streams",
       icon: TrendingUp,
       iconColor: "bg-emerald-400/20",
-      valueColor: "text-emerald-400"
+      valueColor: "text-emerald-400",
     },
     {
       title: "Allocated Expenses",
@@ -74,7 +80,7 @@ export default function RevenueStreamsPage() {
       description: "Distributed costs",
       icon: TrendingDown,
       iconColor: "bg-rose-400/20",
-      valueColor: "text-rose-400"
+      valueColor: "text-rose-400",
     },
     {
       title: "Total Remaining",
@@ -82,7 +88,7 @@ export default function RevenueStreamsPage() {
       description: "Available liquidity",
       icon: DollarSign,
       iconColor: "bg-cyan-400/20",
-      valueColor: totalRemaining >= 0 ? "text-cyan-400" : "text-rose-400"
+      valueColor: totalRemaining >= 0 ? "text-cyan-400" : "text-rose-400",
     },
     {
       title: "Revenue Streams",
@@ -90,8 +96,8 @@ export default function RevenueStreamsPage() {
       description: "Active sources",
       icon: Target,
       iconColor: "bg-indigo-400/20",
-      valueColor: "text-indigo-400"
-    }
+      valueColor: "text-indigo-400",
+    },
   ];
 
   return (
@@ -140,9 +146,7 @@ export default function RevenueStreamsPage() {
                 >
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div
-                        className={`h-4 w-4 rounded-full ${stream.color}`}
-                      />
+                      <div className={`h-4 w-4 rounded-full ${stream.color}`} />
                       <h3 className="text-lg font-semibold">{stream.name}</h3>
                     </div>
                     <div className="text-right">
@@ -181,8 +185,7 @@ export default function RevenueStreamsPage() {
                       <div className="text-lg font-semibold text-cyan-400">
                         {stream.totalIncome > 0
                           ? (
-                              (stream.allocatedExpenses /
-                                stream.totalIncome) *
+                              (stream.allocatedExpenses / stream.totalIncome) *
                               100
                             ).toFixed(1)
                           : 0}
@@ -205,8 +208,7 @@ export default function RevenueStreamsPage() {
                       <Progress
                         value={
                           stream.totalIncome > 0
-                            ? (stream.allocatedExpenses /
-                                stream.totalIncome) *
+                            ? (stream.allocatedExpenses / stream.totalIncome) *
                               100
                             : 0
                         }
@@ -246,4 +248,4 @@ export default function RevenueStreamsPage() {
       </Card>
     </FinancialLayout>
   );
-} 
+}

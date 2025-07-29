@@ -3,43 +3,85 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { FinancialLayout } from "~/components/financial-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { Badge } from "~/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { Calendar } from "~/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import { CalendarIcon, Plus, Edit, Trash2, Zap, ArrowRight, Droplets } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import {
+  CalendarIcon,
+  Plus,
+  Edit,
+  Trash2,
+  Zap,
+  ArrowRight,
+  Droplets,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
-import { 
-  initializeData, 
-  saveToLocalStorage, 
-  getCategoryName, 
-  getCategoryColor, 
+import {
+  initializeData,
+  saveToLocalStorage,
+  getCategoryName,
+  getCategoryColor,
   getAvailableRevenueStreams,
-  validateTransaction
+  validateTransaction,
 } from "~/lib/financial-utils";
-import { Transaction, TransactionTemplate, Category } from "~/lib/types";
+import type { Transaction, TransactionTemplate, Category } from "~/lib/types";
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [templates, setTemplates] = useState<TransactionTemplate[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  
+
   // Dialog states
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [isAddTemplateOpen, setIsAddTemplateOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [editingTemplate, setEditingTemplate] = useState<TransactionTemplate | null>(null);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
+  const [editingTemplate, setEditingTemplate] =
+    useState<TransactionTemplate | null>(null);
 
   // Form states
-  const [transactionType, setTransactionType] = useState<"income" | "expense">("expense");
+  const [transactionType, setTransactionType] = useState<"income" | "expense">(
+    "expense",
+  );
   const [amount, setAmount] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedRevenueStream, setSelectedRevenueStream] = useState("");
@@ -58,7 +100,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     saveToLocalStorage("financial-transactions", transactions);
     // Trigger event for other components to update
-    window.dispatchEvent(new CustomEvent('financialDataUpdate'));
+    window.dispatchEvent(new CustomEvent("financialDataUpdate"));
   }, [transactions]);
 
   useEffect(() => {
@@ -76,7 +118,15 @@ export default function TransactionsPage() {
   };
 
   const handleAddTransaction = () => {
-    if (!validateTransaction(transactionType, amount, selectedCategory, selectedRevenueStream)) return;
+    if (
+      !validateTransaction(
+        transactionType,
+        amount,
+        selectedCategory,
+        selectedRevenueStream,
+      )
+    )
+      return;
 
     const newTransaction: Transaction = {
       id: editingTransaction?.id || Date.now().toString(),
@@ -85,7 +135,8 @@ export default function TransactionsPage() {
       category: selectedCategory,
       description,
       date,
-      revenueStream: transactionType === "expense" ? selectedRevenueStream : undefined,
+      revenueStream:
+        transactionType === "expense" ? selectedRevenueStream : undefined,
     };
 
     if (editingTransaction) {
@@ -110,7 +161,8 @@ export default function TransactionsPage() {
       amount: Number.parseFloat(amount),
       category: selectedCategory,
       description,
-      revenueStream: transactionType === "expense" ? selectedRevenueStream : undefined,
+      revenueStream:
+        transactionType === "expense" ? selectedRevenueStream : undefined,
     };
 
     if (editingTemplate) {
@@ -168,8 +220,13 @@ export default function TransactionsPage() {
     setTemplates((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const availableRevenueStreams = getAvailableRevenueStreams(transactions, categories);
-  const currentCategories = categories.filter((c) => c.type === transactionType);
+  const availableRevenueStreams = getAvailableRevenueStreams(
+    transactions,
+    categories,
+  );
+  const currentCategories = categories.filter(
+    (c) => c.type === transactionType,
+  );
 
   return (
     <FinancialLayout
@@ -206,9 +263,7 @@ export default function TransactionsPage() {
               <h3 className="gradient-text text-2xl font-semibold">
                 All Transactions
               </h3>
-              <p className="text-muted-foreground">
-                Track your financial flow
-              </p>
+              <p className="text-muted-foreground">Track your financial flow</p>
             </div>
             <Dialog
               open={isAddTransactionOpen}
@@ -229,7 +284,9 @@ export default function TransactionsPage() {
               <DialogContent className="glass-card border-0 sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingTransaction ? "Edit Transaction" : "Add New Transaction"}
+                    {editingTransaction
+                      ? "Edit Transaction"
+                      : "Add New Transaction"}
                   </DialogTitle>
                   <DialogDescription>
                     {editingTransaction
@@ -340,7 +397,11 @@ export default function TransactionsPage() {
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {date ? format(date, "PPP") : <span>Pick a date</span>}
+                          {date ? (
+                            format(date, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="glass-card w-auto p-0">
@@ -398,7 +459,8 @@ export default function TransactionsPage() {
                           <Droplets className="h-8 w-8" />
                         </div>
                         <p>
-                          No transactions yet. Add your first transaction to get started.
+                          No transactions yet. Add your first transaction to get
+                          started.
                         </p>
                       </TableCell>
                     </TableRow>
@@ -406,7 +468,8 @@ export default function TransactionsPage() {
                     transactions
                       .sort(
                         (a, b) =>
-                          new Date(b.date).getTime() - new Date(a.date).getTime(),
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime(),
                       )
                       .map((transaction) => (
                         <TableRow
@@ -419,7 +482,9 @@ export default function TransactionsPage() {
                           <TableCell>
                             <Badge
                               variant={
-                                transaction.type === "income" ? "default" : "destructive"
+                                transaction.type === "income"
+                                  ? "default"
+                                  : "destructive"
                               }
                               className="glass"
                             >
@@ -431,7 +496,12 @@ export default function TransactionsPage() {
                               <div
                                 className={`h-3 w-3 rounded-full ${getCategoryColor(transaction.category, categories)}`}
                               />
-                              <span>{getCategoryName(transaction.category, categories)}</span>
+                              <span>
+                                {getCategoryName(
+                                  transaction.category,
+                                  categories,
+                                )}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>{transaction.description}</TableCell>
@@ -439,7 +509,9 @@ export default function TransactionsPage() {
                             {transaction.revenueStream ? (
                               <div className="flex items-center space-x-1">
                                 <ArrowRight className="text-muted-foreground h-3 w-3" />
-                                <span className="text-sm">{transaction.revenueStream}</span>
+                                <span className="text-sm">
+                                  {transaction.revenueStream}
+                                </span>
                               </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
@@ -460,7 +532,9 @@ export default function TransactionsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleEditTransaction(transaction)}
+                                onClick={() =>
+                                  handleEditTransaction(transaction)
+                                }
                                 className="glass"
                               >
                                 <Edit className="h-4 w-4" />
@@ -468,7 +542,9 @@ export default function TransactionsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                onClick={() =>
+                                  handleDeleteTransaction(transaction.id)
+                                }
                                 className="glass"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -491,10 +567,14 @@ export default function TransactionsPage() {
                 Quick Add Templates
               </h3>
               <p className="text-muted-foreground">
-                Create templates for common transactions with pre-allocated revenue streams
+                Create templates for common transactions with pre-allocated
+                revenue streams
               </p>
             </div>
-            <Dialog open={isAddTemplateOpen} onOpenChange={setIsAddTemplateOpen}>
+            <Dialog
+              open={isAddTemplateOpen}
+              onOpenChange={setIsAddTemplateOpen}
+            >
               <DialogTrigger asChild>
                 <Button
                   onClick={() => {
@@ -570,7 +650,9 @@ export default function TransactionsPage() {
 
                   {transactionType === "expense" && (
                     <div>
-                      <Label htmlFor="revenueStream">Default Revenue Stream</Label>
+                      <Label htmlFor="revenueStream">
+                        Default Revenue Stream
+                      </Label>
                       <Select
                         value={selectedRevenueStream}
                         onValueChange={setSelectedRevenueStream}
@@ -608,7 +690,10 @@ export default function TransactionsPage() {
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleAddTemplate} className="glass-card border-0">
+                  <Button
+                    onClick={handleAddTemplate}
+                    className="glass-card border-0"
+                  >
                     {editingTemplate ? "Update" : "Add"} Template
                   </Button>
                 </div>
@@ -629,7 +714,9 @@ export default function TransactionsPage() {
                         className={`h-3 w-3 rounded-full ${getCategoryColor(template.category, categories)}`}
                       />
                       <Badge
-                        variant={template.type === "income" ? "default" : "destructive"}
+                        variant={
+                          template.type === "income" ? "default" : "destructive"
+                        }
                         className="text-xs"
                       >
                         {template.type}
@@ -657,7 +744,9 @@ export default function TransactionsPage() {
 
                   <div className="space-y-2">
                     <h3 className="font-semibold">{template.description}</h3>
-                    <p className="text-muted-foreground text-sm">{template.category}</p>
+                    <p className="text-muted-foreground text-sm">
+                      {template.category}
+                    </p>
                     {template.revenueStream && (
                       <div className="text-muted-foreground flex items-center space-x-1 text-sm">
                         <ArrowRight className="h-3 w-3" />
@@ -692,9 +781,12 @@ export default function TransactionsPage() {
                 <div className="bg-muted/30 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full p-4">
                   <Droplets className="h-8 w-8" />
                 </div>
-                <p className="text-muted-foreground mb-4">No templates created yet.</p>
+                <p className="text-muted-foreground mb-4">
+                  No templates created yet.
+                </p>
                 <p className="text-muted-foreground text-sm">
-                  Create templates for common transactions with pre-allocated revenue streams.
+                  Create templates for common transactions with pre-allocated
+                  revenue streams.
                 </p>
               </CardContent>
             </Card>
@@ -725,7 +817,9 @@ export default function TransactionsPage() {
                         key={category.id}
                         className="flex items-center space-x-3 rounded-lg p-2"
                       >
-                        <div className={`h-4 w-4 rounded-full ${category.color}`} />
+                        <div
+                          className={`h-4 w-4 rounded-full ${category.color}`}
+                        />
                         <span className="font-medium">{category.name}</span>
                       </div>
                     ))}
@@ -735,7 +829,9 @@ export default function TransactionsPage() {
 
             <Card className="glass">
               <CardHeader>
-                <CardTitle className="text-rose-400">Expense Categories</CardTitle>
+                <CardTitle className="text-rose-400">
+                  Expense Categories
+                </CardTitle>
                 <CardDescription>
                   Categories for expenses that get allocated to revenue streams
                 </CardDescription>
@@ -749,7 +845,9 @@ export default function TransactionsPage() {
                         key={category.id}
                         className="flex items-center space-x-3 rounded-lg p-2"
                       >
-                        <div className={`h-4 w-4 rounded-full ${category.color}`} />
+                        <div
+                          className={`h-4 w-4 rounded-full ${category.color}`}
+                        />
                         <span className="font-medium">{category.name}</span>
                       </div>
                     ))}
@@ -761,4 +859,4 @@ export default function TransactionsPage() {
       </Tabs>
     </FinancialLayout>
   );
-} 
+}
