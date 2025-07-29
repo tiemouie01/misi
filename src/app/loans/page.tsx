@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { FinancialLayout } from "~/components/financial-layout";
+import { PageHeader } from "~/components/page-header";
 import { OverviewCardsGrid } from "~/components/overview-cards";
 import {
   Card,
@@ -289,525 +289,540 @@ export default function LoansPage() {
   ];
 
   return (
-    <FinancialLayout
-      title="Loan Management"
-      description="Track borrowed and lent money with payment allocation to revenue streams"
-    >
-      <OverviewCardsGrid cards={overviewCards} />
+    <>
+      <PageHeader
+        title="Loan Management"
+        description="Track borrowed and lent money with payment allocation to revenue streams"
+      />
 
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h3 className="gradient-text mb-2 text-2xl font-semibold">
-            Loan Portfolio
-          </h3>
-          <p className="text-muted-foreground">
-            Manage your loans and track payments
-          </p>
-        </div>
-        <Dialog open={isAddLoanOpen} onOpenChange={setIsAddLoanOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => {
-                resetLoanForm();
-                setIsAddLoanOpen(true);
-              }}
-              className="glass-card border-0 transition-transform hover:scale-105"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Loan
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="glass-card border-0 sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingLoan ? "Edit Loan" : "Add New Loan"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingLoan
-                  ? "Update the loan details below."
-                  : "Enter the details for your new loan."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid max-h-[60vh] gap-4 overflow-y-auto py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="loanType">Loan Type</Label>
-                  <Select
-                    value={loanType}
-                    onValueChange={(value: "borrowed" | "lent") =>
-                      setLoanType(value)
-                    }
-                  >
-                    <SelectTrigger className="glass">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="glass-card">
-                      <SelectItem value="borrowed">Money I Borrowed</SelectItem>
-                      <SelectItem value="lent">Money I Lent</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="loanName">Loan Name</Label>
-                  <Input
-                    id="loanName"
-                    placeholder="e.g., Car Loan, Personal Loan"
-                    value={loanName}
-                    onChange={(e) => setLoanName(e.target.value)}
-                    className="glass"
-                  />
-                </div>
-              </div>
+      <div className="min-h-[100vh] flex-1 rounded-xl md:min-h-min">
+        <OverviewCardsGrid cards={overviewCards} />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="principalAmount">Principal Amount</Label>
-                  <Input
-                    id="principalAmount"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={principalAmount}
-                    onChange={(e) => setPrincipalAmount(e.target.value)}
-                    className="glass"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="interestRate">Interest Rate (%)</Label>
-                  <Input
-                    id="interestRate"
-                    type="number"
-                    step="0.01"
-                    placeholder="5.00"
-                    value={interestRate}
-                    onChange={(e) => setInterestRate(e.target.value)}
-                    className="glass"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="termMonths">Term (Months)</Label>
-                  <Input
-                    id="termMonths"
-                    type="number"
-                    placeholder="36"
-                    value={termMonths}
-                    onChange={(e) => setTermMonths(e.target.value)}
-                    className="glass"
-                  />
-                </div>
-                <div>
-                  <Label>Start Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "glass w-full justify-start text-left font-normal",
-                          !startDate && "text-muted-foreground",
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? (
-                          format(startDate, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="glass-card w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={(date) => date && setStartDate(date)}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              {loanType === "borrowed" && (
-                <div>
-                  <Label htmlFor="loanRevenueStream">
-                    Payment Source (Revenue Stream)
-                  </Label>
-                  <Select
-                    value={loanRevenueStream}
-                    onValueChange={setLoanRevenueStream}
-                  >
-                    <SelectTrigger className="glass">
-                      <SelectValue placeholder="Select revenue stream for payments" />
-                    </SelectTrigger>
-                    <SelectContent className="glass-card">
-                      {availableRevenueStreams.map((stream) => (
-                        <SelectItem key={stream.id} value={stream.name}>
-                          {stream.name}
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h3 className="gradient-text mb-2 text-2xl font-semibold">
+              Loan Portfolio
+            </h3>
+            <p className="text-muted-foreground">
+              Manage your loans and track payments
+            </p>
+          </div>
+          <Dialog open={isAddLoanOpen} onOpenChange={setIsAddLoanOpen}>
+            <DialogTrigger asChild>
+              <Button
+                onClick={() => {
+                  resetLoanForm();
+                  setIsAddLoanOpen(true);
+                }}
+                className="glass-card border-0 transition-transform hover:scale-105"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Loan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass-card border-0 sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingLoan ? "Edit Loan" : "Add New Loan"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingLoan
+                    ? "Update the loan details below."
+                    : "Enter the details for your new loan."}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid max-h-[60vh] gap-4 overflow-y-auto py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="loanType">Loan Type</Label>
+                    <Select
+                      value={loanType}
+                      onValueChange={(value: "borrowed" | "lent") =>
+                        setLoanType(value)
+                      }
+                    >
+                      <SelectTrigger className="glass">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass-card">
+                        <SelectItem value="borrowed">
+                          Money I Borrowed
                         </SelectItem>
-                      ))}
+                        <SelectItem value="lent">Money I Lent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="loanName">Loan Name</Label>
+                    <Input
+                      id="loanName"
+                      placeholder="e.g., Car Loan, Personal Loan"
+                      value={loanName}
+                      onChange={(e) => setLoanName(e.target.value)}
+                      className="glass"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="principalAmount">Principal Amount</Label>
+                    <Input
+                      id="principalAmount"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={principalAmount}
+                      onChange={(e) => setPrincipalAmount(e.target.value)}
+                      className="glass"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="interestRate">Interest Rate (%)</Label>
+                    <Input
+                      id="interestRate"
+                      type="number"
+                      step="0.01"
+                      placeholder="5.00"
+                      value={interestRate}
+                      onChange={(e) => setInterestRate(e.target.value)}
+                      className="glass"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="termMonths">Term (Months)</Label>
+                    <Input
+                      id="termMonths"
+                      type="number"
+                      placeholder="36"
+                      value={termMonths}
+                      onChange={(e) => setTermMonths(e.target.value)}
+                      className="glass"
+                    />
+                  </div>
+                  <div>
+                    <Label>Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "glass w-full justify-start text-left font-normal",
+                            !startDate && "text-muted-foreground",
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {startDate ? (
+                            format(startDate, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="glass-card w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={(date) => date && setStartDate(date)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {loanType === "borrowed" && (
+                  <div>
+                    <Label htmlFor="loanRevenueStream">
+                      Payment Source (Revenue Stream)
+                    </Label>
+                    <Select
+                      value={loanRevenueStream}
+                      onValueChange={setLoanRevenueStream}
+                    >
+                      <SelectTrigger className="glass">
+                        <SelectValue placeholder="Select revenue stream for payments" />
+                      </SelectTrigger>
+                      <SelectContent className="glass-card">
+                        {availableRevenueStreams.map((stream) => (
+                          <SelectItem key={stream.id} value={stream.name}>
+                            {stream.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div>
+                  <Label htmlFor="loanCategory">Category</Label>
+                  <Select value={loanCategory} onValueChange={setLoanCategory}>
+                    <SelectTrigger className="glass">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-card">
+                      <SelectItem value="Auto Loan">Auto Loan</SelectItem>
+                      <SelectItem value="Personal Loan">
+                        Personal Loan
+                      </SelectItem>
+                      <SelectItem value="Student Loan">Student Loan</SelectItem>
+                      <SelectItem value="Mortgage">Mortgage</SelectItem>
+                      <SelectItem value="Business Loan">
+                        Business Loan
+                      </SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="loanDescription">Description</Label>
+                  <Textarea
+                    id="loanDescription"
+                    placeholder="Additional details about the loan..."
+                    value={loanDescription}
+                    onChange={(e) => setLoanDescription(e.target.value)}
+                    className="glass"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsAddLoanOpen(false)}
+                  className="glass"
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleAddLoan} className="glass-card border-0">
+                  {editingLoan ? "Update" : "Add"} Loan
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Loans List */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="glass-card border-0">
+            <CardHeader>
+              <CardTitle className="text-rose-400">Money I Borrowed</CardTitle>
+              <CardDescription>Loans you need to pay back</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loans.filter((l) => l.type === "borrowed").length === 0 ? (
+                <p className="text-muted-foreground">
+                  No borrowed loans recorded.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {loans
+                    .filter((l) => l.type === "borrowed")
+                    .map((loan) => (
+                      <div
+                        key={loan.id}
+                        className="glass rounded-xl border border-rose-400/20 p-4"
+                      >
+                        <div className="mb-3 flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold">{loan.name}</h3>
+                            <p className="text-muted-foreground text-sm">
+                              {loan.category}
+                            </p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedLoanForPayment(loan);
+                                setIsLoanPaymentOpen(true);
+                              }}
+                              className="glass"
+                            >
+                              Pay
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditLoan(loan)}
+                              className="glass"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteLoan(loan.id)}
+                              className="glass"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">
+                              Current Balance:
+                            </span>
+                            <div className="font-semibold text-rose-400">
+                              ${loan.currentBalance.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Monthly Payment:
+                            </span>
+                            <div className="font-semibold">
+                              ${loan.monthlyPayment.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Interest Rate:
+                            </span>
+                            <div className="font-semibold">
+                              {loan.interestRate}%
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Payment Source:
+                            </span>
+                            <div className="text-sm font-semibold">
+                              {loan.revenueStreamAllocation || "Not set"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3">
+                          <div className="mb-1 flex justify-between text-sm">
+                            <span>Progress</span>
+                            <span>
+                              {(
+                                ((loan.principalAmount - loan.currentBalance) /
+                                  loan.principalAmount) *
+                                100
+                              ).toFixed(1)}
+                              % paid
+                            </span>
+                          </div>
+                          <Progress
+                            value={
+                              ((loan.principalAmount - loan.currentBalance) /
+                                loan.principalAmount) *
+                              100
+                            }
+                            className="h-2"
+                          />
+                        </div>
+                      </div>
+                    ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card border-0">
+            <CardHeader>
+              <CardTitle className="text-emerald-400">Money I Lent</CardTitle>
+              <CardDescription>Loans others owe you</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loans.filter((l) => l.type === "lent").length === 0 ? (
+                <p className="text-muted-foreground">No lent loans recorded.</p>
+              ) : (
+                <div className="space-y-4">
+                  {loans
+                    .filter((l) => l.type === "lent")
+                    .map((loan) => (
+                      <div
+                        key={loan.id}
+                        className="glass rounded-xl border border-emerald-400/20 p-4"
+                      >
+                        <div className="mb-3 flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold">{loan.name}</h3>
+                            <p className="text-muted-foreground text-sm">
+                              {loan.category}
+                            </p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditLoan(loan)}
+                              className="glass"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteLoan(loan.id)}
+                              className="glass"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">
+                              Outstanding:
+                            </span>
+                            <div className="font-semibold text-emerald-400">
+                              ${loan.currentBalance.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Expected Monthly:
+                            </span>
+                            <div className="font-semibold">
+                              ${loan.monthlyPayment.toFixed(2)}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Interest Rate:
+                            </span>
+                            <div className="font-semibold">
+                              {loan.interestRate}%
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Next Payment:
+                            </span>
+                            <div className="text-sm font-semibold">
+                              {format(loan.nextPaymentDate, "MMM dd")}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3">
+                          <div className="mb-1 flex justify-between text-sm">
+                            <span>Repaid</span>
+                            <span>
+                              {(
+                                ((loan.principalAmount - loan.currentBalance) /
+                                  loan.principalAmount) *
+                                100
+                              ).toFixed(1)}
+                              %
+                            </span>
+                          </div>
+                          <Progress
+                            value={
+                              ((loan.principalAmount - loan.currentBalance) /
+                                loan.principalAmount) *
+                              100
+                            }
+                            className="h-2"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Loan Payment Dialog */}
+        <Dialog open={isLoanPaymentOpen} onOpenChange={setIsLoanPaymentOpen}>
+          <DialogContent className="glass-card border-0 sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Make Loan Payment</DialogTitle>
+              <DialogDescription>
+                Record a payment for {selectedLoanForPayment?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div>
+                <Label htmlFor="paymentAmount">Payment Amount</Label>
+                <Input
+                  id="paymentAmount"
+                  type="number"
+                  step="0.01"
+                  placeholder={selectedLoanForPayment?.monthlyPayment.toFixed(
+                    2,
+                  )}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="glass"
+                />
+              </div>
 
               <div>
-                <Label htmlFor="loanCategory">Category</Label>
-                <Select value={loanCategory} onValueChange={setLoanCategory}>
+                <Label htmlFor="paymentRevenueStream">Payment Source</Label>
+                <Select
+                  value={selectedRevenueStream}
+                  onValueChange={setSelectedRevenueStream}
+                >
                   <SelectTrigger className="glass">
-                    <SelectValue placeholder="Select a category" />
+                    <SelectValue placeholder="Select revenue stream" />
                   </SelectTrigger>
                   <SelectContent className="glass-card">
-                    <SelectItem value="Auto Loan">Auto Loan</SelectItem>
-                    <SelectItem value="Personal Loan">Personal Loan</SelectItem>
-                    <SelectItem value="Student Loan">Student Loan</SelectItem>
-                    <SelectItem value="Mortgage">Mortgage</SelectItem>
-                    <SelectItem value="Business Loan">Business Loan</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    {availableRevenueStreams.map((stream) => (
+                      <SelectItem key={stream.id} value={stream.name}>
+                        {stream.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label htmlFor="loanDescription">Description</Label>
-                <Textarea
-                  id="loanDescription"
-                  placeholder="Additional details about the loan..."
-                  value={loanDescription}
-                  onChange={(e) => setLoanDescription(e.target.value)}
-                  className="glass"
-                />
+                <Label>Payment Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "glass w-full justify-start text-left font-normal",
+                        !date && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {date ? format(date, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="glass-card w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={(date) => date && setDate(date)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="flex justify-end space-x-2">
               <Button
                 variant="outline"
-                onClick={() => setIsAddLoanOpen(false)}
+                onClick={() => setIsLoanPaymentOpen(false)}
                 className="glass"
               >
                 Cancel
               </Button>
-              <Button onClick={handleAddLoan} className="glass-card border-0">
-                {editingLoan ? "Update" : "Add"} Loan
+              <Button
+                onClick={handleLoanPayment}
+                className="glass-card border-0"
+              >
+                Record Payment
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
-
-      {/* Loans List */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="glass-card border-0">
-          <CardHeader>
-            <CardTitle className="text-rose-400">Money I Borrowed</CardTitle>
-            <CardDescription>Loans you need to pay back</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loans.filter((l) => l.type === "borrowed").length === 0 ? (
-              <p className="text-muted-foreground">
-                No borrowed loans recorded.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {loans
-                  .filter((l) => l.type === "borrowed")
-                  .map((loan) => (
-                    <div
-                      key={loan.id}
-                      className="glass rounded-xl border border-rose-400/20 p-4"
-                    >
-                      <div className="mb-3 flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold">{loan.name}</h3>
-                          <p className="text-muted-foreground text-sm">
-                            {loan.category}
-                          </p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedLoanForPayment(loan);
-                              setIsLoanPaymentOpen(true);
-                            }}
-                            className="glass"
-                          >
-                            Pay
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditLoan(loan)}
-                            className="glass"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteLoan(loan.id)}
-                            className="glass"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">
-                            Current Balance:
-                          </span>
-                          <div className="font-semibold text-rose-400">
-                            ${loan.currentBalance.toFixed(2)}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Monthly Payment:
-                          </span>
-                          <div className="font-semibold">
-                            ${loan.monthlyPayment.toFixed(2)}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Interest Rate:
-                          </span>
-                          <div className="font-semibold">
-                            {loan.interestRate}%
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Payment Source:
-                          </span>
-                          <div className="text-sm font-semibold">
-                            {loan.revenueStreamAllocation || "Not set"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <div className="mb-1 flex justify-between text-sm">
-                          <span>Progress</span>
-                          <span>
-                            {(
-                              ((loan.principalAmount - loan.currentBalance) /
-                                loan.principalAmount) *
-                              100
-                            ).toFixed(1)}
-                            % paid
-                          </span>
-                        </div>
-                        <Progress
-                          value={
-                            ((loan.principalAmount - loan.currentBalance) /
-                              loan.principalAmount) *
-                            100
-                          }
-                          className="h-2"
-                        />
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card border-0">
-          <CardHeader>
-            <CardTitle className="text-emerald-400">Money I Lent</CardTitle>
-            <CardDescription>Loans others owe you</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loans.filter((l) => l.type === "lent").length === 0 ? (
-              <p className="text-muted-foreground">No lent loans recorded.</p>
-            ) : (
-              <div className="space-y-4">
-                {loans
-                  .filter((l) => l.type === "lent")
-                  .map((loan) => (
-                    <div
-                      key={loan.id}
-                      className="glass rounded-xl border border-emerald-400/20 p-4"
-                    >
-                      <div className="mb-3 flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold">{loan.name}</h3>
-                          <p className="text-muted-foreground text-sm">
-                            {loan.category}
-                          </p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditLoan(loan)}
-                            className="glass"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteLoan(loan.id)}
-                            className="glass"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">
-                            Outstanding:
-                          </span>
-                          <div className="font-semibold text-emerald-400">
-                            ${loan.currentBalance.toFixed(2)}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Expected Monthly:
-                          </span>
-                          <div className="font-semibold">
-                            ${loan.monthlyPayment.toFixed(2)}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Interest Rate:
-                          </span>
-                          <div className="font-semibold">
-                            {loan.interestRate}%
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Next Payment:
-                          </span>
-                          <div className="text-sm font-semibold">
-                            {format(loan.nextPaymentDate, "MMM dd")}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <div className="mb-1 flex justify-between text-sm">
-                          <span>Repaid</span>
-                          <span>
-                            {(
-                              ((loan.principalAmount - loan.currentBalance) /
-                                loan.principalAmount) *
-                              100
-                            ).toFixed(1)}
-                            %
-                          </span>
-                        </div>
-                        <Progress
-                          value={
-                            ((loan.principalAmount - loan.currentBalance) /
-                              loan.principalAmount) *
-                            100
-                          }
-                          className="h-2"
-                        />
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Loan Payment Dialog */}
-      <Dialog open={isLoanPaymentOpen} onOpenChange={setIsLoanPaymentOpen}>
-        <DialogContent className="glass-card border-0 sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Make Loan Payment</DialogTitle>
-            <DialogDescription>
-              Record a payment for {selectedLoanForPayment?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div>
-              <Label htmlFor="paymentAmount">Payment Amount</Label>
-              <Input
-                id="paymentAmount"
-                type="number"
-                step="0.01"
-                placeholder={selectedLoanForPayment?.monthlyPayment.toFixed(2)}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="glass"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="paymentRevenueStream">Payment Source</Label>
-              <Select
-                value={selectedRevenueStream}
-                onValueChange={setSelectedRevenueStream}
-              >
-                <SelectTrigger className="glass">
-                  <SelectValue placeholder="Select revenue stream" />
-                </SelectTrigger>
-                <SelectContent className="glass-card">
-                  {availableRevenueStreams.map((stream) => (
-                    <SelectItem key={stream.id} value={stream.name}>
-                      {stream.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Payment Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "glass w-full justify-start text-left font-normal",
-                      !date && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date ? format(date, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="glass-card w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={(date) => date && setDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsLoanPaymentOpen(false)}
-              className="glass"
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleLoanPayment} className="glass-card border-0">
-              Record Payment
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </FinancialLayout>
+    </>
   );
 }
