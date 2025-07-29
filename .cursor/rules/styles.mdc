@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# CSS Styling Rules
+
+- Always use tailwindcss to style components
+- Strictly avoid the use of positioning styles in favour of CSS Grid and Flexbox alternatives

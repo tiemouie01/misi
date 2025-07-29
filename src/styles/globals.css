@@ -49,75 +49,75 @@
 
 :root {
   --radius: 1rem;
-  /* Light theme - Crystal clear water */
-  --background: oklch(0.98 0.005 240);
-  --foreground: oklch(0.15 0.02 240);
-  --card: oklch(0.99 0.003 240 / 0.7);
-  --card-foreground: oklch(0.15 0.02 240);
-  --popover: oklch(0.99 0.003 240 / 0.8);
-  --popover-foreground: oklch(0.15 0.02 240);
+  /* Light theme - Frosted glass with better readability */
+  --background: oklch(0.99 0.003 240);
+  --foreground: oklch(0.12 0.015 240);
+  --card: oklch(0.98 0.004 240 / 0.8);
+  --card-foreground: oklch(0.12 0.015 240);
+  --popover: oklch(0.98 0.004 240 / 0.85);
+  --popover-foreground: oklch(0.12 0.015 240);
   --primary: oklch(0.55 0.15 200);
-  --primary-foreground: oklch(0.98 0.005 240);
-  --secondary: oklch(0.95 0.01 240 / 0.6);
-  --secondary-foreground: oklch(0.15 0.02 240);
-  --muted: oklch(0.96 0.008 240 / 0.5);
-  --muted-foreground: oklch(0.45 0.02 240);
-  --accent: oklch(0.92 0.02 200 / 0.4);
-  --accent-foreground: oklch(0.15 0.02 240);
+  --primary-foreground: oklch(0.99 0.003 240);
+  --secondary: oklch(0.96 0.01 240 / 0.7);
+  --secondary-foreground: oklch(0.12 0.015 240);
+  --muted: oklch(0.97 0.006 240 / 0.6);
+  --muted-foreground: oklch(0.42 0.015 240);
+  --accent: oklch(0.94 0.015 200 / 0.5);
+  --accent-foreground: oklch(0.12 0.015 240);
   --destructive: oklch(0.65 0.25 15);
-  --destructive-foreground: oklch(0.98 0.005 240);
-  --border: oklch(0.9 0.01 240 / 0.3);
-  --input: oklch(0.95 0.01 240 / 0.6);
-  --ring: oklch(0.55 0.15 200 / 0.3);
+  --destructive-foreground: oklch(0.99 0.003 240);
+  --border: oklch(0.92 0.008 240 / 0.4);
+  --input: oklch(0.96 0.008 240 / 0.7);
+  --ring: oklch(0.55 0.15 200 / 0.4);
   --chart-1: oklch(0.6 0.2 200);
   --chart-2: oklch(0.55 0.18 180);
   --chart-3: oklch(0.5 0.16 160);
   --chart-4: oklch(0.65 0.22 220);
   --chart-5: oklch(0.7 0.25 240);
-  --sidebar-background: oklch(0.97 0.004 240 / 0.8);
-  --sidebar-foreground: oklch(0.15 0.02 240);
+  --sidebar-background: oklch(0.98 0.003 240 / 0.85);
+  --sidebar-foreground: oklch(0.12 0.015 240);
   --sidebar-primary: oklch(0.55 0.15 200);
-  --sidebar-primary-foreground: oklch(0.98 0.005 240);
-  --sidebar-accent: oklch(0.94 0.012 240 / 0.6);
-  --sidebar-accent-foreground: oklch(0.15 0.02 240);
-  --sidebar-border: oklch(0.9 0.01 240 / 0.4);
-  --sidebar-ring: oklch(0.55 0.15 200 / 0.3);
+  --sidebar-primary-foreground: oklch(0.99 0.003 240);
+  --sidebar-accent: oklch(0.95 0.01 240 / 0.7);
+  --sidebar-accent-foreground: oklch(0.12 0.015 240);
+  --sidebar-border: oklch(0.92 0.008 240 / 0.5);
+  --sidebar-ring: oklch(0.55 0.15 200 / 0.4);
 }
 
 .dark {
-  /* Dark theme - Deep ocean */
-  --background: oklch(0.08 0.01 240);
-  --foreground: oklch(0.95 0.005 240);
-  --card: oklch(0.12 0.015 240 / 0.6);
-  --card-foreground: oklch(0.95 0.005 240);
-  --popover: oklch(0.12 0.015 240 / 0.7);
-  --popover-foreground: oklch(0.95 0.005 240);
+  /* Dark theme - Frosted glass with better readability */
+  --background: oklch(0.06 0.008 240);
+  --foreground: oklch(0.96 0.003 240);
+  --card: oklch(0.09 0.012 240 / 0.7);
+  --card-foreground: oklch(0.96 0.003 240);
+  --popover: oklch(0.09 0.012 240 / 0.75);
+  --popover-foreground: oklch(0.96 0.003 240);
   --primary: oklch(0.65 0.2 200);
-  --primary-foreground: oklch(0.08 0.01 240);
-  --secondary: oklch(0.15 0.02 240 / 0.5);
-  --secondary-foreground: oklch(0.95 0.005 240);
-  --muted: oklch(0.18 0.025 240 / 0.4);
-  --muted-foreground: oklch(0.65 0.02 240);
-  --accent: oklch(0.22 0.03 200 / 0.3);
-  --accent-foreground: oklch(0.95 0.005 240);
+  --primary-foreground: oklch(0.06 0.008 240);
+  --secondary: oklch(0.14 0.018 240 / 0.6);
+  --secondary-foreground: oklch(0.96 0.003 240);
+  --muted: oklch(0.16 0.02 240 / 0.5);
+  --muted-foreground: oklch(0.68 0.015 240);
+  --accent: oklch(0.2 0.025 200 / 0.4);
+  --accent-foreground: oklch(0.96 0.003 240);
   --destructive: oklch(0.7 0.3 15);
-  --destructive-foreground: oklch(0.95 0.005 240);
-  --border: oklch(0.25 0.035 240 / 0.3);
-  --input: oklch(0.18 0.025 240 / 0.5);
-  --ring: oklch(0.65 0.2 200 / 0.4);
+  --destructive-foreground: oklch(0.96 0.003 240);
+  --border: oklch(0.22 0.03 240 / 0.4);
+  --input: oklch(0.16 0.02 240 / 0.6);
+  --ring: oklch(0.65 0.2 200 / 0.5);
   --chart-1: oklch(0.7 0.25 200);
   --chart-2: oklch(0.65 0.22 180);
   --chart-3: oklch(0.6 0.2 160);
   --chart-4: oklch(0.75 0.28 220);
   --chart-5: oklch(0.8 0.3 240);
-  --sidebar-background: oklch(0.1 0.012 240 / 0.8);
-  --sidebar-foreground: oklch(0.95 0.005 240);
+  --sidebar-background: oklch(0.08 0.01 240 / 0.8);
+  --sidebar-foreground: oklch(0.96 0.003 240);
   --sidebar-primary: oklch(0.65 0.2 200);
-  --sidebar-primary-foreground: oklch(0.08 0.01 240);
-  --sidebar-accent: oklch(0.16 0.022 240 / 0.5);
-  --sidebar-accent-foreground: oklch(0.95 0.005 240);
-  --sidebar-border: oklch(0.25 0.035 240 / 0.4);
-  --sidebar-ring: oklch(0.65 0.2 200 / 0.4);
+  --sidebar-primary-foreground: oklch(0.06 0.008 240);
+  --sidebar-accent: oklch(0.15 0.02 240 / 0.6);
+  --sidebar-accent-foreground: oklch(0.96 0.003 240);
+  --sidebar-border: oklch(0.22 0.03 240 / 0.5);
+  --sidebar-ring: oklch(0.65 0.2 200 / 0.5);
 }
 
 @layer base {
@@ -129,72 +129,101 @@
     background-image:
       radial-gradient(
         circle at 20% 80%,
-        oklch(0.6 0.15 200 / 0.1) 0%,
+        oklch(0.6 0.15 200 / 0.08) 0%,
         transparent 50%
       ),
       radial-gradient(
         circle at 80% 20%,
-        oklch(0.7 0.2 220 / 0.1) 0%,
+        oklch(0.7 0.2 220 / 0.08) 0%,
         transparent 50%
       ),
       radial-gradient(
         circle at 40% 40%,
-        oklch(0.5 0.1 180 / 0.05) 0%,
+        oklch(0.5 0.1 180 / 0.04) 0%,
         transparent 50%
       );
     background-attachment: fixed;
   }
 }
 
-/* Glass morphism effects */
+/* Frosted glass effects - more readable */
 .glass {
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
   background: linear-gradient(
     135deg,
-    oklch(1 0 0 / 0.1) 0%,
-    oklch(1 0 0 / 0.05) 100%
+    oklch(1 0 0 / 0.3) 0%,
+    oklch(1 0 0 / 0.15) 100%
   );
-  border: 1px solid oklch(1 0 0 / 0.2);
+  border: 1px solid oklch(1 0 0 / 0.3);
 }
 
 .dark .glass {
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  background: linear-gradient(
+    135deg,
+    oklch(0 0 0 / 0.4) 0%,
+    oklch(0 0 0 / 0.2) 100%
+  );
+  border: 1px solid oklch(1 0 0 / 0.15);
+}
+
+.glass-card {
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   background: linear-gradient(
     135deg,
-    oklch(0 0 0 / 0.2) 0%,
-    oklch(0 0 0 / 0.1) 100%
+    oklch(1 0 0 / 0.4) 0%,
+    oklch(1 0 0 / 0.2) 100%
   );
-  border: 1px solid oklch(1 0 0 / 0.1);
-}
-
-.glass-card {
-  backdrop-filter: blur(20px) saturate(200%);
-  -webkit-backdrop-filter: blur(20px) saturate(200%);
-  background: linear-gradient(
-    135deg,
-    oklch(1 0 0 / 0.15) 0%,
-    oklch(1 0 0 / 0.08) 100%
-  );
-  border: 1px solid oklch(1 0 0 / 0.25);
+  border: 1px solid oklch(1 0 0 / 0.35);
   box-shadow:
-    0 8px 32px 0 oklch(0 0 0 / 0.1),
-    inset 0 1px 0 oklch(1 0 0 / 0.2);
+    0 8px 32px 0 oklch(0 0 0 / 0.08),
+    inset 0 1px 0 oklch(1 0 0 / 0.3);
 }
 
 .dark .glass-card {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: linear-gradient(
+    135deg,
+    oklch(0 0 0 / 0.5) 0%,
+    oklch(0 0 0 / 0.3) 100%
+  );
+  border: 1px solid oklch(1 0 0 / 0.2);
+  box-shadow:
+    0 8px 32px 0 oklch(0 0 0 / 0.2),
+    inset 0 1px 0 oklch(1 0 0 / 0.15);
+}
+
+/* Enhanced frosted glass variant for better readability */
+.frosted {
   backdrop-filter: blur(20px) saturate(200%);
   -webkit-backdrop-filter: blur(20px) saturate(200%);
   background: linear-gradient(
     135deg,
-    oklch(0 0 0 / 0.25) 0%,
-    oklch(0 0 0 / 0.15) 100%
+    oklch(1 0 0 / 0.6) 0%,
+    oklch(1 0 0 / 0.4) 100%
   );
-  border: 1px solid oklch(1 0 0 / 0.15);
+  border: 1px solid oklch(1 0 0 / 0.4);
   box-shadow:
-    0 8px 32px 0 oklch(0 0 0 / 0.3),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+    0 8px 32px 0 oklch(0 0 0 / 0.06),
+    inset 0 1px 0 oklch(1 0 0 / 0.4);
+}
+
+.dark .frosted {
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
+  background: linear-gradient(
+    135deg,
+    oklch(0 0 0 / 0.7) 0%,
+    oklch(0 0 0 / 0.5) 100%
+  );
+  border: 1px solid oklch(1 0 0 / 0.25);
+  box-shadow:
+    0 8px 32px 0 oklch(0 0 0 / 0.15),
+    inset 0 1px 0 oklch(1 0 0 / 0.2);
 }
 
 /* Water ripple animation */

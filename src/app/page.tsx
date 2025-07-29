@@ -652,16 +652,16 @@ export default function FinancialTracker() {
       </div>
 
       <div className="relative z-10 container mx-auto max-w-7xl p-6">
-        {/* Header with glass effect */}
-        <div className="glass-card mb-8 rounded-2xl p-8">
+        {/* Header with frosted glass effect */}
+        <div className="frosted mb-8 rounded-2xl p-8">
           <div className="mb-6 flex items-start justify-between">
             <div className="flex items-center space-x-4">
-              <div className="rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 p-3">
+              <div className="rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 p-3 shadow-lg">
                 <Droplets className="h-8 w-8 text-white" />
               </div>
               <div>
                 <h1 className="gradient-text mb-2 text-4xl font-bold">Misi</h1>
-                <p className="text-muted-foreground text-lg">
+                <p className="text-foreground/80 text-lg font-medium">
                   Liquid Financial Flow
                 </p>
               </div>
@@ -669,17 +669,17 @@ export default function FinancialTracker() {
             <ThemeToggle />
           </div>
 
-          <div className="text-muted-foreground flex items-center space-x-2">
+          <div className="text-foreground/70 flex items-center space-x-2">
             <Waves className="h-4 w-4" />
-            <span className="text-sm">
+            <span className="text-sm font-medium">
               Track your revenue streams with the fluidity of water
             </span>
           </div>
         </div>
 
-        {/* Financial Overview Cards with glass morphism */}
+        {/* Financial Overview Cards with frosted glass */}
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
-          <Card className="glass-card border-0 transition-transform duration-300 hover:scale-105">
+          <Card className="frosted border-0 transition-transform duration-300 hover:scale-105">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-muted-foreground text-sm font-medium">
                 Total Revenue
@@ -717,9 +717,9 @@ export default function FinancialTracker() {
             </CardContent>
           </Card>
 
-          <Card className="glass-card border-0 transition-transform duration-300 hover:scale-105">
+          <Card className="frosted border-0 transition-transform duration-300 hover:scale-105">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-muted-foreground text-sm font-medium">
+              <CardTitle className="text-foreground/70 text-sm font-medium">
                 Total Remaining
               </CardTitle>
               <div className="rounded-lg bg-cyan-400/20 p-2">
@@ -732,13 +732,13 @@ export default function FinancialTracker() {
               >
                 ${totalRemaining.toFixed(2)}
               </div>
-              <p className="text-muted-foreground mt-1 text-xs">
+              <p className="text-foreground/60 mt-1 text-xs font-medium">
                 Available liquidity
               </p>
             </CardContent>
           </Card>
 
-          <Card className="glass-card border-0 transition-transform duration-300 hover:scale-105">
+          <Card className="frosted border-0 transition-transform duration-300 hover:scale-105">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-muted-foreground text-sm font-medium">
                 Revenue Streams
@@ -758,8 +758,8 @@ export default function FinancialTracker() {
           </Card>
         </div>
 
-        {/* Revenue Streams Overview with enhanced glass design */}
-        <Card className="glass-card mb-8 border-0">
+        {/* Revenue Streams Overview with frosted glass design */}
+        <Card className="frosted mb-8 border-0">
           <CardHeader>
             <div className="flex items-center space-x-3">
               <div className="rounded-lg bg-gradient-to-br from-blue-400 to-cyan-400 p-2">
@@ -903,9 +903,9 @@ export default function FinancialTracker() {
           </CardContent>
         </Card>
 
-        {/* Enhanced Tabs with glass design */}
+        {/* Enhanced Tabs with frosted glass design */}
         <Tabs defaultValue="transactions" className="space-y-6">
-          <div className="glass-card rounded-xl p-2">
+          <div className="frosted rounded-xl p-2">
             <TabsList className="grid w-full grid-cols-4 bg-transparent">
               <TabsTrigger
                 value="transactions"
