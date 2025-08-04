@@ -517,6 +517,32 @@ export const getFinancialSummary = async (userId: string) => {
   }
 };
 
+// Loan counts by type (for loan summary)
+export const getLoanCountsByType = async (userId: string) => {
+  try {
+    const borrowedCount = await db
+      .select({ count: count() })
+      .from(loans)
+      .where(and(eq(loans.userId, userId), eq(loans.type, "borrowed")));
+
+    const lentCount = await db
+      .select({ count: count() })
+      .from(loans)
+      .where(and(eq(loans.userId, userId), eq(loans.type, "lent")));
+
+    const data = {
+      borrowedCount: borrowedCount[0]?.count ?? 0,
+      lentCount: lentCount[0]?.count ?? 0,
+    };
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
+};
+
 // Available revenue streams (for dropdowns)
 export const getAvailableRevenueStreams = async (userId: string) => {
   try {
