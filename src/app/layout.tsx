@@ -16,6 +16,7 @@ import {
   BreadcrumbLink,
   BreadcrumbList,
 } from "~/components/ui/breadcrumb";
+import { DynamicPageHeader } from "~/components/dynamic-page-header";
 
 export const metadata: Metadata = {
   title: "Misi - Liquid Financial Flow",
@@ -77,6 +78,7 @@ export default function RootLayout({
               </header>
 
               <div className="relative z-10 flex flex-1 flex-col gap-4 p-4 pt-0">
+                <DynamicPageHeader />
                 {children}
               </div>
             </SidebarInset>
