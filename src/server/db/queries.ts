@@ -16,71 +16,127 @@ import {
 
 // Categories queries
 export const getCategories = async (userId: string) => {
-  return await db
-    .select()
-    .from(categories)
-    .where(eq(categories.userId, userId))
-    .orderBy(categories.name);
+  try {
+    const data = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.userId, userId))
+      .orderBy(categories.name);
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const getCategoriesByType = async (
   userId: string,
   type: "income" | "expense",
 ) => {
-  return await db
-    .select()
-    .from(categories)
-    .where(and(eq(categories.userId, userId), eq(categories.type, type)))
-    .orderBy(categories.name);
+  try {
+    const data = await db
+      .select()
+      .from(categories)
+      .where(and(eq(categories.userId, userId), eq(categories.type, type)))
+      .orderBy(categories.name);
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Transactions queries
 export const getTransactions = async (userId: string) => {
-  return await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.userId, userId))
-    .orderBy(desc(transactions.date));
+  try {
+    const data = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.date));
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const getRecentTransactions = async (userId: string, limit = 5) => {
-  return await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.userId, userId))
-    .orderBy(desc(transactions.date))
-    .limit(limit);
+  try {
+    const data = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.date))
+      .limit(limit);
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const getTransactionsByType = async (
   userId: string,
   type: "income" | "expense",
 ) => {
-  return await db
-    .select()
-    .from(transactions)
-    .where(and(eq(transactions.userId, userId), eq(transactions.type, type)))
-    .orderBy(desc(transactions.date));
+  try {
+    const data = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), eq(transactions.type, type)))
+      .orderBy(desc(transactions.date));
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const getTransactionsByRevenueStream = async (
   userId: string,
   revenueStream: string,
 ) => {
-  return await db
-    .select()
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, userId),
-        eq(transactions.revenueStream, revenueStream),
-      ),
-    )
-    .orderBy(desc(transactions.date));
+  try {
+    const data = await db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.revenueStream, revenueStream),
+        ),
+      )
+      .orderBy(desc(transactions.date));
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const createTransaction = async (transaction: NewTransaction) => {
-  return await db.insert(transactions).values(transaction).returning();
+  try {
+    const data = await db.insert(transactions).values(transaction).returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const updateTransaction = async (
@@ -88,147 +144,234 @@ export const updateTransaction = async (
   id: string,
   transaction: Partial<NewTransaction>,
 ) => {
-  return await db
-    .update(transactions)
-    .set(transaction)
-    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
-    .returning();
+  try {
+    const data = await db
+      .update(transactions)
+      .set(transaction)
+      .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
+      .returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const deleteTransaction = async (userId: string, id: string) => {
-  return await db
-    .delete(transactions)
-    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)));
+  try {
+    const data = await db
+      .delete(transactions)
+      .where(and(eq(transactions.id, id), eq(transactions.userId, userId)));
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Revenue stream calculations (replaces calculateRevenueStreams from financial-utils.ts)
 export const calculateRevenueStreams = async (userId: string) => {
-  // Get all income categories for this user
-  const incomeCategories = await getCategoriesByType(userId, "income");
+  try {
+    // Get all income categories for this user
+    const incomeCategoriesResult = await getCategoriesByType(userId, "income");
+    if (incomeCategoriesResult.error) {
+      return { data: null, error: incomeCategoriesResult.error };
+    }
+    const incomeCategories = incomeCategoriesResult.data ?? [];
 
-  const revenueStreams = await Promise.all(
-    incomeCategories.map(async (category) => {
-      // Calculate total income for this category
-      const incomeResult = await db
-        .select({ total: sum(transactions.amount) })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.userId, userId),
-            eq(transactions.type, "income"),
-            eq(transactions.categoryName, category.name),
-          ),
-        );
+    const revenueStreams = await Promise.all(
+      incomeCategories.map(async (category) => {
+        // Calculate total income for this category
+        const incomeResult = await db
+          .select({ total: sum(transactions.amount) })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              eq(transactions.type, "income"),
+              eq(transactions.categoryName, category.name),
+            ),
+          );
 
-      // Calculate allocated expenses for this revenue stream
-      const expenseResult = await db
-        .select({ total: sum(transactions.amount) })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.userId, userId),
-            eq(transactions.type, "expense"),
-            eq(transactions.revenueStream, category.name),
-          ),
-        );
+        // Calculate allocated expenses for this revenue stream
+        const expenseResult = await db
+          .select({ total: sum(transactions.amount) })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              eq(transactions.type, "expense"),
+              eq(transactions.revenueStream, category.name),
+            ),
+          );
 
-      // Get expense transactions for this stream
-      const expenses = await db
-        .select()
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.userId, userId),
-            eq(transactions.type, "expense"),
-            eq(transactions.revenueStream, category.name),
-          ),
-        )
-        .orderBy(desc(transactions.date));
+        // Get expense transactions for this stream
+        const expenses = await db
+          .select()
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              eq(transactions.type, "expense"),
+              eq(transactions.revenueStream, category.name),
+            ),
+          )
+          .orderBy(desc(transactions.date));
 
-      const totalIncome = Number(incomeResult[0]?.total ?? 0);
-      const allocatedExpenses = Number(expenseResult[0]?.total ?? 0);
+        const totalIncome = Number(incomeResult[0]?.total ?? 0);
+        const allocatedExpenses = Number(expenseResult[0]?.total ?? 0);
 
-      return {
-        name: category.name,
-        totalIncome,
-        allocatedExpenses,
-        remaining: totalIncome - allocatedExpenses,
-        color: category.color,
-        expenses,
-      };
-    }),
-  );
+        return {
+          name: category.name,
+          totalIncome,
+          allocatedExpenses,
+          remaining: totalIncome - allocatedExpenses,
+          color: category.color,
+          expenses,
+        };
+      }),
+    );
 
-  // Filter to only include streams with activity
-  return revenueStreams.filter(
-    (stream) => stream.totalIncome > 0 || stream.allocatedExpenses > 0,
-  );
+    // Filter to only include streams with activity
+    const data = revenueStreams.filter(
+      (stream) => stream.totalIncome > 0 || stream.allocatedExpenses > 0,
+    );
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Transaction Templates queries
 export const getTransactionTemplates = async (userId: string) => {
-  return await db
-    .select()
-    .from(transactionTemplates)
-    .where(eq(transactionTemplates.userId, userId))
-    .orderBy(transactionTemplates.description);
+  try {
+    const data = await db
+      .select()
+      .from(transactionTemplates)
+      .where(eq(transactionTemplates.userId, userId))
+      .orderBy(transactionTemplates.description);
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const createTransactionTemplate = async (
   template: typeof transactionTemplates.$inferInsert,
 ) => {
-  return await db.insert(transactionTemplates).values(template).returning();
+  try {
+    const data = await db
+      .insert(transactionTemplates)
+      .values(template)
+      .returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const deleteTransactionTemplate = async (userId: string, id: string) => {
-  return await db
-    .delete(transactionTemplates)
-    .where(
-      and(
-        eq(transactionTemplates.id, id),
-        eq(transactionTemplates.userId, userId),
-      ),
-    );
+  try {
+    const data = await db
+      .delete(transactionTemplates)
+      .where(
+        and(
+          eq(transactionTemplates.id, id),
+          eq(transactionTemplates.userId, userId),
+        ),
+      );
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Loans queries
 export const getLoans = async (userId: string) => {
-  return await db
-    .select()
-    .from(loans)
-    .where(eq(loans.userId, userId))
-    .orderBy(loans.name);
+  try {
+    const data = await db
+      .select()
+      .from(loans)
+      .where(eq(loans.userId, userId))
+      .orderBy(loans.name);
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const getLoansByType = async (
   userId: string,
   type: "borrowed" | "lent",
 ) => {
-  return await db
-    .select()
-    .from(loans)
-    .where(and(eq(loans.userId, userId), eq(loans.type, type)))
-    .orderBy(loans.name);
+  try {
+    const data = await db
+      .select()
+      .from(loans)
+      .where(and(eq(loans.userId, userId), eq(loans.type, type)))
+      .orderBy(loans.name);
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const getLoanWithPayments = async (userId: string, loanId: string) => {
-  const loan = await db
-    .select()
-    .from(loans)
-    .where(and(eq(loans.id, loanId), eq(loans.userId, userId)));
-  const payments = await db
-    .select()
-    .from(loanPayments)
-    .where(
-      and(eq(loanPayments.loanId, loanId), eq(loanPayments.userId, userId)),
-    )
-    .orderBy(desc(loanPayments.date));
+  try {
+    const loan = await db
+      .select()
+      .from(loans)
+      .where(and(eq(loans.id, loanId), eq(loans.userId, userId)));
+    const payments = await db
+      .select()
+      .from(loanPayments)
+      .where(
+        and(eq(loanPayments.loanId, loanId), eq(loanPayments.userId, userId)),
+      )
+      .orderBy(desc(loanPayments.date));
 
-  return { loan: loan[0], payments };
+    const data = { loan: loan[0], payments };
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const createLoan = async (loan: NewLoan) => {
-  return await db.insert(loans).values(loan).returning();
+  try {
+    const data = await db.insert(loans).values(loan).returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const updateLoan = async (
@@ -236,128 +379,176 @@ export const updateLoan = async (
   id: string,
   loan: Partial<NewLoan>,
 ) => {
-  return await db
-    .update(loans)
-    .set(loan)
-    .where(and(eq(loans.id, id), eq(loans.userId, userId)))
-    .returning();
+  try {
+    const data = await db
+      .update(loans)
+      .set(loan)
+      .where(and(eq(loans.id, id), eq(loans.userId, userId)))
+      .returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 export const deleteLoan = async (userId: string, id: string) => {
-  // Delete associated payments first (user validation)
-  await db
-    .delete(loanPayments)
-    .where(and(eq(loanPayments.loanId, id), eq(loanPayments.userId, userId)));
-  // Then delete the loan (user validation)
-  return await db
-    .delete(loans)
-    .where(and(eq(loans.id, id), eq(loans.userId, userId)));
+  try {
+    // Delete associated payments first (user validation)
+    await db
+      .delete(loanPayments)
+      .where(and(eq(loanPayments.loanId, id), eq(loanPayments.userId, userId)));
+    // Then delete the loan (user validation)
+    const data = await db
+      .delete(loans)
+      .where(and(eq(loans.id, id), eq(loans.userId, userId)));
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Loan Payments queries
 export const getLoanPayments = async (userId: string, loanId?: string) => {
-  const query = db.select().from(loanPayments);
+  try {
+    const query = db.select().from(loanPayments);
 
-  if (loanId) {
-    return await query
-      .where(
-        and(eq(loanPayments.userId, userId), eq(loanPayments.loanId, loanId)),
-      )
+    if (loanId) {
+      const data = await query
+        .where(
+          and(eq(loanPayments.userId, userId), eq(loanPayments.loanId, loanId)),
+        )
+        .orderBy(desc(loanPayments.date));
+      return { data, error: null };
+    }
+
+    const data = await query
+      .where(eq(loanPayments.userId, userId))
       .orderBy(desc(loanPayments.date));
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
   }
-
-  return await query
-    .where(eq(loanPayments.userId, userId))
-    .orderBy(desc(loanPayments.date));
 };
 
 export const createLoanPayment = async (payment: NewLoanPayment) => {
-  return await db.insert(loanPayments).values(payment).returning();
+  try {
+    const data = await db.insert(loanPayments).values(payment).returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Financial summary calculations
 export const getFinancialSummary = async (userId: string) => {
-  // Total income
-  const incomeResult = await db
-    .select({ total: sum(transactions.amount) })
-    .from(transactions)
-    .where(
-      and(eq(transactions.userId, userId), eq(transactions.type, "income")),
-    );
+  try {
+    // Total income
+    const incomeResult = await db
+      .select({ total: sum(transactions.amount) })
+      .from(transactions)
+      .where(
+        and(eq(transactions.userId, userId), eq(transactions.type, "income")),
+      );
 
-  // Total expenses
-  const expenseResult = await db
-    .select({ total: sum(transactions.amount) })
-    .from(transactions)
-    .where(
-      and(eq(transactions.userId, userId), eq(transactions.type, "expense")),
-    );
+    // Total expenses
+    const expenseResult = await db
+      .select({ total: sum(transactions.amount) })
+      .from(transactions)
+      .where(
+        and(eq(transactions.userId, userId), eq(transactions.type, "expense")),
+      );
 
-  // Loan totals
-  const borrowedResult = await db
-    .select({ total: sum(loans.currentBalance) })
-    .from(loans)
-    .where(and(eq(loans.userId, userId), eq(loans.type, "borrowed")));
+    // Loan totals
+    const borrowedResult = await db
+      .select({ total: sum(loans.currentBalance) })
+      .from(loans)
+      .where(and(eq(loans.userId, userId), eq(loans.type, "borrowed")));
 
-  const lentResult = await db
-    .select({ total: sum(loans.currentBalance) })
-    .from(loans)
-    .where(and(eq(loans.userId, userId), eq(loans.type, "lent")));
+    const lentResult = await db
+      .select({ total: sum(loans.currentBalance) })
+      .from(loans)
+      .where(and(eq(loans.userId, userId), eq(loans.type, "lent")));
 
-  const monthlyPaymentsResult = await db
-    .select({ total: sum(loans.monthlyPayment) })
-    .from(loans)
-    .where(and(eq(loans.userId, userId), eq(loans.type, "borrowed")));
+    const monthlyPaymentsResult = await db
+      .select({ total: sum(loans.monthlyPayment) })
+      .from(loans)
+      .where(and(eq(loans.userId, userId), eq(loans.type, "borrowed")));
 
-  // Active loans count
-  const activeLoanCount = await db
-    .select({ count: count() })
-    .from(loans)
-    .where(eq(loans.userId, userId));
+    // Active loans count
+    const activeLoanCount = await db
+      .select({ count: count() })
+      .from(loans)
+      .where(eq(loans.userId, userId));
 
-  const totalIncome = Number(incomeResult[0]?.total ?? 0);
-  const totalExpenses = Number(expenseResult[0]?.total ?? 0);
-  const totalBorrowed = Number(borrowedResult[0]?.total ?? 0);
-  const totalLent = Number(lentResult[0]?.total ?? 0);
-  const monthlyPayments = Number(monthlyPaymentsResult[0]?.total ?? 0);
-  const activeLoans = activeLoanCount[0]?.count ?? 0;
+    const totalIncome = Number(incomeResult[0]?.total ?? 0);
+    const totalExpenses = Number(expenseResult[0]?.total ?? 0);
+    const totalBorrowed = Number(borrowedResult[0]?.total ?? 0);
+    const totalLent = Number(lentResult[0]?.total ?? 0);
+    const monthlyPayments = Number(monthlyPaymentsResult[0]?.total ?? 0);
+    const activeLoans = activeLoanCount[0]?.count ?? 0;
 
-  return {
-    totalIncome,
-    totalExpenses,
-    totalRemaining: totalIncome - totalExpenses,
-    totalBorrowed,
-    totalLent,
-    monthlyPayments,
-    activeLoans,
-  };
+    const data = {
+      totalIncome,
+      totalExpenses,
+      totalRemaining: totalIncome - totalExpenses,
+      totalBorrowed,
+      totalLent,
+      monthlyPayments,
+      activeLoans,
+    };
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
 
 // Available revenue streams (for dropdowns)
 export const getAvailableRevenueStreams = async (userId: string) => {
-  // Get categories that have income transactions for this user
-  const result = await db
-    .selectDistinct({
-      id: categories.id,
-      name: categories.name,
-      color: categories.color,
-    })
-    .from(categories)
-    .innerJoin(
-      transactions,
-      and(
-        eq(categories.name, transactions.categoryName),
-        eq(categories.userId, transactions.userId),
-      ),
-    )
-    .where(
-      and(
-        eq(categories.userId, userId),
-        eq(categories.type, "income"),
-        eq(transactions.type, "income"),
-      ),
-    )
-    .orderBy(categories.name);
+  try {
+    // Get categories that have income transactions for this user
+    const data = await db
+      .selectDistinct({
+        id: categories.id,
+        name: categories.name,
+        color: categories.color,
+      })
+      .from(categories)
+      .innerJoin(
+        transactions,
+        and(
+          eq(categories.name, transactions.categoryName),
+          eq(categories.userId, transactions.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(categories.userId, userId),
+          eq(categories.type, "income"),
+          eq(transactions.type, "income"),
+        ),
+      )
+      .orderBy(categories.name);
 
-  return result;
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 };
