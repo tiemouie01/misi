@@ -8,13 +8,29 @@ import {
 } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { initializeData } from "~/lib/financial-utils";
+import { getRecentTransactions } from "~/server/db/queries";
 
-export function RecentTransactions() {
-  const data = initializeData();
-  const recentTransactions = data.transactions
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5);
+export async function RecentTransactions() {
+  // TODO: Replace with actual user ID from authentication
+  const userId = "cmdr1xnpujgm4ta";
+
+  const { data: recentTransactions, error } = await getRecentTransactions(
+    userId,
+    5,
+  );
+
+  if (error) {
+    return (
+      <Card className="glass-card border-0">
+        <CardHeader>
+          <CardTitle className="text-lg">Recent Transactions</CardTitle>
+          <CardDescription>Error loading recent transactions</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const transactions = recentTransactions ?? [];
 
   return (
     <Card className="glass-card border-0">
@@ -30,7 +46,7 @@ export function RecentTransactions() {
         </Link>
       </CardHeader>
       <CardContent>
-        {recentTransactions.length === 0 ? (
+        {transactions.length === 0 ? (
           <div className="py-8 text-center">
             <p className="text-muted-foreground mb-2">No transactions yet</p>
             <p className="text-muted-foreground text-sm">
@@ -39,7 +55,7 @@ export function RecentTransactions() {
           </div>
         ) : (
           <div className="space-y-3">
-            {recentTransactions.map((transaction) => (
+            {transactions.map((transaction) => (
               <div
                 key={transaction.id}
                 className="border-muted/20 flex items-center justify-between border-b py-2 last:border-0"
@@ -60,7 +76,7 @@ export function RecentTransactions() {
                     </span>
                   </div>
                   <p className="text-muted-foreground text-sm">
-                    {transaction.category}
+                    {transaction.categoryName}
                   </p>
                 </div>
                 <span
@@ -71,7 +87,7 @@ export function RecentTransactions() {
                   }`}
                 >
                   {transaction.type === "income" ? "+" : "-"}$
-                  {transaction.amount.toFixed(2)}
+                  {Number(transaction.amount).toFixed(2)}
                 </span>
               </div>
             ))}

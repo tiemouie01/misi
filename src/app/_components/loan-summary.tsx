@@ -8,14 +8,25 @@ import {
 } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { initializeData, calculateLoanTotals } from "~/lib/financial-utils";
+import { getFinancialSummary, getLoanCountsByType } from "~/server/db/queries";
 
-export function LoanSummary() {
-  const data = initializeData();
-  const { loans } = data;
-  const { totalBorrowed, totalLent } = calculateLoanTotals(loans);
+export async function LoanSummary() {
+  // TODO: Replace with actual user ID from authentication
+  const userId = "cmdr1xnpujgm4ta";
 
-  if (loans.length === 0) {
+  const [financialResult, countsResult] = await Promise.all([
+    getFinancialSummary(userId),
+    getLoanCountsByType(userId),
+  ]);
+
+  if (financialResult.error || countsResult.error) {
+    return null; // Silently fail for this summary component
+  }
+
+  const { totalBorrowed, totalLent, activeLoans } = financialResult.data!;
+  const { borrowedCount, lentCount } = countsResult.data!;
+
+  if (activeLoans === 0) {
     return null;
   }
 
@@ -40,7 +51,7 @@ export function LoanSummary() {
               ${totalBorrowed.toFixed(2)}
             </div>
             <div className="text-muted-foreground text-xs">
-              {loans.filter((l) => l.type === "borrowed").length} loan(s)
+              {borrowedCount} loan(s)
             </div>
           </div>
           <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-center">
@@ -49,7 +60,7 @@ export function LoanSummary() {
               ${totalLent.toFixed(2)}
             </div>
             <div className="text-muted-foreground text-xs">
-              {loans.filter((l) => l.type === "lent").length} loan(s)
+              {lentCount} loan(s)
             </div>
           </div>
         </div>
