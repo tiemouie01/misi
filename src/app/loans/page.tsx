@@ -145,7 +145,7 @@ export default function LoansPage() {
     nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
 
     const newLoan: Loan = {
-      id: editingLoan?.id || Date.now().toString(),
+      id: editingLoan?.id ?? Date.now().toString(),
       type: loanType,
       name: loanName,
       principalAmount: principal,
@@ -181,7 +181,7 @@ export default function LoansPage() {
     setInterestRate(loan.interestRate.toString());
     setTermMonths(loan.termMonths.toString());
     setStartDate(loan.startDate);
-    setLoanRevenueStream(loan.revenueStreamAllocation || "");
+    setLoanRevenueStream(loan.revenueStreamAllocation ?? "");
     setLoanCategory(loan.category);
     setLoanDescription(loan.description);
     setIsAddLoanOpen(true);
@@ -594,7 +594,7 @@ export default function LoansPage() {
                               Payment Source:
                             </span>
                             <div className="text-sm font-semibold">
-                              {loan.revenueStreamAllocation || "Not set"}
+                              {loan.revenueStreamAllocation ?? "Not set"}
                             </div>
                           </div>
                         </div>
