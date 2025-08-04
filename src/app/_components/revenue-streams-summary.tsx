@@ -9,14 +9,26 @@ import {
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
 import { ArrowRight } from "lucide-react";
-import { initializeData, calculateRevenueStreams } from "~/lib/financial-utils";
+import { calculateRevenueStreams } from "~/server/db/queries";
 
-export function RevenueStreamsSummary() {
-  const data = initializeData();
-  const revenueStreams = calculateRevenueStreams(
-    data.transactions,
-    data.categories,
-  );
+export async function RevenueStreamsSummary() {
+  // TODO: Replace with actual user ID from authentication
+  const userId = "cmdr1xnpujgm4ta";
+
+  const { data: revenueStreams, error } = await calculateRevenueStreams(userId);
+
+  if (error) {
+    return (
+      <Card className="glass-card border-0">
+        <CardHeader>
+          <CardTitle className="text-lg">Revenue Streams</CardTitle>
+          <CardDescription>Error loading revenue streams</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const streams = revenueStreams ?? [];
 
   return (
     <Card className="glass-card border-0">
@@ -32,7 +44,7 @@ export function RevenueStreamsSummary() {
         </Link>
       </CardHeader>
       <CardContent>
-        {revenueStreams.length === 0 ? (
+        {streams.length === 0 ? (
           <div className="py-8 text-center">
             <p className="text-muted-foreground mb-2">No revenue streams yet</p>
             <p className="text-muted-foreground text-sm">
@@ -41,7 +53,7 @@ export function RevenueStreamsSummary() {
           </div>
         ) : (
           <div className="space-y-4">
-            {revenueStreams.slice(0, 3).map((stream) => (
+            {streams.slice(0, 3).map((stream) => (
               <div key={stream.name} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -64,9 +76,9 @@ export function RevenueStreamsSummary() {
                 />
               </div>
             ))}
-            {revenueStreams.length > 3 && (
+            {streams.length > 3 && (
               <p className="text-muted-foreground pt-2 text-center text-sm">
-                +{revenueStreams.length - 3} more streams
+                +{streams.length - 3} more streams
               </p>
             )}
           </div>

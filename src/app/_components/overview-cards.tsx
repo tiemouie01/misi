@@ -1,20 +1,26 @@
 import { OverviewCardsGrid } from "~/components/overview-cards";
 import { TrendingUp, TrendingDown, DollarSign, Target } from "lucide-react";
-import {
-  initializeData,
-  calculateRevenueStreams,
-  calculateTotals,
-  calculateLoanTotals,
-} from "~/lib/financial-utils";
+import { getFinancialSummary } from "~/server/db/queries";
 
-export function OverviewCards() {
-  const data = initializeData();
-  const { transactions, loans } = data;
+export async function OverviewCards() {
+  // TODO: Replace with actual user ID from authentication
+  const userId = "cmdr1xnpujgm4ta";
 
-  const revenueStreams = calculateRevenueStreams(transactions, data.categories);
-  const { totalIncome, totalExpenses, totalRemaining } =
-    calculateTotals(revenueStreams);
-  const { totalBorrowed, totalLent } = calculateLoanTotals(loans);
+  const { data: financialData, error } = await getFinancialSummary(userId);
+
+  if (error || !financialData) {
+    // Return empty state or error state
+    return (
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="glass-card rounded-xl border-0 p-6">
+          <p className="text-muted-foreground">Error loading financial data</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { totalIncome, totalExpenses, totalRemaining, activeLoans } =
+    financialData;
 
   const overviewCards = [
     {
@@ -43,7 +49,7 @@ export function OverviewCards() {
     },
     {
       title: "Active Loans",
-      value: loans.length.toString(),
+      value: activeLoans.toString(),
       description: "Loans in portfolio",
       icon: Target,
       iconColor: "bg-indigo-400/20",
