@@ -1,14 +1,14 @@
 import { OverviewCardsGrid } from "~/components/overview-cards";
 import { TrendingUp, TrendingDown, DollarSign, Target } from "lucide-react";
-import { calculateRevenueStreams } from "~/server/db/queries";
+import { getRevenueStreamsOverview } from "~/server/db/queries";
 
 export async function RevenueStreamsOverview() {
   // TODO: Replace with actual user ID from authentication
   const userId = "cmdr1xnpujgm4ta";
 
-  const { data: revenueStreams, error } = await calculateRevenueStreams(userId);
+  const { data: overviewData, error } = await getRevenueStreamsOverview(userId);
 
-  if (error || !revenueStreams) {
+  if (error || !overviewData) {
     // Return empty state or error state
     return (
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -21,19 +21,9 @@ export async function RevenueStreamsOverview() {
     );
   }
 
-  // Calculate totals from revenue streams data
-  const totalIncome = revenueStreams.reduce(
-    (sum, stream) => sum + stream.totalIncome,
-    0,
-  );
-  const totalExpenses = revenueStreams.reduce(
-    (sum, stream) => sum + stream.allocatedExpenses,
-    0,
-  );
-  const totalRemaining = revenueStreams.reduce(
-    (sum, stream) => sum + stream.remaining,
-    0,
-  );
+  // Data is already aggregated by the optimized SQL query
+  const { totalIncome, totalExpenses, totalRemaining, totalStreams } =
+    overviewData;
 
   const overviewCards = [
     {
@@ -62,7 +52,7 @@ export async function RevenueStreamsOverview() {
     },
     {
       title: "Revenue Streams",
-      value: revenueStreams.length.toString(),
+      value: totalStreams.toString(),
       description: "Active sources",
       icon: Target,
       iconColor: "bg-indigo-400/20",

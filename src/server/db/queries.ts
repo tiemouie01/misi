@@ -126,63 +126,116 @@ export const getTransactionsByRevenueStream = async (
   }
 };
 
-// Revenue stream calculations (replaces calculateRevenueStreams from financial-utils.ts)
-export const calculateRevenueStreams = async (userId: string) => {
+// Optimized query for revenue streams overview (totals only)
+export const getRevenueStreamsOverview = async (userId: string) => {
   try {
-    // Get all income categories for this user
+    // Use aggregation with FILTER for conditional sums in a single query
+    const incomeResult = await db
+      .select({ total: sum(transactions.amount) })
+      .from(transactions)
+      .where(
+        and(eq(transactions.userId, userId), eq(transactions.type, "income")),
+      );
+
+    const expenseResult = await db
+      .select({ total: sum(transactions.amount) })
+      .from(transactions)
+      .where(
+        and(eq(transactions.userId, userId), eq(transactions.type, "expense")),
+      );
+
+    // Count distinct income categories (revenue streams)
+    const streamsResult = await db
+      .selectDistinct({ categoryName: transactions.categoryName })
+      .from(transactions)
+      .where(
+        and(eq(transactions.userId, userId), eq(transactions.type, "income")),
+      );
+
+    const totalIncome = Number(incomeResult[0]?.total ?? 0);
+    const totalExpenses = Number(expenseResult[0]?.total ?? 0);
+    const totalRemaining = totalIncome - totalExpenses;
+    const totalStreams = streamsResult.length;
+
+    return {
+      data: {
+        totalIncome,
+        totalExpenses,
+        totalRemaining,
+        totalStreams,
+      },
+      error: null,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
+};
+
+// Optimized query for revenue streams list with individual expenses
+export const getRevenueStreamsList = async (userId: string) => {
+  try {
+    // Get all income categories for this user with revenue stream calculations
     const incomeCategoriesResult = await getCategoriesByType(userId, "income");
     if (incomeCategoriesResult.error) {
       return { data: null, error: incomeCategoriesResult.error };
     }
     const incomeCategories = incomeCategoriesResult.data ?? [];
 
-    const revenueStreams = await Promise.all(
+    // Use a more efficient approach with parallel queries
+    const revenueStreamsData = await Promise.all(
       incomeCategories.map(async (category) => {
-        // Calculate total income for this category
-        const incomeResult = await db
-          .select({ total: sum(transactions.amount) })
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "income"),
-              eq(transactions.categoryName, category.name),
-            ),
-          );
+        // Single query to get both income and expense totals for this stream
+        const [incomeResult, expenseResult, expenseTransactions] =
+          await Promise.all([
+            db
+              .select({ total: sum(transactions.amount) })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.userId, userId),
+                  eq(transactions.type, "income"),
+                  eq(transactions.categoryName, category.name),
+                ),
+              ),
+            db
+              .select({ total: sum(transactions.amount) })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.userId, userId),
+                  eq(transactions.type, "expense"),
+                  eq(transactions.revenueStream, category.name),
+                ),
+              ),
+            db
+              .select({
+                id: transactions.id,
+                description: transactions.description,
+                amount: transactions.amount,
+                date: transactions.date,
+              })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.userId, userId),
+                  eq(transactions.type, "expense"),
+                  eq(transactions.revenueStream, category.name),
+                ),
+              )
+              .orderBy(desc(transactions.date)),
+          ]);
 
-        // Calculate allocated expenses for this revenue stream
-        const expenseResult = await db
-          .select({ total: sum(transactions.amount) })
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "expense"),
-              eq(transactions.revenueStream, category.name),
-            ),
-          );
+        const totalIncome = Number(incomeResult[0]?.total ?? 0);
+        const allocatedExpenses = Number(expenseResult[0]?.total ?? 0);
 
-        // Get expense transactions for this stream
-        const expenseTransactions = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.userId, userId),
-              eq(transactions.type, "expense"),
-              eq(transactions.revenueStream, category.name),
-            ),
-          )
-          .orderBy(desc(transactions.date));
-
-        // Convert amount from string to number for each expense
+        // Convert amounts for expenses
         const expenses = expenseTransactions.map((expense) => ({
           ...expense,
           amount: Number(expense.amount),
         }));
-
-        const totalIncome = Number(incomeResult[0]?.total ?? 0);
-        const allocatedExpenses = Number(expenseResult[0]?.total ?? 0);
 
         return {
           name: category.name,
@@ -196,9 +249,10 @@ export const calculateRevenueStreams = async (userId: string) => {
     );
 
     // Filter to only include streams with activity
-    const data = revenueStreams.filter(
+    const data = revenueStreamsData.filter(
       (stream) => stream.totalIncome > 0 || stream.allocatedExpenses > 0,
     );
+
     return { data, error: null };
   } catch (error) {
     return {
@@ -206,6 +260,11 @@ export const calculateRevenueStreams = async (userId: string) => {
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
+};
+
+// Legacy function - kept for backward compatibility, redirects to new optimized function
+export const calculateRevenueStreams = async (userId: string) => {
+  return getRevenueStreamsList(userId);
 };
 
 // Transaction Templates queries

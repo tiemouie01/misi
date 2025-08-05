@@ -7,15 +7,15 @@ import {
 } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
 import { Droplets } from "lucide-react";
-import { calculateRevenueStreams } from "~/server/db/queries";
+import { getRevenueStreamsList } from "~/server/db/queries";
 
 export async function RevenueStreamsList() {
   // TODO: Replace with actual user ID from authentication
   const userId = "cmdr1xnpujgm4ta";
 
-  const { data: revenueStreams, error } = await calculateRevenueStreams(userId);
+  const { data: revenueStreams, error } = await getRevenueStreamsList(userId);
 
-  if (error) {
+  if (error || !revenueStreams) {
     return (
       <Card className="frosted border-0">
         <CardHeader>
@@ -37,7 +37,7 @@ export async function RevenueStreamsList() {
     );
   }
 
-  const streams = revenueStreams ?? [];
+  const streams = revenueStreams;
 
   return (
     <Card className="frosted border-0">
