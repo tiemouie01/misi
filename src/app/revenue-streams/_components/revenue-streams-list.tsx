@@ -7,14 +7,37 @@ import {
 } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
 import { Droplets } from "lucide-react";
-import { initializeData, calculateRevenueStreams } from "~/lib/financial-utils";
+import { calculateRevenueStreams } from "~/server/db/queries";
 
-export function RevenueStreamsList() {
-  const data = initializeData();
-  const revenueStreams = calculateRevenueStreams(
-    data.transactions,
-    data.categories,
-  );
+export async function RevenueStreamsList() {
+  // TODO: Replace with actual user ID from authentication
+  const userId = "cmdr1xnpujgm4ta";
+
+  const { data: revenueStreams, error } = await calculateRevenueStreams(userId);
+
+  if (error) {
+    return (
+      <Card className="frosted border-0">
+        <CardHeader>
+          <div className="flex items-center space-x-3">
+            <div className="rounded-lg bg-gradient-to-br from-blue-400 to-cyan-400 p-2">
+              <Droplets className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="gradient-text">
+                Revenue Stream Details
+              </CardTitle>
+              <CardDescription>
+                Error loading revenue streams data
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const streams = revenueStreams ?? [];
 
   return (
     <Card className="frosted border-0">
@@ -34,7 +57,7 @@ export function RevenueStreamsList() {
         </div>
       </CardHeader>
       <CardContent>
-        {revenueStreams.length === 0 ? (
+        {streams.length === 0 ? (
           <div className="py-12 text-center">
             <div className="bg-muted/30 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full p-4">
               <Droplets className="text-muted-foreground h-8 w-8" />
@@ -48,7 +71,7 @@ export function RevenueStreamsList() {
           </div>
         ) : (
           <div className="space-y-6">
-            {revenueStreams.map((stream) => (
+            {streams.map((stream) => (
               <div
                 key={stream.name}
                 className="glass rounded-xl p-6 transition-transform duration-300 hover:scale-[1.02]"
@@ -142,7 +165,7 @@ export function RevenueStreamsList() {
                             {expense.description}
                           </span>
                           <span className="ml-2 font-medium text-rose-400">
-                            ${expense.amount.toFixed(2)}
+                            ${Number(expense.amount).toFixed(2)}
                           </span>
                         </div>
                       ))}

@@ -1,19 +1,39 @@
 import { OverviewCardsGrid } from "~/components/overview-cards";
 import { TrendingUp, TrendingDown, DollarSign, Target } from "lucide-react";
-import {
-  initializeData,
-  calculateRevenueStreams,
-  calculateTotals,
-} from "~/lib/financial-utils";
+import { calculateRevenueStreams } from "~/server/db/queries";
 
-export function RevenueStreamsOverview() {
-  const data = initializeData();
-  const revenueStreams = calculateRevenueStreams(
-    data.transactions,
-    data.categories,
+export async function RevenueStreamsOverview() {
+  // TODO: Replace with actual user ID from authentication
+  const userId = "cmdr1xnpujgm4ta";
+
+  const { data: revenueStreams, error } = await calculateRevenueStreams(userId);
+
+  if (error || !revenueStreams) {
+    // Return empty state or error state
+    return (
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="glass-card rounded-xl border-0 p-6">
+          <p className="text-muted-foreground">
+            Error loading revenue streams data
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate totals from revenue streams data
+  const totalIncome = revenueStreams.reduce(
+    (sum, stream) => sum + stream.totalIncome,
+    0,
   );
-  const { totalIncome, totalExpenses, totalRemaining } =
-    calculateTotals(revenueStreams);
+  const totalExpenses = revenueStreams.reduce(
+    (sum, stream) => sum + stream.allocatedExpenses,
+    0,
+  );
+  const totalRemaining = revenueStreams.reduce(
+    (sum, stream) => sum + stream.remaining,
+    0,
+  );
 
   const overviewCards = [
     {

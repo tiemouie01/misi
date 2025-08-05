@@ -163,7 +163,7 @@ export const calculateRevenueStreams = async (userId: string) => {
           );
 
         // Get expense transactions for this stream
-        const expenses = await db
+        const expenseTransactions = await db
           .select()
           .from(transactions)
           .where(
@@ -174,6 +174,12 @@ export const calculateRevenueStreams = async (userId: string) => {
             ),
           )
           .orderBy(desc(transactions.date));
+
+        // Convert amount from string to number for each expense
+        const expenses = expenseTransactions.map((expense) => ({
+          ...expense,
+          amount: Number(expense.amount),
+        }));
 
         const totalIncome = Number(incomeResult[0]?.total ?? 0);
         const allocatedExpenses = Number(expenseResult[0]?.total ?? 0);
