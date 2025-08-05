@@ -1,3 +1,5 @@
+"use server";
+
 // Database mutations for MISI Financial Management
 // All create, update, delete operations
 

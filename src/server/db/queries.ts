@@ -1,3 +1,5 @@
+"use server";
+
 // Database queries for MISI Financial Management
 // Examples of how to replace localStorage with database operations
 
