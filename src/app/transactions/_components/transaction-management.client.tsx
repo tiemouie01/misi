@@ -9,10 +9,35 @@ import { TemplatesList } from "./templates-list";
 import { CategoriesList } from "./categories-list";
 import { TransactionForm } from "./transaction-form.client";
 import { TemplateForm } from "./template-form.client";
-import { saveToLocalStorage, initializeData } from "~/lib/financial-utils";
-import type { Transaction, TransactionTemplate } from "~/lib/types";
+import type { Transaction, TransactionTemplate } from "~/server/db/schema";
+import {
+  deleteTransactionAction,
+  deleteTemplateAction,
+  useTemplateAction as runTemplateQuickAdd,
+} from "../actions";
 
-export function TransactionManagement() {
+type RevenueStreamOption = { id: string; name: string; color: string };
+
+interface TransactionManagementProps {
+  transactions: Transaction[];
+  templates: TransactionTemplate[];
+  categories: {
+    id: string;
+    name: string;
+    type: "income" | "expense";
+    color: string;
+  }[];
+  availableRevenueStreams: RevenueStreamOption[];
+  userId: string;
+}
+
+export function TransactionManagement({
+  transactions,
+  templates,
+  categories,
+  availableRevenueStreams,
+  userId,
+}: TransactionManagementProps) {
   // Dialog states
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [isAddTemplateOpen, setIsAddTemplateOpen] = useState(false);
@@ -32,37 +57,26 @@ export function TransactionManagement() {
     setIsAddTemplateOpen(true);
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    const data = initializeData();
-    const updatedTransactions = data.transactions.filter((t) => t.id !== id);
-    saveToLocalStorage("financial-transactions", updatedTransactions);
-    window.dispatchEvent(new CustomEvent("financialDataUpdate"));
-    setRefreshKey((prev) => prev + 1);
+  // Server actions are wired in the forms; list components will call actions via callbacks we pass
+  const handleDeleteTransaction = async (id: string) => {
+    await deleteTransactionAction(id, userId);
+    setRefreshKey((p) => p + 1);
   };
-
-  const handleDeleteTemplate = (id: string) => {
-    const data = initializeData();
-    const updatedTemplates = data.templates.filter((t) => t.id !== id);
-    saveToLocalStorage("financial-templates", updatedTemplates);
-    setRefreshKey((prev) => prev + 1);
+  const handleDeleteTemplate = async (id: string) => {
+    await deleteTemplateAction(id, userId);
+    setRefreshKey((p) => p + 1);
   };
-
-  const handleUseTemplate = (template: TransactionTemplate) => {
-    const data = initializeData();
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      type: template.type,
-      amount: template.amount,
-      category: template.category,
-      description: template.description,
-      date: new Date(),
-      revenueStream: template.revenueStream,
-    };
-
-    const updatedTransactions = [...data.transactions, newTransaction];
-    saveToLocalStorage("financial-transactions", updatedTransactions);
-    window.dispatchEvent(new CustomEvent("financialDataUpdate"));
-    setRefreshKey((prev) => prev + 1);
+  const handleUseTemplate = async (t: TransactionTemplate) => {
+    await runTemplateQuickAdd({
+      id: t.id,
+      userId: t.userId,
+      type: t.type,
+      amount: t.amount,
+      categoryName: t.categoryName,
+      description: t.description,
+      revenueStream: t.revenueStream,
+    });
+    setRefreshKey((p) => p + 1);
   };
 
   const handleTransactionSaved = () => {
@@ -121,7 +135,7 @@ export function TransactionManagement() {
               resetTransactionForm();
               setIsAddTransactionOpen(true);
             }}
-            className="glass-card border-0 transition-transform hover:scale-105"
+            className="glass-card border-0 transition-transform hover:scale-105 dark:text-white"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Transaction
@@ -130,6 +144,8 @@ export function TransactionManagement() {
 
         <div key={`transactions-${refreshKey}`}>
           <TransactionsList
+            transactions={transactions}
+            categories={categories}
             onEditTransaction={handleEditTransaction}
             onDeleteTransaction={handleDeleteTransaction}
           />
@@ -161,6 +177,8 @@ export function TransactionManagement() {
 
         <div key={`templates-${refreshKey}`}>
           <TemplatesList
+            templates={templates}
+            categories={categories}
             onEditTemplate={handleEditTemplate}
             onDeleteTemplate={handleDeleteTemplate}
             onUseTemplate={handleUseTemplate}
@@ -173,7 +191,7 @@ export function TransactionManagement() {
           Transaction Categories
         </h3>
 
-        <CategoriesList />
+        <CategoriesList categories={categories} />
       </TabsContent>
 
       {/* Transaction Form Dialog */}
@@ -182,6 +200,9 @@ export function TransactionManagement() {
         onOpenChange={setIsAddTransactionOpen}
         editingTransaction={editingTransaction}
         onTransactionSaved={handleTransactionSaved}
+        categories={categories}
+        availableRevenueStreams={availableRevenueStreams}
+        userId={userId}
       />
 
       {/* Template Form Dialog */}
@@ -190,6 +211,9 @@ export function TransactionManagement() {
         onOpenChange={setIsAddTemplateOpen}
         editingTemplate={editingTemplate}
         onTemplateSaved={handleTemplateSaved}
+        categories={categories}
+        availableRevenueStreams={availableRevenueStreams}
+        userId={userId}
       />
     </Tabs>
   );

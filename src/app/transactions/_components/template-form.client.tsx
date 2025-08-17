@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useTransition } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -18,18 +19,35 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import type { TransactionTemplate } from "~/server/db/schema";
 import {
-  saveToLocalStorage,
-  getAvailableRevenueStreams,
-  initializeData,
-} from "~/lib/financial-utils";
-import type { TransactionTemplate } from "~/lib/types";
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "~/components/ui/form";
+import {
+  templateFormSchema,
+  type TemplateFormValues,
+} from "~/lib/validations/transactions";
+import { addOrUpdateTemplate } from "../actions";
 
 interface TemplateFormProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   editingTemplate: TransactionTemplate | null;
   onTemplateSaved: () => void;
+  categories: {
+    id: string;
+    name: string;
+    type: "income" | "expense";
+    color: string;
+  }[];
+  availableRevenueStreams: { id: string; name: string; color: string }[];
+  userId: string;
 }
 
 export function TemplateForm({
@@ -37,74 +55,64 @@ export function TemplateForm({
   onOpenChange,
   editingTemplate,
   onTemplateSaved,
+  categories,
+  availableRevenueStreams,
+  userId,
 }: TemplateFormProps) {
-  const [transactionType, setTransactionType] = useState<"income" | "expense">(
-    "expense",
-  );
-  const [amount, setAmount] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedRevenueStream, setSelectedRevenueStream] = useState("");
-  const [description, setDescription] = useState("");
+  const [isPending, startTransition] = useTransition();
 
-  // Initialize form when editing template changes
-  useState(() => {
-    if (editingTemplate) {
-      setTransactionType(editingTemplate.type);
-      setAmount(editingTemplate.amount.toString());
-      setSelectedCategory(editingTemplate.category);
-      setSelectedRevenueStream(editingTemplate.revenueStream || "");
-      setDescription(editingTemplate.description);
-    } else {
-      resetForm();
-    }
+  const form = useForm<TemplateFormValues>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: {
+      id: undefined,
+      userId,
+      type: "expense",
+      amount: 0,
+      categoryName: "",
+      description: "",
+      revenueStream: null,
+    },
   });
 
-  const resetForm = () => {
-    setAmount("");
-    setSelectedCategory("");
-    setSelectedRevenueStream("");
-    setDescription("");
-  };
+  const transactionType = form.watch("type");
 
-  const handleAddTemplate = () => {
-    if (!amount || !selectedCategory || !description) return;
-    if (transactionType === "expense" && !selectedRevenueStream) return;
-
-    const data = initializeData();
-    const newTemplate: TransactionTemplate = {
-      id: editingTemplate?.id || Date.now().toString(),
-      type: transactionType,
-      amount: Number.parseFloat(amount),
-      category: selectedCategory,
-      description,
-      revenueStream:
-        transactionType === "expense" ? selectedRevenueStream : undefined,
-    };
-
-    let updatedTemplates;
+  useEffect(() => {
     if (editingTemplate) {
-      updatedTemplates = data.templates.map((t) =>
-        t.id === editingTemplate.id ? newTemplate : t,
-      );
+      form.reset({
+        id: editingTemplate.id,
+        userId: editingTemplate.userId,
+        type: editingTemplate.type,
+        amount: Number(editingTemplate.amount),
+        categoryName: editingTemplate.categoryName,
+        description: editingTemplate.description,
+        revenueStream: editingTemplate.revenueStream ?? null,
+      });
     } else {
-      updatedTemplates = [...data.templates, newTemplate];
+      form.reset({
+        id: undefined,
+        userId,
+        type: "expense",
+        amount: 0,
+        categoryName: "",
+        description: "",
+        revenueStream: null,
+      });
     }
+  }, [editingTemplate, form, userId]);
 
-    saveToLocalStorage("financial-templates", updatedTemplates);
-
-    resetForm();
-    onOpenChange(false);
-    onTemplateSaved();
-  };
-
-  const data = initializeData();
-  const availableRevenueStreams = getAvailableRevenueStreams(
-    data.transactions,
-    data.categories,
-  );
-  const currentCategories = data.categories.filter(
+  const currentCategories = categories.filter(
     (c) => c.type === transactionType,
   );
+
+  const onSubmit = (values: TemplateFormValues) => {
+    startTransition(async () => {
+      const res = await addOrUpdateTemplate(values);
+      if (res && (res as any).success) {
+        onOpenChange(false);
+        onTemplateSaved();
+      }
+    });
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -117,102 +125,149 @@ export function TemplateForm({
             Create a template for transactions you make frequently.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="type">Type</Label>
-              <Select
-                value={transactionType}
-                onValueChange={(value: "income" | "expense") =>
-                  setTransactionType(value)
-                }
-              >
-                <SelectTrigger className="glass">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="glass-card">
-                  <SelectItem value="income">Income</SelectItem>
-                  <SelectItem value="expense">Expense</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="amount">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="glass"
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="grid gap-4 py-4"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="glass">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="glass-card">
+                        <SelectItem value="income">Income</SelectItem>
+                        <SelectItem value="expense">Expense</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        className="glass"
+                        value={field.value ?? 0}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor="category">Category</Label>
-            <Select
-              value={selectedCategory}
-              onValueChange={setSelectedCategory}
-            >
-              <SelectTrigger className="glass">
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent className="glass-card">
-                {currentCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.name}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {transactionType === "expense" && (
-            <div>
-              <Label htmlFor="revenueStream">Default Revenue Stream</Label>
-              <Select
-                value={selectedRevenueStream}
-                onValueChange={setSelectedRevenueStream}
-              >
-                <SelectTrigger className="glass">
-                  <SelectValue placeholder="Select revenue stream" />
-                </SelectTrigger>
-                <SelectContent className="glass-card">
-                  {availableRevenueStreams.map((stream) => (
-                    <SelectItem key={stream.id} value={stream.name}>
-                      {stream.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div>
-            <Label htmlFor="description">Description</Label>
-            <Input
-              id="description"
-              placeholder="e.g., Coffee, Gas Fill-up, Lunch"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="glass"
+            <FormField
+              control={form.control}
+              name="categoryName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="glass">
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="glass-card">
+                      {currentCategories.map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-        </div>
-        <div className="flex justify-end space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="glass"
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleAddTemplate} className="glass-card border-0">
-            {editingTemplate ? "Update" : "Add"} Template
-          </Button>
-        </div>
+
+            {transactionType === "expense" && (
+              <FormField
+                control={form.control}
+                name="revenueStream"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Default Revenue Stream</FormLabel>
+                    <Select
+                      value={field.value ?? undefined}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="glass">
+                          <SelectValue placeholder="Select revenue stream" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="glass-card">
+                        {availableRevenueStreams.map((stream) => (
+                          <SelectItem key={stream.id} value={stream.name}>
+                            {stream.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., Coffee, Gas Fill-up, Lunch"
+                      className="glass"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="glass"
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="glass-card border-0"
+                disabled={isPending}
+              >
+                {editingTemplate ? "Update" : "Add"} Template
+              </Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

@@ -5,12 +5,17 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { initializeData } from "~/lib/financial-utils";
 
-export function CategoriesList() {
-  const data = initializeData();
-  const { categories } = data;
-
+export function CategoriesList({
+  categories,
+}: {
+  categories: {
+    id: string;
+    name: string;
+    type: "income" | "expense";
+    color: string;
+  }[];
+}) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card className="glass">

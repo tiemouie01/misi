@@ -11,24 +11,28 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Edit, Trash2, ArrowRight, Droplets } from "lucide-react";
-import {
-  initializeData,
-  getCategoryName,
-  getCategoryColor,
-} from "~/lib/financial-utils";
-import type { Transaction } from "~/lib/types";
+import type { Transaction } from "~/server/db/schema";
 
 interface TransactionsListProps {
+  transactions: Transaction[];
+  categories: {
+    id: string;
+    name: string;
+    type: "income" | "expense";
+    color: string;
+  }[];
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
 }
 
 export function TransactionsList({
+  transactions,
+  categories,
   onEditTransaction,
   onDeleteTransaction,
 }: TransactionsListProps) {
-  const data = initializeData();
-  const { transactions, categories } = data;
+  const getCategoryColor = (categoryName: string) =>
+    categories.find((c) => c.name === categoryName)?.color ?? "bg-slate-400";
 
   return (
     <Card className="glass-card border-0">
@@ -90,11 +94,9 @@ export function TransactionsList({
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <div
-                          className={`h-3 w-3 rounded-full ${getCategoryColor(transaction.category, categories)}`}
+                          className={`h-3 w-3 rounded-full ${getCategoryColor(transaction.categoryName)}`}
                         />
-                        <span>
-                          {getCategoryName(transaction.category, categories)}
-                        </span>
+                        <span>{transaction.categoryName}</span>
                       </div>
                     </TableCell>
                     <TableCell>{transaction.description}</TableCell>
@@ -118,7 +120,7 @@ export function TransactionsList({
                       }
                     >
                       {transaction.type === "income" ? "+" : "-"}$
-                      {transaction.amount.toFixed(2)}
+                      {Number(transaction.amount).toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">

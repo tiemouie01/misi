@@ -2,22 +2,30 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Edit, Trash2, ArrowRight, Zap, Droplets } from "lucide-react";
-import { initializeData, getCategoryColor } from "~/lib/financial-utils";
-import type { TransactionTemplate } from "~/lib/types";
+import type { TransactionTemplate } from "~/server/db/schema";
 
 interface TemplatesListProps {
+  templates: TransactionTemplate[];
+  categories: {
+    id: string;
+    name: string;
+    type: "income" | "expense";
+    color: string;
+  }[];
   onEditTemplate: (template: TransactionTemplate) => void;
   onDeleteTemplate: (id: string) => void;
   onUseTemplate: (template: TransactionTemplate) => void;
 }
 
 export function TemplatesList({
+  templates,
+  categories,
   onEditTemplate,
   onDeleteTemplate,
   onUseTemplate,
 }: TemplatesListProps) {
-  const data = initializeData();
-  const { templates, categories } = data;
+  const getCategoryColor = (categoryName: string) =>
+    categories.find((c) => c.name === categoryName)?.color ?? "bg-slate-400";
 
   if (templates.length === 0) {
     return (
@@ -49,7 +57,7 @@ export function TemplatesList({
             <div className="mb-3 flex items-start justify-between">
               <div className="flex items-center space-x-2">
                 <div
-                  className={`h-3 w-3 rounded-full ${getCategoryColor(template.category, categories)}`}
+                  className={`h-3 w-3 rounded-full ${getCategoryColor(template.categoryName)}`}
                 />
                 <Badge
                   variant={
@@ -83,7 +91,7 @@ export function TemplatesList({
             <div className="space-y-2">
               <h3 className="font-semibold">{template.description}</h3>
               <p className="text-muted-foreground text-sm">
-                {template.category}
+                {template.categoryName}
               </p>
               {template.revenueStream && (
                 <div className="text-muted-foreground flex items-center space-x-1 text-sm">
@@ -95,7 +103,7 @@ export function TemplatesList({
                 className={`text-lg font-bold ${template.type === "income" ? "text-emerald-400" : "text-rose-400"}`}
               >
                 {template.type === "income" ? "+" : "-"}$
-                {template.amount.toFixed(2)}
+                {Number(template.amount).toFixed(2)}
               </div>
             </div>
 

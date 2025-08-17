@@ -11,6 +11,7 @@ import {
   loans,
   loanPayments,
   type NewTransaction,
+  type NewTransactionTemplate,
   type NewLoan,
   type NewLoanPayment,
 } from "./schema";
@@ -70,6 +71,31 @@ export const createTransactionTemplate = async (
     const data = await db
       .insert(transactionTemplates)
       .values(template)
+      .returning();
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
+};
+
+export const updateTransactionTemplate = async (
+  userId: string,
+  id: string,
+  template: Partial<NewTransactionTemplate>,
+) => {
+  try {
+    const data = await db
+      .update(transactionTemplates)
+      .set(template)
+      .where(
+        and(
+          eq(transactionTemplates.id, id),
+          eq(transactionTemplates.userId, userId),
+        ),
+      )
       .returning();
     return { data, error: null };
   } catch (error) {
