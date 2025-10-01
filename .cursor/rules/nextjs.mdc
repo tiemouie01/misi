@@ -1,9 +1,4 @@
 ---
-description: 
-globs: 
-alwaysApply: true
----
----
 description: This rule explains Next.js conventions and best practices for fullstack development.
 globs: **/*.js,**/*.jsx,**/*.ts,**/*.tsx
 alwaysApply: false
@@ -13,8 +8,8 @@ alwaysApply: false
 
 - Use the App Router structure with `page.tsx` files in route directories.
 - Client components must be explicitly marked with `'use client'` at the top of the file.
-- Use kebab-case for directory names (e.g., `components/auth-form`) and PascalCase for component files.
-- Prefer named exports over default exports, i.e. `export function Button() { /* ... */ }` instead of `export default function Button() { /* ... */ }`.
+- Use kebab-case for directory names and for component files(e.g., `components/auth-form`).
+- Prefer default exports over named exports, i.e. `export default function Button() { /* ... */ }` instead of `export function Button() { /* ... */ }`.
 - Minimize `'use client'` directives:
   - Keep most components as React Server Components (RSC)
   - Only use client components when you need interactivity and wrap in `Suspense` with fallback UI
@@ -24,4 +19,20 @@ alwaysApply: false
   - Use React Server Actions for form handling
   - Use URL search params for shareable state
 - Use `nuqs` for URL search param state management
-- Make use of shadcn components as much as possible when building out UIs.
+ - Place all route-scoped components under an `_components` directory within that route
+ - Base all new UI components on Shadcn primitives from `src/components/ui/*`
+ - **Use Tailwind CSS v4 for all styling** - prioritize Tailwind utility classes over custom CSS; leverage Tailwind's design system for consistent spacing, colors, and typography
+ - Database queries and mutations must return `{ data: object | null, error: string | null }`
+ - Wrap all database queries and mutations in `try/catch`; do not throw from the data layer
+ - Prefer granular, component-specific data fetching and colocate fetches with components; use `Suspense` boundaries with meaningful fallbacks
+ - In each component file, export `Loading` and `Error` UIs as named exports at the end; use them conditionally within the same component, and where applicable also create a `NoData` fallback UI for empty states
+ - Each route must include a `loading.tsx` that composes/loading-aggregates child component loading UIs
+ - React 19 is the target: avoid `useMemo`/`useCallback`; leverage Server Components, Actions, and `use` for async where appropriate
+ - Always reference schemas in `src/server/db/schema/*` when creating queries or mutations
+- Handle dynamic routes per Next.js Dynamic Segments:
+  - Use `[segment]` for single dynamic parts, `[...segment]` for catch-all, and `[[...segment]]` for optional catch-all
+  - In Next.js 15, `params` is a Promise; use `async`/`await` or React `use` to read values
+  - Type `params` with `PageProps<'/route'>`, `LayoutProps<'/route'>`, or `RouteContext<'/route'>` as appropriate
+  - Prefer `generateStaticParams` to prebuild known dynamic routes when possible
+  - See docs: [Dynamic Route Segments](https://nextjs.org/docs/app/api-reference/file-conventions/dynamic-routes)
+
