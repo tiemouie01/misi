@@ -1,20 +1,19 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   ArrowDownToLine,
   ArrowRight,
   Check,
   Droplets,
   Layers,
-  Moon,
   PiggyBank,
   Scale,
   Sprout,
-  Sun,
   Waves,
   WifiOff,
   Zap,
 } from 'lucide-react'
+
+import { ThemeToggle } from '#/components/theme-toggle'
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -92,38 +91,12 @@ const reconcileRows = [
   { account: 'Cash', expected: 'K38,500', actual: 'K38,500', drift: null },
 ]
 
-function ThemeToggle() {
-  const [isDark, setIsDark] = useState<boolean>(false)
-
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains('dark'))
-  }, [])
-
-  function toggleTheme() {
-    const nextIsDark = !isDark
-    document.documentElement.classList.toggle('dark', nextIsDark)
-    localStorage.setItem('misi-theme', nextIsDark ? 'dark' : 'light')
-    setIsDark(nextIsDark)
-  }
-
-  return (
-    <button
-      type="button"
-      aria-label="Toggle dark mode"
-      className="grid size-9 place-items-center rounded-full border border-(--chip-line) bg-(--chip-bg) text-sea-ink transition hover:border-lagoon-deep"
-      onClick={toggleTheme}
-    >
-      {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-    </button>
-  )
-}
-
 function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-(--line) bg-(--header-bg) backdrop-blur-md">
       <div className="page-wrap flex items-center justify-between gap-4 py-3.5">
         <a href="#top" className="flex items-center gap-2.5 no-underline">
-          <span className="grid size-9 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-white shadow-md">
+          <span className="grid size-9 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
             <Waves className="size-4.5" strokeWidth={2.4} />
           </span>
           <span className="font-display text-2xl font-bold tracking-tight text-sea-ink">
@@ -143,12 +116,12 @@ function Header() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <a
-            href="#open"
+          <Link
+            to="/app"
             className="btn-primary rounded-full px-4.5 py-2 text-sm font-bold no-underline shadow-md transition hover:shadow-lg hover:brightness-110"
           >
             Open app
-          </a>
+          </Link>
         </div>
       </div>
     </header>
@@ -249,7 +222,7 @@ function HeroVisual() {
         className="island-shell float-soft rise-in absolute -top-9 right-6 z-10 hidden items-center gap-2.5 rounded-2xl px-4 py-3 lg:flex"
         style={{ animationDelay: '450ms' }}
       >
-        <span className="grid size-8 place-items-center rounded-lg bg-linear-to-br from-lagoon to-lagoon-deep text-white">
+        <span className="grid size-8 place-items-center rounded-lg bg-linear-to-br from-lagoon to-lagoon-deep text-(--btn-text)">
           <Zap className="size-4" />
         </span>
         <div>
@@ -266,7 +239,7 @@ function HeroVisual() {
         className="island-shell float-soft rise-in absolute -bottom-10 left-8 z-10 hidden items-center gap-2.5 rounded-2xl px-4 py-3 lg:flex"
         style={{ animationDelay: '650ms', animationDuration: '7s' }}
       >
-        <span className="grid size-8 place-items-center rounded-lg bg-linear-to-br from-palm to-lagoon-deep text-white">
+        <span className="grid size-8 place-items-center rounded-lg bg-linear-to-br from-palm to-lagoon-deep text-(--btn-text)">
           <PiggyBank className="size-4" />
         </span>
         <div>
@@ -336,13 +309,13 @@ function Home() {
               className="rise-in mt-8 flex flex-wrap items-center gap-3.5"
               style={{ animationDelay: '240ms' }}
             >
-              <a
-                href="#open"
+              <Link
+                to="/app"
                 className="btn-primary group flex items-center gap-2 rounded-full px-6 py-3 text-[0.95rem] font-bold no-underline shadow-lg transition hover:shadow-xl hover:brightness-110"
               >
                 Start tracking
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </a>
+              </Link>
               <a
                 href="#flow"
                 className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-6 py-3 text-[0.95rem] font-bold text-sea-ink no-underline transition hover:border-lagoon-deep hover:text-sea-ink"
@@ -384,7 +357,7 @@ function Home() {
                   style={{ animationDelay: `${i * 120}ms` }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="grid size-11 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-white shadow-md">
+                    <span className="grid size-11 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
                       <s.icon className="size-5" strokeWidth={2.2} />
                     </span>
                     <span className="font-mono text-xs font-semibold tracking-widest text-lagoon-deep">
@@ -423,7 +396,7 @@ function Home() {
                 style={{ animationDelay: `${i * 100}ms` }}
               >
                 <div className="flex items-center gap-3.5">
-                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-linear-to-br from-lagoon to-lagoon-deep text-white shadow-md">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-linear-to-br from-lagoon to-lagoon-deep text-(--btn-text) shadow-md">
                     <f.icon className="size-5" strokeWidth={2.2} />
                   </span>
                   <h3 className="text-[1.08rem] font-extrabold text-sea-ink">
@@ -464,7 +437,7 @@ function Home() {
                     key={item}
                     className="flex items-start gap-3 text-[0.95rem] font-medium text-sea-ink-soft"
                   >
-                    <span className="mt-0.5 grid size-5.5 shrink-0 place-items-center rounded-full bg-linear-to-br from-lagoon to-palm text-white">
+                    <span className="mt-0.5 grid size-5.5 shrink-0 place-items-center rounded-full bg-linear-to-br from-lagoon to-palm text-(--btn-text)">
                       <Check className="size-3" strokeWidth={3} />
                     </span>
                     {item}
@@ -521,12 +494,12 @@ function Home() {
                 <p className="text-sm font-bold text-sea-ink">
                   One gap to close
                 </p>
-                <a
-                  href="#open"
+                <Link
+                  to="/app"
                   className="flex items-center gap-1.5 text-sm font-bold text-lagoon-deep no-underline transition hover:gap-2.5"
                 >
                   Close it <ArrowRight className="size-4" />
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -543,7 +516,7 @@ function Home() {
               }}
             />
             <div className="relative">
-              <span className="mx-auto grid size-13 place-items-center rounded-2xl bg-linear-to-br from-lagoon-deep to-palm text-white shadow-lg">
+              <span className="mx-auto grid size-13 place-items-center rounded-2xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-lg">
                 <Waves className="size-6" strokeWidth={2.2} />
               </span>
               <h2 className="font-display mx-auto mt-5 max-w-xl text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
@@ -553,13 +526,13 @@ function Home() {
                 Install Misi on your home screen and log your first transaction
                 before the water settles.
               </p>
-              <a
-                href="#top"
+              <Link
+                to="/app"
                 className="btn-primary group mt-7 inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-bold no-underline shadow-lg transition hover:shadow-xl hover:brightness-110"
               >
                 Open Misi
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </a>
+              </Link>
             </div>
           </div>
         </section>

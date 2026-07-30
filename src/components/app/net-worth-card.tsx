@@ -1,0 +1,154 @@
+import { Droplets } from 'lucide-react'
+import { useState } from 'react'
+
+import { CYCLE_BUDGET, USD_RATE, formatK, seedWallets } from '#/lib/app-data'
+
+import type { Account } from '#/lib/app-data'
+
+interface NetWorthCardProps {
+  accounts: Account[]
+  netWorth: number
+  spendingLeft: number
+  savingsBalance: number
+  animationDelay: string
+}
+
+interface DisplayRow {
+  id: string
+  name: string
+  amount: number
+  amountLabel: string
+  color: string
+  ratioBase?: number
+}
+
+export function NetWorthCard({
+  accounts,
+  netWorth,
+  spendingLeft,
+  savingsBalance,
+  animationDelay,
+}: NetWorthCardProps) {
+  const [view, setView] = useState<'accounts' | 'wallets'>('accounts')
+
+  const accountRows: DisplayRow[] = accounts.map((account) => ({
+    id: account.id,
+    name: account.name,
+    amount:
+      account.currency === 'USD' ? account.balance * USD_RATE : account.balance,
+    amountLabel:
+      account.currency === 'USD'
+        ? `$${account.balance.toFixed(2)}`
+        : formatK(account.balance),
+    color:
+      account.currency === 'USD' || account.kind === 'cash'
+        ? 'var(--palm)'
+        : account.kind === 'mobile'
+          ? 'var(--lagoon)'
+          : 'var(--lagoon-deep)',
+  }))
+  const walletRows: DisplayRow[] = seedWallets.map((wallet) => {
+    const balance =
+      wallet.id === 'spending'
+        ? spendingLeft
+        : wallet.id === 'savings'
+          ? savingsBalance
+          : wallet.balance
+    const color =
+      wallet.id === 'spending'
+        ? 'var(--lagoon)'
+        : wallet.id === 'unit-trust'
+          ? 'var(--lagoon-deep)'
+          : wallet.id === 'debt'
+            ? '#d96a4e'
+            : 'var(--palm)'
+    return {
+      id: wallet.id,
+      name: wallet.name,
+      amount: wallet.currency === 'USD' ? balance * USD_RATE : balance,
+      amountLabel:
+        wallet.currency === 'USD' ? `$${balance.toFixed(2)}` : formatK(balance),
+      color,
+      ratioBase: wallet.id === 'spending' ? CYCLE_BUDGET : undefined,
+    }
+  })
+  const rows = view === 'accounts' ? accountRows : walletRows
+  const largest = Math.max(...rows.map((row) => row.amount), 1)
+
+  return (
+    <section
+      className="island-shell rise-in rounded-3xl p-6"
+      style={{ animationDelay }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="island-kicker">Total across everything</p>
+          <p className="font-display mt-1.5 text-4xl font-bold tracking-tight text-sea-ink tabular-nums">
+            {formatK(netWorth)}
+          </p>
+          <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-palm">
+            <Droplets className="size-3.5" />
+            <span className="font-mono tabular-nums">+K112,300</span> this cycle
+          </p>
+        </div>
+        <span className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1 text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
+          MWK
+        </span>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
+        {(['accounts', 'wallets'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={
+              view === option
+                ? 'rounded-full bg-(--surface-strong) px-3 py-1.5 text-sm font-bold text-sea-ink shadow-sm'
+                : 'rounded-full px-3 py-1.5 text-sm font-semibold text-sea-ink-soft'
+            }
+            onClick={() => setView(option)}
+          >
+            {option === 'accounts' ? 'Accounts' : 'Wallets'}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 space-y-3">
+        {rows.map((row) => {
+          const width = row.ratioBase
+            ? (row.amount / row.ratioBase) * 100
+            : (row.amount / largest) * 100
+          return (
+            <div key={row.id} className="flex items-center gap-3">
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: row.color }}
+              />
+              <span className="w-24 shrink-0 truncate text-sm font-semibold text-sea-ink">
+                {row.name}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--line)">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(8, Math.min(width, 100))}%`,
+                    background: `linear-gradient(90deg, ${row.color}, var(--lagoon))`,
+                  }}
+                />
+              </div>
+              <span className="font-mono w-24 shrink-0 text-right text-[0.8rem] text-sea-ink-soft tabular-nums">
+                {row.amountLabel}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-5 flex flex-wrap gap-2 border-t border-dashed border-(--line) pt-4">
+        <span className="rounded-full bg-(--chip-bg) px-2.5 py-1 text-[0.78rem] font-semibold text-sea-ink-soft">
+          USD @ K1,735
+        </span>
+        <span className="rounded-full bg-(--chip-bg) px-2.5 py-1 text-[0.78rem] font-semibold text-sea-ink-soft">
+          Cycle anchored to the 20th
+        </span>
+      </div>
+    </section>
+  )
+}
