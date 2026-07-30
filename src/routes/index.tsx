@@ -345,7 +345,7 @@ function Home() {
               </a>
               <a
                 href="#flow"
-                className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-6 py-3 text-[0.95rem] font-bold text-sea-ink no-underline transition hover:border-lagoon-deep"
+                className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-6 py-3 text-[0.95rem] font-bold text-sea-ink no-underline transition hover:border-lagoon-deep hover:text-sea-ink"
               >
                 See the flow
               </a>

@@ -30,6 +30,7 @@
   --btn-a: #1f6e76;
   --btn-b: #1d5138;
   --btn-text: #ffffff;
+  --link-hover: #246f76;
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -90,6 +91,7 @@
   --btn-a: #4fc4ba;
   --btn-b: #4ea87c;
   --btn-text: #06231d;
+  --link-hover: #b8efe5;
 
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
@@ -251,7 +253,7 @@ a {
 }
 
 a:hover {
-  color: #246f76;
+  color: var(--link-hover);
 }
 
 code {
@@ -436,6 +438,10 @@ a {
 
 .btn-primary {
   background: linear-gradient(120deg, var(--btn-a), var(--btn-b));
+  color: var(--btn-text);
+}
+
+.btn-primary:hover {
   color: var(--btn-text);
 }
 
