@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Misi — Product Spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --sea-ink: #173a40;
+    --sea-ink-soft: #416166;
+    --lagoon: #4fb8b2;
+    --lagoon-deep: #328f97;
+    --palm: #2f6a4a;
+    --sand: #e7f0e8;
+    --foam: #f3faf5;
+    --surface: rgba(255, 255, 255, 0.74);
+    --surface-strong: rgba(255, 255, 255, 0.9);
+    --line: rgba(23, 58, 64, 0.14);
+    --inset-glint: rgba(255, 255, 255, 0.82);
+    --kicker: rgba(47, 106, 74, 0.9);
+    --bg-base: #e7f3ec;
+    --header-bg: rgba(251, 255, 248, 0.84);
+    --chip-bg: rgba(255, 255, 255, 0.8);
+    --chip-line: rgba(47, 106, 74, 0.18);
+    --hero-a: rgba(79, 184, 178, 0.36);
+    --hero-b: rgba(47, 106, 74, 0.2);
+    --code-bg: rgba(255, 255, 255, 0.7);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --sea-ink: #d7ece8;
+      --sea-ink-soft: #afcdc8;
+      --lagoon: #60d7cf;
+      --lagoon-deep: #8de5db;
+      --palm: #6ec89a;
+      --sand: #0f1a1e;
+      --foam: #101d22;
+      --surface: rgba(16, 30, 34, 0.8);
+      --surface-strong: rgba(15, 27, 31, 0.92);
+      --line: rgba(141, 229, 219, 0.18);
+      --inset-glint: rgba(194, 247, 238, 0.14);
+      --kicker: #b8efe5;
+      --bg-base: #0a1418;
+      --header-bg: rgba(10, 20, 24, 0.8);
+      --chip-bg: rgba(13, 28, 32, 0.9);
+      --chip-line: rgba(141, 229, 219, 0.24);
+      --hero-a: rgba(96, 215, 207, 0.18);
+      --hero-b: rgba(110, 200, 154, 0.12);
+      --code-bg: rgba(13, 28, 32, 0.75);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    color: var(--sea-ink);
+    font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    background-color: var(--bg-base);
+    background:
+      radial-gradient(1100px 620px at -8% -10%, var(--hero-a), transparent 58%),
+      radial-gradient(1050px 620px at 112% -12%, var(--hero-b), transparent 62%),
+      radial-gradient(720px 380px at 50% 115%, rgba(79, 184, 178, 0.1), transparent 68%),
+      linear-gradient(180deg, color-mix(in oklab, var(--sand) 68%, white) 0%, var(--foam) 44%, var(--bg-base) 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.28;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.8), transparent 34%),
+      radial-gradient(circle at 78% 26%, rgba(79, 184, 178, 0.2), transparent 42%),
+      radial-gradient(circle at 42% 82%, rgba(47, 106, 74, 0.14), transparent 36%);
+  }
+
+  .page-wrap {
+    width: min(880px, calc(100% - 2rem));
+    margin-inline: auto;
+  }
+
+  /* ---------- Header ---------- */
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid var(--line);
+    background: var(--header-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .site-header .page-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.85rem;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    text-decoration: none;
+    color: var(--sea-ink);
+  }
+
+  .brand-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .brand-tag {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sea-ink-soft);
+  }
+
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .toc a {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--sea-ink-soft);
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+  }
+
+  .toc a:hover {
+    color: var(--sea-ink);
+    background: var(--chip-bg);
+    border-color: var(--chip-line);
+  }
+
+  @media (max-width: 720px) {
+    .toc { display: none; }
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    padding: 4.5rem 0 2.5rem;
+  }
+
+  .kicker {
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    font-size: 0.69rem;
+    color: var(--kicker);
+    margin: 0 0 0.9rem;
+  }
+
+  .hero h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: clamp(2.6rem, 6vw, 4rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.1rem;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    background: linear-gradient(100deg, var(--lagoon-deep), var(--palm));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero .lede {
+    font-size: 1.12rem;
+    color: var(--sea-ink-soft);
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  /* ---------- Sections & cards ---------- */
+  main { padding-bottom: 5rem; }
+
+  section { margin-top: 3.25rem; }
+
+  section > h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.35rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  section > h2 .num {
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--lagoon-deep);
+    border: 1px solid var(--chip-line);
+    background: var(--chip-bg);
+    border-radius: 999px;
+    padding: 0.28rem 0.6rem;
+  }
+
+  section > .section-lede {
+    color: var(--sea-ink-soft);
+    margin: 0 0 1.4rem;
+    max-width: 62ch;
+  }
+
+  .island {
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: linear-gradient(165deg, var(--surface-strong), var(--surface));
+    box-shadow:
+      0 1px 0 var(--inset-glint) inset,
+      0 22px 44px rgba(30, 90, 72, 0.1),
+      0 6px 18px rgba(23, 58, 64, 0.08);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: 1.6rem 1.75rem;
+    margin-bottom: 1.1rem;
+  }
+
+  .island h3 {
+    font-size: 1.06rem;
+    font-weight: 800;
+    margin: 0 0 0.55rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .island h3 .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--lagoon), var(--palm));
+    flex: none;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--lagoon) 22%, transparent);
+  }
+
+  .island p { margin: 0 0 0.8rem; }
+  .island p:last-child { margin-bottom: 0; }
+
+  .island ul, .island ol {
+    margin: 0.4rem 0 0.8rem;
+    padding-left: 1.25rem;
+  }
+
+  .island li { margin-bottom: 0.4rem; }
+  .island li:last-child { margin-bottom: 0; }
+  .island ul:last-child, .island ol:last-child { margin-bottom: 0; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.1rem;
+  }
+
+  .grid-2 .island { margin-bottom: 0; }
+
+  strong { font-weight: 700; }
+
+  code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.86em;
+    border: 1px solid var(--line);
+    background: var(--code-bg);
+    border-radius: 7px;
+    padding: 1.5px 7px;
+  }
+
+  pre {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--code-bg);
+    padding: 1.1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.6rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+
+  pre code {
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; margin-top: 0.4rem; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--sea-ink-soft);
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: 0; }
+
+  /* ---------- Chips & misc ---------- */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.7rem;
+  }
+
+  .chip {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.32rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--chip-line);
+    background: var(--chip-bg);
+    color: var(--sea-ink-soft);
+  }
+
+  .chip.accent {
+    color: var(--lagoon-deep);
+    border-color: color-mix(in oklab, var(--lagoon-deep) 40%, transparent);
+  }
+
+  .callout {
+    border-left: 3px solid var(--lagoon);
+    padding: 0.15rem 0 0.15rem 1rem;
+    margin: 0.9rem 0;
+    color: var(--sea-ink-soft);
+  }
+
+  /* ---------- Roadmap ---------- */
+  .phase {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 1.1rem;
+    align-items: start;
+  }
+
+  .phase-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: white;
+    background: linear-gradient(140deg, var(--lagoon-deep), var(--palm));
+    box-shadow: 0 6px 14px rgba(50, 143, 151, 0.35);
+  }
+
+  .phase h3 { margin-top: 0.55rem; }
+
+  .done-when {
+    font-size: 0.85rem;
+    color: var(--sea-ink-soft);
+    margin-top: 0.5rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed var(--line);
+  }
+
+  /* ---------- Footer ---------- */
+  .site-footer {
+    border-top: 1px solid var(--line);
+    padding: 2rem 0 3rem;
+    color: var(--sea-ink-soft);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="page-wrap">
+    <a class="brand" href="#top">
+      <span class="brand-name">Misi</span>
+      <span class="brand-tag">Product Spec</span>
+    </a>
+    <nav class="toc">
+      <a href="#vision">Vision</a>
+      <a href="#concepts">Concepts</a>
+      <a href="#reconciliation">Reconciliation</a>
+      <a href="#entry">Entry Speed</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#scope">Scope</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page-wrap" id="top">
+
+  <div class="hero">
+    <p class="kicker">Personal finance, Malawi-first</p>
+    <h1>Misi — <em>water</em>, for money that flows.</h1>
+    <p class="lede">
+      A personal budgeting and expense-tracking PWA built for how money actually works in Malawi:
+      multiple bank accounts, Airtel Money, cash, unit trusts, and a US dollar account — all in one honest picture.
+    </p>
+  </div>
+
+  <!-- 1. Vision -->
+  <section id="vision">
+    <h2><span class="num">01</span> Vision</h2>
+    <p class="section-lede">
+      Buddy proved the model — wallets, categories, budgets, insights — but fails on entry speed,
+      reconciliation, debt, multi-currency, and investments. Misi keeps what works and fixes the rest.
+    </p>
+    <div class="grid-2">
+      <div class="island">
+        <h3><span class="dot"></span>Entry speed above all</h3>
+        <p>Logging a transaction takes under 10 seconds. Every screen is designed around reducing friction to log.</p>
+      </div>
+      <div class="island">
+        <h3><span class="dot"></span>Reality-first</h3>
+        <p>The app mirrors real money — 3 banks, Airtel Money, cash. When app and reality drift, reconciliation is a first-class flow, not an afterthought.</p>
+      </div>
+      <div class="island">
+        <h3><span class="dot"></span>Allocation ≠ location</h3>
+        <p>Where money <em>sits</em> (accounts) and what it's <em>for</em> (wallets) are separate dimensions, tracked independently.</p>
+      </div>
+      <div class="island">
+        <h3><span class="dot"></span>Offline-first</h3>
+        <p>Expenses happen in markets, buses, and shops — often without data. Everything works offline and syncs later via PowerSync.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Core concepts -->
+  <section id="concepts">
+    <h2><span class="num">02</span> Core Concepts</h2>
+    <p class="section-lede">The vocabulary of the app. Everything else builds on these.</p>
+
+    <div class="island">
+      <h3><span class="dot"></span>Accounts — where money sits</h3>
+      <p>Real-world money locations: Bank 1/2/3, Airtel Money, Cash, plus investment custodians (unit trust funds, USD account). Each has a currency (MWK or USD) and an <code>includeInNetWorth</code> flag.</p>
+    </div>
+
+    <div class="island">
+      <h3><span class="dot"></span>Wallets — what money is for</h3>
+      <p>Virtual allocations, Buddy-style but unlimited: <strong>Spending</strong>, <strong>Savings</strong> (auto-filled from income), and one wallet per investment. Wallets don't map 1:1 to accounts — that was Buddy's friction — but every transaction records <strong>both</strong> its account and its wallet, so per-account expected balances are always computable.</p>
+    </div>
+
+    <div class="island">
+      <h3><span class="dot"></span>Transactions</h3>
+      <p>Three types: <code>expense</code>, <code>income</code>, <code>transfer</code>. Transfers are double-ended (bank → Airtel Money, savings → unit trust) and never count as spending. Investment purchases are transfers into the investment wallet.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>amount</code> + <code>currency</code></td><td>MWK or USD; FX rate captured at entry for USD</td></tr>
+            <tr><td><code>accountId</code></td><td>Where the money moved (bank / Airtel / cash)</td></tr>
+            <tr><td><code>walletId</code></td><td>Which allocation it affects</td></tr>
+            <tr><td><code>categoryId</code> / <code>subcategoryId</code></td><td>Unlimited, user-defined</td></tr>
+            <tr><td><code>payee</code></td><td>Free text, remembered for quick re-entry</td></tr>
+            <tr><td><code>date</code>, <code>note</code></td><td>Date defaults to now</td></tr>
+            <tr><td><code>items</code></td><td>Free text, autocomplete from history — see "Items" below</td></tr>
+            <tr><td><code>excludeFromBudget</code></td><td>Per-transaction toggle (kept from Buddy)</td></tr>
+            <tr><td><code>receiptId</code></td><td>Optional receipt photo link (future OCR)</td></tr>
+            <tr><td><code>reconciliationId</code></td><td>Set when created during a reconcile session</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="island">
+        <h3><span class="dot"></span>Categories & subcategories</h3>
+        <p>Unlimited, user-defined, with icon and color. Seeded with Malawi-relevant defaults — groceries, minibus, airtime &amp; data, utilities, eating out, health — all editable and deletable.</p>
+      </div>
+      <div class="island">
+        <h3><span class="dot"></span>Budgets, anchored to payday</h3>
+        <p>Budgets per category/subcategory with an amount and optional rollover. The cycle starts on the <strong>20th</strong> (configurable anchor day), matching when income lands — not the 1st. Weekly, monthly-from-anchor, or custom ranges. The budget view shows spent / remaining / pace.</p>
+      </div>
+    </div>
+
+    <div class="island" style="margin-top: 1.1rem;">
+      <h3><span class="dot"></span>Items — spend below the category line</h3>
+      <p>"How much am I spending on milk a month?" shouldn't require a whole category. Every transaction has an optional <code>items</code> field — free text with autocomplete learned from your history. Typing "mi…" suggests <em>milk</em> from last time; one tap and done.</p>
+      <ul>
+        <li>Aggregation is <strong>deterministic and offline</strong>: "Milk — K18,400 this budget period" is a simple sum, not an AI guess.</li>
+        <li>Categories stay broad buckets; items answer the specific questions. No category explosion.</li>
+        <li>AI arrives later (Phase 6) as an optional <strong>fuzzy-grouping layer</strong> on top — merging "Malaicha milk" with "milk", suggesting items from receipt text — but the foundation never depends on it.</li>
+      </ul>
+      <div class="callout">Rejected alternatives: a category per product (unmanageable), or AI-only aggregation over a description field (fuzzy, non-deterministic, breaks offline).</div>
+    </div>
+
+    <div class="island" style="margin-top: 1.1rem;">
+      <h3><span class="dot"></span>Income sources &amp; schedule</h3>
+      <p>Income isn't one event — it's a rhythm. Misi models named income sources, each with an expected landing window:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Source</th><th>Expected</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>Primary salary</td><td>20th</td><td>Largest — <strong>budget anchor</strong></td></tr>
+            <tr><td>Secondary income</td><td>24th – 30th</td><td>Expected range, date varies</td></tr>
+            <tr><td>Allowance (primary job)</td><td>10th</td><td>Lands mid-cycle</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul style="margin-top: 0.8rem;">
+        <li><strong>Expected-income checklist:</strong> each cycle, Misi shows which sources have landed and which are pending — a missing salary is visible immediately, and mid-cycle top-ups (10th, 24th–30th) are anticipated rather than surprising.</li>
+        <li>The <strong>split rule</strong> applies per source: each can have its own savings percentage (e.g. 20% of salary, 50% of allowance).</li>
+        <li>Budget pacing accounts for the rhythm — "you can spend K2,100/day until the allowance lands on the 10th."</li>
+      </ul>
+    </div>
+
+    <div class="island" style="margin-top: 1.1rem;">
+      <h3><span class="dot"></span>Income split rule</h3>
+      <p>"When income lands, move X% to Savings." Each income source carries its own percentage. Logging income makes Misi propose the savings transfer — one tap to confirm, editable. From Savings, a separate <strong>Allocate</strong> flow moves money into investment wallets. Mirrors the mental system: income → auto-save → deliberate investing.</p>
+      <div class="chip-row">
+        <span class="chip accent">Income</span><span class="chip">→</span>
+        <span class="chip accent">Auto-save X%</span><span class="chip">→</span>
+        <span class="chip accent">Allocate to unit trusts / USD</span>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top: 1.1rem;">
+      <div class="island">
+        <h3><span class="dot"></span>Investments</h3>
+        <p>Each investment = wallet + metadata: fund name, type (unit trust / USD cash), optional units and latest unit price (entered manually — no market APIs for Malawian unit trusts). Tracks contributions, estimated value, and simple return. USD converts into net worth at a manually maintained FX rate with history, so currency gain/loss is visible.</p>
+      </div>
+      <div class="island">
+        <h3><span class="dot"></span>Debts</h3>
+        <p>Buddy has none; Misi does. Track money <strong>owed to you</strong> and <strong>you owe</strong> — person, optional due date, optional note. Lending = transfer to a debt wallet (spending money decreases correctly); repayment = transfer back. Optionally included in net worth.</p>
+      </div>
+    </div>
+
+    <div class="island" style="margin-top: 1.1rem;">
+      <h3><span class="dot"></span>Insights &amp; overview</h3>
+      <p>The free-Buddy gap — all computed locally:</p>
+      <ul>
+        <li>Spending by category <strong>and by item</strong>, period-over-period comparison, trend lines</li>
+        <li>Spending calendar (daily heatmap)</li>
+        <li>Top payees, average transaction size, day-of-week patterns</li>
+        <li>Budget pace: "at this rate, Groceries runs out on the 14th"</li>
+        <li>Savings rate over time vs. the target rule</li>
+        <li>Net worth over time (MWK-converted), including investments and debts</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3. Reconciliation -->
+  <section id="reconciliation">
+    <h2><span class="num">03</span> Reconciliation — the killer feature</h2>
+    <p class="section-lede">
+      Every few days: "I have K X across everything — does Misi agree?" A guided flow, not a spreadsheet chore.
+    </p>
+    <div class="island">
+      <ol>
+        <li>Misi shows each account with its <strong>expected balance</strong>, computed from transactions.</li>
+        <li>You enter the <strong>actual balance</strong> per account — checking each bank app, Airtel Money, counting cash.</li>
+        <li>Per-account and total drift is shown. Green = matched, red = gap.</li>
+        <li>For gaps, Misi helps close them:
+          <ul>
+            <li>Untracked-days heatmap — "you logged nothing on Saturday"</li>
+            <li>Suggested likely misses: recurring expenses, frequent payees, typical amounts</li>
+            <li>Quick-add missing transactions inline, pre-tagged with the session</li>
+            <li>Last resort: a clearly-marked <strong>balance adjustment</strong> so books always balance — the adjustment is absorbed by the <strong>Spending wallet</strong>, since untracked leakage is real spending</li>
+          </ul>
+        </li>
+        <li>Session closes with a summary. History is kept — drift-over-time is itself an insight ("you typically lose track of ~K3,000/week").</li>
+      </ol>
+      <div class="callout">Reconciliation checks <strong>accounts against reality</strong> (the only ground truth). Wallets are virtual, so drift resolves into Spending by design.</div>
+    </div>
+  </section>
+
+  <!-- 4. Entry speed -->
+  <section id="entry">
+    <h2><span class="num">04</span> Entry Speed — the manual-first design</h2>
+    <p class="section-lede">OCR is deferred by choice, so the manual entry UX carries the product.</p>
+    <div class="grid-2">
+      <div class="island">
+        <h3><span class="dot"></span>Always one tap away</h3>
+        <p>A big "+" on every screen opens amount-first numpad entry. Smart defaults: last-used account/wallet, category guessed from payee history.</p>
+      </div>
+      <div class="island">
+        <h3><span class="dot"></span>Recents, favorites, templates</h3>
+        <p>Frequent payees and categories as one-tap chips (minibus fare, airtime, usual grocery run). Recurring templates (rent, subscriptions, tithe) pre-fill everything. Long-press a past transaction → "again today".</p>
+      </div>
+    </div>
+    <div class="island" style="margin-top: 1.1rem;">
+      <h3><span class="dot"></span>Offline by default</h3>
+      <p>Draft transactions survive without connectivity and sync via PowerSync when back online. Entry never waits on the network.</p>
+    </div>
+  </section>
+
+  <!-- 5. Architecture -->
+  <section id="architecture">
+    <h2><span class="num">05</span> Tech Architecture</h2>
+    <p class="section-lede">Matches the existing scaffold — no detours.</p>
+    <div class="island">
+      <div class="chip-row" style="margin-top: 0;">
+        <span class="chip accent">TanStack Start + React 19</span>
+        <span class="chip accent">Tailwind v4 · PWA</span>
+        <span class="chip accent">PowerSync (SQLite, offline)</span>
+        <span class="chip accent">Convex (sync + source of truth)</span>
+        <span class="chip accent">TanStack DB + Query</span>
+        <span class="chip accent">better-auth</span>
+        <span class="chip accent">PostHog</span>
+      </div>
+      <p>Installable on the iOS home screen, service-worker offline shell. Charts (Recharts or visx) added when building insights. Auth is needed for cross-device sync even single-user.</p>
+      <ul>
+        <li><strong>Security:</strong> passkey app lock (WebAuthn) on top of better-auth — Face ID / fingerprint to open Misi.</li>
+        <li><strong>Net worth base currency: MWK</strong> — USD balances convert in at the tracked FX rate.</li>
+      </ul>
+      <pre><code>users
+accounts        (name, type: bank|mobile_money|cash|investment, currency, includeInNetWorth)
+wallets         (name, type: spending|savings|investment|debt, targetPct?, meta)
+transactions    (type, amount, currency, fxRate, accountId, walletId, toAccountId?,
+                 toWalletId?, categoryId?, payee?, items?, date, note?,
+                 excludeFromBudget, reconciliationId?, createdAt)
+categories      (name, icon, color, parentId?)
+budgets         (categoryId, amount, rollover)
+budgetSettings  (anchorDay=20, periodLength)
+incomeSources   (name, expectedDay | expectedRange, savingsPct, isAnchor)
+debts           (person, direction: owed_to_me|i_owe, currency, dueDate?, note?)
+reconciliations (startedAt, closedAt, entries: [{accountId, expected, actual}])
+fxRates         (pair, rate, date)          // manual entry in v1
+recurringTemplates (transaction shape + label)</code></pre>
+      <div class="callout">Schema is multi-user-ready (every table keyed by <code>userId</code>) but single-user in practice for v1.</div>
+    </div>
+  </section>
+
+  <!-- 6. Roadmap -->
+  <section id="roadmap">
+    <h2><span class="num">06</span> Phased Roadmap</h2>
+    <p class="section-lede">Each phase ships something usable on its own.</p>
+
+    <div class="island phase">
+      <div class="phase-badge">1</div>
+      <div>
+        <h3><span class="dot"></span>Core money mirror</h3>
+        <p>Accounts, wallets, categories, transactions (incl. transfers), offline sync, net worth total.</p>
+        <p class="done-when"><strong>Done when:</strong> you can log a minibus fare offline in under 10 seconds.</p>
+      </div>
+    </div>
+
+    <div class="island phase">
+      <div class="phase-badge">2</div>
+      <div>
+        <h3><span class="dot"></span>Budgets &amp; income rule</h3>
+        <p>Anchored budget periods (20th), category budgets, budget pace view, income sources with expected-landing checklist, per-source auto savings-split, allocate-to-investments flow.</p>
+      </div>
+    </div>
+
+    <div class="island phase">
+      <div class="phase-badge">3</div>
+      <div>
+        <h3><span class="dot"></span>Reconciliation</h3>
+        <p>Guided reconcile flow, balance adjustments, reconciliation history, drift insights.</p>
+      </div>
+    </div>
+
+    <div class="island phase">
+      <div class="phase-badge">4</div>
+      <div>
+        <h3><span class="dot"></span>Insights &amp; calendar</h3>
+        <p>Overview graphs, spending calendar, category trends, savings rate, net worth history.</p>
+      </div>
+    </div>
+
+    <div class="island phase">
+      <div class="phase-badge">5</div>
+      <div>
+        <h3><span class="dot"></span>Debts, investments &amp; multi-currency polish</h3>
+        <p>Debt tracking, unit trust value tracking, USD wallet + FX rates, net worth composition.</p>
+      </div>
+    </div>
+
+    <div class="island phase">
+      <div class="phase-badge">6</div>
+      <div>
+        <h3><span class="dot"></span>AI capture <span style="font-weight: 500; font-size: 0.8rem; color: var(--sea-ink-soft);">(deferred by choice)</span></h3>
+        <p>Receipt photo → cloud vision extraction → pre-filled transaction for confirmation, plus fuzzy item grouping ("Malaicha milk" ≈ "milk"). The <code>receiptId</code> and <code>items</code> hooks are already in the data model.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Scope -->
+  <section id="scope">
+    <h2><span class="num">07</span> Deliberately out of scope (v1)</h2>
+    <div class="island">
+      <ul>
+        <li><strong>No bank / mobile-money API integrations</strong> — none exist for Malawian banks; manual + reconcile is the honest model.</li>
+        <li><strong>No SMS parsing</strong> — iOS doesn't permit it.</li>
+        <li><strong>No shared budgets</strong> or multi-person households.</li>
+        <li><strong>No native app</strong> — PWA until the entry UX is proven.</li>
+      </ul>
+    </div>
+
+    <h2 style="margin-top: 2.5rem;"><span class="num">08</span> Decisions locked</h2>
+    <div class="island">
+      <ul>
+        <li><strong>Reconciliation</strong> checks accounts against reality; deficits resolve into the <strong>Spending wallet</strong> via clearly-marked balance adjustments.</li>
+        <li><strong>Net worth base currency: MWK</strong>, with USD converted in at the tracked FX rate.</li>
+        <li><strong>App lock:</strong> passkey (WebAuthn) on top of better-auth — Face ID / fingerprint on open.</li>
+        <li><strong>Item-level insights</strong> come from the deterministic <code>items</code> field, not per-product categories or AI-only parsing.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="page-wrap">
+    Misi — "water". Money flows; Misi keeps track of where it goes.
+  </div>
+</footer>
+
+</body>
+</html>
