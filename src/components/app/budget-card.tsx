@@ -1,5 +1,8 @@
 import { useState } from 'react'
 
+import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
+import { Progress } from '#/components/ui/progress'
 import {
   CYCLE_BUDGET,
   CYCLE_DAY,
@@ -30,8 +33,9 @@ export function BudgetCard({
   const pacePct = Math.round((CYCLE_DAY / CYCLE_DAYS) * 100)
 
   return (
-    <section
-      className="island-shell rise-in rounded-3xl p-6"
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -49,10 +53,12 @@ export function BudgetCard({
         until 19 Aug
       </p>
       <div className="mt-4">
-        <div className="relative h-2.5 rounded-full bg-(--line)">
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-linear-to-r from-lagoon-deep to-palm"
-            style={{ width: `${spentPct}%` }}
+        <div className="relative">
+          <Progress
+            value={spentPct}
+            aria-label="Cycle budget spent"
+            aria-valuetext={`${spentPct}% spent`}
+            className="h-2.5 [&_[data-slot=progress-indicator]]:from-lagoon-deep"
           />
           <span
             className="absolute -inset-y-0.5 w-0.5 rounded bg-sea-ink/50"
@@ -81,7 +87,15 @@ export function BudgetCard({
                 <span className="w-28 shrink-0 text-sm font-semibold text-sea-ink">
                   {category.name}
                 </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--line)">
+                <div
+                  role="progressbar"
+                  aria-label={`${category.name} budget spent`}
+                  aria-valuemin={0}
+                  aria-valuemax={budget.budget}
+                  aria-valuenow={Math.min(budget.spent, budget.budget)}
+                  aria-valuetext={`${formatK(budget.spent)} of ${formatK(budget.budget)} spent`}
+                  className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--line)"
+                >
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -91,7 +105,8 @@ export function BudgetCard({
                   />
                 </div>
                 <span className="font-mono w-28 shrink-0 text-right text-[0.72rem] whitespace-nowrap text-sea-ink-soft tabular-nums">
-                  {formatK(budget.spent)}/{budget.budget.toLocaleString('en-US')}
+                  {formatK(budget.spent)}/
+                  {budget.budget.toLocaleString('en-US')}
                 </span>
               </div>
               {budget.categoryId === 'eating-out' && (
@@ -103,19 +118,20 @@ export function BudgetCard({
           )
         })}
       </div>
-      <button
+      <Button
         type="button"
-        className="mt-4 rounded-full border border-(--chip-line) bg-(--chip-bg) px-5 py-2.5 text-sm font-bold text-sea-ink transition hover:border-lagoon-deep"
+        variant="secondary"
+        className="mt-4 self-start"
         onClick={() => setShowNote(true)}
       >
         Adjust budgets
-      </button>
+      </Button>
       {showNote && (
         <p className="mt-2 text-[0.78rem] text-sea-ink-soft italic">
           Budget editing arrives with the backend — this prototype uses sample
           data.
         </p>
       )}
-    </section>
+    </Card>
   )
 }

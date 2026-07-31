@@ -2,6 +2,8 @@ import { Link } from '@tanstack/react-router'
 import { Settings, Waves, Wifi } from 'lucide-react'
 
 import { ThemeToggle } from '#/components/theme-toggle'
+import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 
 export function AppHeader() {
   return (
@@ -16,24 +18,29 @@ export function AppHeader() {
               Misi
             </span>
           </Link>
-          <span className="hidden rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1 text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase sm:inline">
+          <Badge
+            variant="secondary"
+            className="hidden px-3 uppercase sm:inline-flex"
+          >
             Jul cycle · day 11
-          </span>
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1 text-[0.7rem] font-bold tracking-wide text-palm uppercase sm:flex">
+          <Badge variant="success" className="hidden px-3 uppercase sm:flex">
             <Wifi className="size-3.5" />
             Synced
-          </span>
+          </Badge>
           <ThemeToggle />
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="icon-sm"
             aria-label="Settings"
-            className="grid size-9 place-items-center rounded-full border border-(--chip-line) bg-(--chip-bg) text-sea-ink transition hover:border-lagoon-deep"
+            className="size-9"
             onClick={() => undefined}
           >
             <Settings className="size-4" />
-          </button>
+          </Button>
         </div>
       </div>
     </header>

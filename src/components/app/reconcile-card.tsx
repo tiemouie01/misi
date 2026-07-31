@@ -1,6 +1,10 @@
 import { Check } from 'lucide-react'
 import { useState } from 'react'
 
+import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
+import { Input } from '#/components/ui/input'
 import { formatK } from '#/lib/app-data'
 
 import type { Account, QuickAddInitial, ReconcileBalance } from '#/lib/app-data'
@@ -18,16 +22,16 @@ interface ReconcileCardProps {
 function DriftChip({ drift }: { drift: number }) {
   if (drift === 0) {
     return (
-      <span className="flex items-center gap-1 rounded-full bg-palm/12 px-2.5 py-1 text-[0.72rem] font-bold text-palm">
+      <Badge variant="success">
         <Check className="size-3" strokeWidth={3} />
         Matched
-      </span>
+      </Badge>
     )
   }
   return (
-    <span className="font-mono rounded-full bg-[#d96a4e]/12 px-2.5 py-1 text-[0.72rem] font-semibold text-[#c05a40] tabular-nums">
+    <Badge variant="destructive" className="font-mono tabular-nums">
       {formatK(drift)}
-    </span>
+    </Badge>
   )
 }
 
@@ -54,8 +58,9 @@ export function ReconcileCard({
   )
 
   return (
-    <section
-      className="island-shell rise-in rounded-3xl p-6"
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -103,10 +108,10 @@ export function ReconcileCard({
                     <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
                       Expected {formatK(balance.expected)}
                     </span>
-                    <input
+                    <Input
                       type="number"
                       aria-label={`${account?.name} actual balance`}
-                      className="font-mono w-28 rounded-lg border border-(--line) bg-(--chip-bg) px-2.5 py-1.5 text-right text-sm text-sea-ink tabular-nums focus:border-lagoon-deep focus:outline-none"
+                      className="font-mono h-9 w-28 rounded-lg px-2.5 py-1.5 text-right tabular-nums"
                       value={balance.actual}
                       onChange={(event) =>
                         onActualChange(
@@ -129,9 +134,9 @@ export function ReconcileCard({
                 </span>
               </p>
               <div className="flex flex-wrap gap-2">
-                <button
+                <Button
                   type="button"
-                  className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-4 py-2 text-sm font-bold text-sea-ink transition hover:border-lagoon-deep"
+                  variant="secondary"
                   onClick={() =>
                     onLogMissing({
                       mode: 'expense',
@@ -143,24 +148,25 @@ export function ReconcileCard({
                   }
                 >
                   Log missing expense
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="rounded-full bg-[#d96a4e] px-4 py-2 text-sm font-bold text-white shadow-sm hover:brightness-110"
+                  variant="destructive"
                   onClick={() => onAbsorb(firstGap.accountId)}
                 >
                   Absorb as adjustment
-                </button>
+                </Button>
               </div>
             </div>
           )}
-          <button
+          <Button
             type="button"
-            className="mt-3 text-sm font-bold text-sea-ink-soft hover:text-sea-ink"
+            variant="ghost"
+            className="mt-3"
             onClick={() => setExpanded(false)}
           >
             Close
-          </button>
+          </Button>
         </>
       ) : (
         <>
@@ -192,15 +198,15 @@ export function ReconcileCard({
               )
             })}
           </div>
-          <button
+          <Button
             type="button"
-            className="btn-primary mt-4 w-full rounded-full py-3 text-sm font-bold shadow-md"
+            className="mt-4 w-full"
             onClick={() => setExpanded(true)}
           >
             Reconcile now
-          </button>
+          </Button>
         </>
       )}
-    </section>
+    </Card>
   )
 }

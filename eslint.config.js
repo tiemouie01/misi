@@ -1,9 +1,11 @@
 //  @ts-check
 
 import { tanstackConfig } from '@tanstack/eslint-config'
+import reactHooks from 'eslint-plugin-react-hooks'
 
 export default [
   ...tanstackConfig,
+  reactHooks.configs.flat['recommended-latest'],
   {
     rules: {
       'import/no-cycle': 'off',
@@ -15,6 +17,11 @@ export default [
     },
   },
   {
-    ignores: ['eslint.config.js', 'prettier.config.js'],
+    ignores: [
+      '.output/**',
+      'convex/_generated/**',
+      'eslint.config.js',
+      'prettier.config.js',
+    ],
   },
 ]

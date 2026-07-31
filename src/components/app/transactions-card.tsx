@@ -1,5 +1,6 @@
 import { ArrowDownToLine, ArrowLeftRight } from 'lucide-react'
 
+import { Card } from '#/components/ui/card'
 import { categories, formatK } from '#/lib/app-data'
 
 import type { Account, Txn } from '#/lib/app-data'
@@ -26,8 +27,9 @@ export function TransactionsCard({
   )
 
   return (
-    <section
-      className="island-shell rise-in rounded-3xl p-6"
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -140,6 +142,6 @@ export function TransactionsCard({
           </div>
         )
       })}
-    </section>
+    </Card>
   )
 }

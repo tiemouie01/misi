@@ -1,6 +1,8 @@
 import { Check, Clock } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
 import { incomeSources } from '#/lib/app-data'
 
 interface IncomeCardProps {
@@ -11,8 +13,9 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
   const [showNote, setShowNote] = useState(false)
 
   return (
-    <section
-      className="island-shell rise-in rounded-3xl p-6"
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -67,18 +70,19 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
         Each source carries its own savings split — salary 20%, allowance 50%.
         Log income with + and Misi proposes the transfer.
       </p>
-      <button
+      <Button
         type="button"
-        className="mt-3.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-5 py-2.5 text-sm font-bold text-sea-ink transition hover:border-lagoon-deep"
+        variant="secondary"
+        className="mt-3.5 self-start"
         onClick={() => setShowNote(true)}
       >
         + Add income source
-      </button>
+      </Button>
       {showNote && (
         <p className="mt-2 text-[0.78rem] text-sea-ink-soft italic">
           Setup flows arrive with the backend — this prototype uses sample data.
         </p>
       )}
-    </section>
+    </Card>
   )
 }

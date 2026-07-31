@@ -38,6 +38,7 @@
     "lucide-react": "^0.577.0",
     "nitro": "3.0.260610-beta",
     "posthog-js": "^1.358.1",
+    "radix-ui": "^1.6.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.0.2",
@@ -57,6 +58,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.20.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.8.1",
     "typescript": "^6.0.2",
     "vite": "^8.0.0"

@@ -1,6 +1,16 @@
-import { Calendar, Delete, PiggyBank, Plus, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Calendar, Delete, PiggyBank, Plus } from 'lucide-react'
+import { useEffect, useEffectEvent, useState } from 'react'
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '#/components/ui/dialog'
+import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
+import { Input } from '#/components/ui/input'
 import { categories, formatK, oneTapRecents } from '#/lib/app-data'
 
 import type {
@@ -44,10 +54,11 @@ function RecentChips({
         if (!category) return null
         const Icon = category.icon
         return (
-          <button
+          <Button
             key={recent.payee}
             type="button"
-            className="flex items-center gap-2 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3.5 py-2 text-sm font-semibold text-sea-ink transition hover:border-lagoon-deep"
+            variant="secondary"
+            className="h-auto px-3.5 py-2 font-semibold"
             onClick={() => onSelect(recent)}
           >
             <Icon className="size-4" style={{ color: category.color }} />
@@ -55,7 +66,7 @@ function RecentChips({
             <span className="font-mono text-sea-ink-soft tabular-nums">
               {formatK(recent.amount)}
             </span>
-          </button>
+          </Button>
         )
       })}
     </div>
@@ -64,20 +75,22 @@ function RecentChips({
 
 export function QuickAddCard({ onOpen, animationDelay }: QuickAddCardProps) {
   return (
-    <section
-      className="island-shell rise-in rounded-3xl p-6"
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-6"
       style={{ animationDelay }}
     >
       <p className="island-kicker">Log · under 10 seconds</p>
       <div className="mt-4 flex items-center gap-4">
-        <button
+        <Button
           type="button"
           aria-label="Log a transaction"
-          className="btn-primary grid size-14 shrink-0 place-items-center rounded-full shadow-lg transition hover:shadow-xl hover:brightness-110"
+          size="icon-lg"
+          className="size-14 shadow-lg hover:shadow-xl"
           onClick={() => onOpen({ mode: 'expense' })}
         >
           <Plus className="size-6" />
-        </button>
+        </Button>
         <div>
           <p className="text-lg font-extrabold text-sea-ink">
             Log a transaction
@@ -105,22 +118,60 @@ export function QuickAddCard({ onOpen, animationDelay }: QuickAddCardProps) {
           />
         </div>
       </div>
-    </section>
+    </Card>
   )
 }
 
 export function QuickAddFab({ onOpen }: QuickAddFabProps) {
   return (
     <div className="fixed inset-x-0 bottom-5 z-40 flex justify-center lg:hidden">
-      <button
+      <Button
         type="button"
-        className="btn-primary flex items-center gap-2 rounded-full px-6 py-3.5 font-bold shadow-xl"
+        size="lg"
+        className="h-auto px-6 py-3.5 shadow-xl"
         onClick={() => onOpen({ mode: 'expense' })}
       >
         <Plus className="size-5" />
         Log transaction
-      </button>
+      </Button>
     </div>
+  )
+}
+
+function AccountPicker({
+  label,
+  accounts,
+  selected,
+  onSelect,
+}: {
+  label: string
+  accounts: Account[]
+  selected: string
+  onSelect: (id: string) => void
+}) {
+  return (
+    <fieldset className="mt-5">
+      <legend className="mb-2 text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
+        {label}
+      </legend>
+      <div className="flex flex-wrap gap-2">
+        {accounts
+          .filter((account) => selectableAccounts.includes(account.id))
+          .map((account) => (
+            <Button
+              key={account.id}
+              type="button"
+              aria-pressed={selected === account.id}
+              variant="secondary"
+              size="sm"
+              className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+              onClick={() => onSelect(account.id)}
+            >
+              {account.name}
+            </Button>
+          ))}
+      </div>
+    </fieldset>
   )
 }
 
@@ -178,45 +229,39 @@ export function QuickAddSheet({
     })
   }
 
-  useEffect(() => {
-    if (!open) return
-    function handleKeyDown(event: KeyboardEvent) {
-      const target = event.target
-      const inField =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement
-      if (event.key === 'Escape') {
-        onClose()
-        return
-      }
-      if (inField) {
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          save()
-        }
-        return
-      }
-      if (/^\d$/.test(event.key)) {
-        event.preventDefault()
-        appendDigits(event.key)
-      } else if (event.key === 'Backspace') {
-        event.preventDefault()
-        setDigits((current) => current.slice(0, -1))
-      } else if (event.key === 'Enter') {
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    const target = event.target
+    const inField =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement
+    if (inField) {
+      if (event.key === 'Enter') {
         event.preventDefault()
         save()
       }
+      return
     }
+    if (/^\d$/.test(event.key)) {
+      event.preventDefault()
+      appendDigits(event.key)
+    } else if (event.key === 'Backspace') {
+      event.preventDefault()
+      setDigits((current) => current.slice(0, -1))
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      save()
+    }
+  })
+
+  useEffect(() => {
+    if (!open) return
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  })
+  }, [open])
 
   if (!open) return null
 
   const amountDisplay = amount ? `K ${amount.toLocaleString('en-US')}` : 'K 0'
-  const accountOptions = accounts.filter((account) =>
-    selectableAccounts.includes(account.id),
-  )
   const saveLabel =
     mode === 'expense'
       ? `Log expense${amount ? ` — ${formatK(amount)}` : ''}`
@@ -241,109 +286,73 @@ export function QuickAddSheet({
     }
   }
 
-  function AccountPicker({
-    label,
-    selected,
-    onSelect,
-  }: {
-    label: string
-    selected: string
-    onSelect: (id: string) => void
-  }) {
-    return (
-      <div className="mt-5">
-        <p className="mb-2 text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
-          {label}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {accountOptions.map((account) => (
-            <button
-              key={account.id}
-              type="button"
-              className={
-                selected === account.id
-                  ? 'rounded-full border border-lagoon-deep bg-lagoon-deep/10 px-3 py-1.5 text-sm font-semibold text-sea-ink transition'
-                  : 'rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1.5 text-sm font-semibold text-sea-ink-soft transition hover:border-lagoon-deep'
-              }
-              onClick={() => onSelect(account.id)}
-            >
-              {account.name}
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
-      <button
-        type="button"
-        aria-label="Close transaction sheet"
-        className="absolute inset-0 bg-sea-ink/45 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <section className="rise-in absolute inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-3xl border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose()
+      }}
+    >
+      <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
+        <DialogTitle className="sr-only">Log a transaction</DialogTitle>
+        <DialogDescription className="sr-only">
+          Enter an amount and optional transaction details.
+        </DialogDescription>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-(--line) sm:hidden" />
-        <button
-          type="button"
-          aria-label="Close"
-          className="absolute top-4 right-4 grid size-9 place-items-center rounded-full border border-(--chip-line) bg-(--chip-bg) text-sea-ink transition hover:border-lagoon-deep"
-          onClick={onClose}
-        >
-          <X className="size-4" />
-        </button>
         <div className="mr-11 grid grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
           {(['expense', 'income', 'transfer'] as const).map((type) => (
-            <button
+            <Button
               key={type}
               type="button"
-              className={
-                mode === type
-                  ? 'rounded-full bg-(--surface-strong) px-3 py-1.5 text-sm font-bold text-sea-ink shadow-sm'
-                  : 'rounded-full px-3 py-1.5 text-sm font-semibold text-sea-ink-soft'
-              }
+              variant="ghost"
+              size="sm"
+              aria-pressed={mode === type}
+              className="w-full aria-pressed:bg-(--surface-strong) aria-pressed:text-sea-ink aria-pressed:shadow-sm"
               onClick={() => switchMode(type)}
             >
               {type[0].toUpperCase()}
               {type.slice(1)}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="mt-5 text-center">
           <p className="island-kicker">Amount (MWK)</p>
           <p
+            aria-live="polite"
+            aria-atomic="true"
             className={`font-mono mt-1 text-[2.6rem] font-bold tracking-tight tabular-nums ${amount ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
           >
             {amountDisplay}
           </p>
           {initial.reconcile && (
-            <span className="mt-1 inline-flex rounded-full border border-(--chip-line) bg-(--chip-bg) px-2.5 py-1 text-[0.72rem] font-bold text-[#c05a40]">
+            <Badge variant="destructive" className="mt-1">
               Reconcile · 30 Jul
-            </span>
+            </Badge>
           )}
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0'].map(
             (key) => (
-              <button
+              <Button
                 key={key}
                 type="button"
-                className="font-mono grid place-items-center rounded-2xl border border-(--line) bg-(--chip-bg) py-3.5 text-lg font-semibold text-sea-ink transition hover:border-lagoon-deep active:scale-95"
+                variant="secondary"
+                className="font-mono h-auto rounded-2xl py-3.5 text-lg font-semibold active:scale-95"
                 onClick={() => appendDigits(key)}
               >
                 {key}
-              </button>
+              </Button>
             ),
           )}
-          <button
+          <Button
             type="button"
             aria-label="Delete digit"
-            className="font-mono grid place-items-center rounded-2xl border border-(--line) bg-(--chip-bg) py-3.5 text-lg font-semibold text-sea-ink transition hover:border-lagoon-deep active:scale-95"
+            variant="secondary"
+            className="font-mono h-auto rounded-2xl py-3.5 text-lg font-semibold active:scale-95"
             onClick={() => setDigits((current) => current.slice(0, -1))}
           >
             <Delete className="size-5" />
-          </button>
+          </Button>
         </div>
         {mode === 'expense' && (
           <>
@@ -363,14 +372,13 @@ export function QuickAddSheet({
                   .map((category) => {
                     const Icon = category.icon
                     return (
-                      <button
+                      <Button
                         key={category.id}
                         type="button"
-                        className={
-                          categoryId === category.id
-                            ? 'flex items-center gap-1.5 rounded-full border border-lagoon-deep bg-lagoon-deep/10 px-3 py-1.5 text-sm font-semibold text-sea-ink transition'
-                            : 'flex items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1.5 text-sm font-semibold text-sea-ink-soft transition hover:border-lagoon-deep'
-                        }
+                        variant="secondary"
+                        size="sm"
+                        aria-pressed={categoryId === category.id}
+                        className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                         onClick={() => setCategoryId(category.id)}
                       >
                         <Icon
@@ -378,7 +386,7 @@ export function QuickAddSheet({
                           style={{ color: category.color }}
                         />
                         {category.name}
-                      </button>
+                      </Button>
                     )
                   })}
               </div>
@@ -389,11 +397,13 @@ export function QuickAddSheet({
           <>
             <AccountPicker
               label="From account"
+              accounts={accounts}
               selected={accountId}
               onSelect={setAccountId}
             />
             <AccountPicker
               label="To account"
+              accounts={accounts}
               selected={toAccountId}
               onSelect={setToAccountId}
             />
@@ -401,17 +411,22 @@ export function QuickAddSheet({
         ) : (
           <AccountPicker
             label={mode === 'income' ? 'Into account' : 'From account'}
+            accounts={accounts}
             selected={accountId}
             onSelect={setAccountId}
           />
         )}
         {mode !== 'transfer' && (
           <div className="mt-5">
-            <label className="mb-2 block text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
+            <label
+              htmlFor="quick-add-payee"
+              className="mb-2 block text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase"
+            >
               Payee
             </label>
-            <input
-              className="w-full rounded-xl border border-(--line) bg-(--chip-bg) px-4 py-2.5 text-sm font-semibold text-sea-ink placeholder:font-normal placeholder:text-sea-ink-soft/60 focus:border-lagoon-deep focus:outline-none"
+            <Input
+              id="quick-add-payee"
+              className="px-4 py-2.5 font-semibold placeholder:font-normal"
               placeholder="e.g. Chipiku"
               value={payee}
               onChange={(event) => setPayee(event.target.value)}
@@ -420,8 +435,12 @@ export function QuickAddSheet({
         )}
         {mode === 'expense' && (
           <div className="mt-4">
-            <input
-              className="w-full rounded-xl border border-(--line) bg-(--chip-bg) px-4 py-2.5 text-sm font-semibold text-sea-ink placeholder:font-normal placeholder:text-sea-ink-soft/60 focus:border-lagoon-deep focus:outline-none"
+            <label htmlFor="quick-add-items" className="sr-only">
+              Items
+            </label>
+            <Input
+              id="quick-add-items"
+              className="px-4 py-2.5 font-semibold placeholder:font-normal"
               placeholder="Items — milk, bread… (optional)"
               value={items}
               onChange={(event) => setItems(event.target.value)}
@@ -444,26 +463,34 @@ export function QuickAddSheet({
           </div>
         )}
         <div className="mt-5 flex gap-2.5">
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-2 text-sm font-semibold text-sea-ink">
+          <Badge
+            variant="secondary"
+            className="px-3 py-2 text-sm font-semibold tracking-normal text-sea-ink"
+          >
             <Calendar className="size-4" />
             Today
-          </span>
-          <input
-            className="min-w-0 flex-1 rounded-xl border border-(--line) bg-(--chip-bg) px-4 py-2.5 text-sm font-semibold text-sea-ink placeholder:font-normal placeholder:text-sea-ink-soft/60 focus:border-lagoon-deep focus:outline-none"
+          </Badge>
+          <label htmlFor="quick-add-note" className="sr-only">
+            Note
+          </label>
+          <Input
+            id="quick-add-note"
+            className="min-w-0 flex-1 px-4 py-2.5 font-semibold placeholder:font-normal"
             placeholder="Note (optional)"
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
         </div>
-        <button
+        <Button
           type="button"
           disabled={!canSave}
-          className="btn-primary mt-6 w-full rounded-full py-3.5 font-bold shadow-lg transition hover:brightness-110 disabled:opacity-45 disabled:hover:brightness-100"
+          size="lg"
+          className="mt-6 h-auto w-full py-3.5 shadow-lg disabled:opacity-45"
           onClick={save}
         >
           {saveLabel}
-        </button>
-      </section>
-    </div>
+        </Button>
+      </DialogContent>
+    </Dialog>
   )
 }

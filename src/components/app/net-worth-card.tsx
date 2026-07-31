@@ -1,6 +1,9 @@
 import { Droplets } from 'lucide-react'
 import { useState } from 'react'
 
+import { Badge } from '#/components/ui/badge'
+import { Card } from '#/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { CYCLE_BUDGET, USD_RATE, formatK, seedWallets } from '#/lib/app-data'
 
 import type { Account } from '#/lib/app-data'
@@ -20,6 +23,51 @@ interface DisplayRow {
   amountLabel: string
   color: string
   ratioBase?: number
+}
+
+function BalanceRows({ rows }: { rows: DisplayRow[] }) {
+  const largest = Math.max(...rows.map((row) => row.amount), 1)
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => {
+        const width = row.ratioBase
+          ? (row.amount / row.ratioBase) * 100
+          : (row.amount / largest) * 100
+        return (
+          <div key={row.id} className="flex items-center gap-3">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: row.color }}
+            />
+            <span className="w-24 shrink-0 truncate text-sm font-semibold text-sea-ink">
+              {row.name}
+            </span>
+            <div
+              role="progressbar"
+              aria-label={`${row.name} relative balance`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(Math.min(width, 100))}
+              aria-valuetext={row.amountLabel}
+              className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--line)"
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max(8, Math.min(width, 100))}%`,
+                  background: `linear-gradient(90deg, ${row.color}, var(--lagoon))`,
+                }}
+              />
+            </div>
+            <span className="font-mono w-24 shrink-0 text-right text-[0.8rem] text-sea-ink-soft tabular-nums">
+              {row.amountLabel}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export function NetWorthCard({
@@ -72,12 +120,10 @@ export function NetWorthCard({
       ratioBase: wallet.id === 'spending' ? CYCLE_BUDGET : undefined,
     }
   })
-  const rows = view === 'accounts' ? accountRows : walletRows
-  const largest = Math.max(...rows.map((row) => row.amount), 1)
-
   return (
-    <section
-      className="island-shell rise-in rounded-3xl p-6"
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -91,64 +137,36 @@ export function NetWorthCard({
             <span className="font-mono tabular-nums">+K112,300</span> this cycle
           </p>
         </div>
-        <span className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1 text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
+        <Badge variant="secondary" className="uppercase">
           MWK
-        </span>
+        </Badge>
       </div>
-      <div className="mt-5 grid grid-cols-2 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
-        {(['accounts', 'wallets'] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={
-              view === option
-                ? 'rounded-full bg-(--surface-strong) px-3 py-1.5 text-sm font-bold text-sea-ink shadow-sm'
-                : 'rounded-full px-3 py-1.5 text-sm font-semibold text-sea-ink-soft'
-            }
-            onClick={() => setView(option)}
-          >
-            {option === 'accounts' ? 'Accounts' : 'Wallets'}
-          </button>
-        ))}
-      </div>
-      <div className="mt-4 space-y-3">
-        {rows.map((row) => {
-          const width = row.ratioBase
-            ? (row.amount / row.ratioBase) * 100
-            : (row.amount / largest) * 100
-          return (
-            <div key={row.id} className="flex items-center gap-3">
-              <span
-                className="size-2 shrink-0 rounded-full"
-                style={{ background: row.color }}
-              />
-              <span className="w-24 shrink-0 truncate text-sm font-semibold text-sea-ink">
-                {row.name}
-              </span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--line)">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${Math.max(8, Math.min(width, 100))}%`,
-                    background: `linear-gradient(90deg, ${row.color}, var(--lagoon))`,
-                  }}
-                />
-              </div>
-              <span className="font-mono w-24 shrink-0 text-right text-[0.8rem] text-sea-ink-soft tabular-nums">
-                {row.amountLabel}
-              </span>
-            </div>
-          )
-        })}
-      </div>
+      <Tabs
+        value={view}
+        onValueChange={(value) =>
+          setView(value === 'wallets' ? 'wallets' : 'accounts')
+        }
+        className="mt-5 gap-4"
+      >
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          <TabsTrigger value="wallets">Wallets</TabsTrigger>
+        </TabsList>
+        <TabsContent value="accounts">
+          <BalanceRows rows={accountRows} />
+        </TabsContent>
+        <TabsContent value="wallets">
+          <BalanceRows rows={walletRows} />
+        </TabsContent>
+      </Tabs>
       <div className="mt-5 flex flex-wrap gap-2 border-t border-dashed border-(--line) pt-4">
-        <span className="rounded-full bg-(--chip-bg) px-2.5 py-1 text-[0.78rem] font-semibold text-sea-ink-soft">
+        <Badge variant="secondary" className="border-transparent">
           USD @ K1,735
-        </span>
-        <span className="rounded-full bg-(--chip-bg) px-2.5 py-1 text-[0.78rem] font-semibold text-sea-ink-soft">
+        </Badge>
+        <Badge variant="secondary" className="border-transparent">
           Cycle anchored to the 20th
-        </span>
+        </Badge>
       </div>
-    </section>
+    </Card>
   )
 }

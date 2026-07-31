@@ -1,6 +1,9 @@
 import { Check, Pencil, PiggyBank } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
+import { Input } from '#/components/ui/input'
 import { formatK } from '#/lib/app-data'
 
 export type AutoSaveStatus = 'proposed' | 'saved' | 'dismissed'
@@ -31,8 +34,8 @@ export function AutoSaveCard({
 
   if (status === 'saved') {
     return (
-      <section
-        className="rise-in rounded-3xl border border-lagoon-deep/35 bg-linear-to-r from-lagoon-deep/10 to-palm/10 p-5"
+      <Card
+        className="rise-in gap-0 rounded-3xl border border-lagoon-deep/35 bg-transparent bg-linear-to-r from-lagoon-deep/10 to-palm/10 p-5"
         style={{ animationDelay }}
       >
         <div className="flex items-center gap-3">
@@ -48,7 +51,7 @@ export function AutoSaveCard({
             Today
           </span>
         </div>
-      </section>
+      </Card>
     )
   }
 
@@ -60,8 +63,8 @@ export function AutoSaveCard({
   }
 
   return (
-    <section
-      className="rise-in rounded-3xl border border-lagoon-deep/35 bg-linear-to-r from-lagoon-deep/10 to-palm/10 p-6"
+    <Card
+      className="rise-in gap-0 rounded-3xl border border-lagoon-deep/35 bg-transparent bg-linear-to-r from-lagoon-deep/10 to-palm/10 p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-start gap-3.5">
@@ -76,21 +79,23 @@ export function AutoSaveCard({
           <div className="mt-1 text-sm text-sea-ink-soft">
             {editing ? (
               <span className="inline-flex items-center gap-2">
-                <input
+                <Input
                   type="number"
                   min="1"
-                  className="font-mono w-32 rounded-lg border border-(--line) bg-(--chip-bg) px-2 py-1 text-sea-ink tabular-nums"
+                  className="font-mono h-8 w-32 rounded-lg px-2 py-1 tabular-nums"
                   value={draftAmount}
                   onChange={(event) => setDraftAmount(event.target.value)}
                 />
-                <button
+                <Button
                   type="button"
                   aria-label="Confirm amount"
-                  className="grid size-8 place-items-center rounded-full border border-(--chip-line) bg-(--chip-bg) text-palm hover:border-lagoon-deep"
+                  variant="secondary"
+                  size="icon-sm"
+                  className="text-palm"
                   onClick={confirmEdit}
                 >
                   <Check className="size-4" strokeWidth={3} />
-                </button>
+                </Button>
               </span>
             ) : (
               <>
@@ -104,16 +109,12 @@ export function AutoSaveCard({
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
-        <button
-          type="button"
-          className="btn-primary rounded-full px-5 py-2.5 text-sm font-bold shadow-md"
-          onClick={onConfirm}
-        >
+        <Button type="button" onClick={onConfirm}>
           Move to Savings
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="flex items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-5 py-2.5 text-sm font-bold text-sea-ink transition hover:border-lagoon-deep"
+          variant="secondary"
           onClick={() => {
             setDraftAmount(String(amount))
             setEditing(true)
@@ -121,15 +122,11 @@ export function AutoSaveCard({
         >
           <Pencil className="size-3.5" />
           Edit amount
-        </button>
-        <button
-          type="button"
-          className="text-sm font-bold text-sea-ink-soft hover:text-sea-ink"
-          onClick={onDismiss}
-        >
+        </Button>
+        <Button type="button" variant="ghost" onClick={onDismiss}>
           Not now
-        </button>
+        </Button>
       </div>
-    </section>
+    </Card>
   )
 }

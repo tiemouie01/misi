@@ -14,6 +14,9 @@ import {
 } from 'lucide-react'
 
 import { ThemeToggle } from '#/components/theme-toggle'
+import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
+import { Card } from '#/components/ui/card'
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -116,12 +119,9 @@ function Header() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Link
-            to="/app"
-            className="btn-primary rounded-full px-4.5 py-2 text-sm font-bold no-underline shadow-md transition hover:shadow-lg hover:brightness-110"
-          >
-            Open app
-          </Link>
+          <Button asChild size="sm" className="h-9 px-4.5">
+            <Link to="/app">Open app</Link>
+          </Button>
         </div>
       </div>
     </header>
@@ -173,9 +173,9 @@ function HeroVisual() {
                 +K112,300 this cycle
               </p>
             </div>
-            <span className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1 text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
+            <Badge variant="secondary" className="px-3 uppercase">
               MWK
-            </span>
+            </Badge>
           </div>
 
           <div className="mt-6 space-y-3">
@@ -205,15 +205,24 @@ function HeroVisual() {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-dashed border-(--line) pt-4 text-[0.78rem] font-semibold text-sea-ink-soft">
-            <span className="rounded-full bg-(--chip-bg) px-2.5 py-1">
+            <Badge
+              variant="secondary"
+              className="border-transparent normal-case"
+            >
               USD @ K1,735
-            </span>
-            <span className="rounded-full bg-(--chip-bg) px-2.5 py-1">
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="border-transparent normal-case"
+            >
               Cycle anchored to payday
-            </span>
-            <span className="rounded-full bg-(--chip-bg) px-2.5 py-1">
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="border-transparent normal-case"
+            >
               All accounts reconciled
-            </span>
+            </Badge>
           </div>
         </div>
       </div>
@@ -265,9 +274,7 @@ function SectionHeading({
   return (
     <div className="mb-8 max-w-2xl">
       <p className="island-kicker mb-3 flex items-center gap-2.5">
-        <span className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-2.5 py-1 text-[0.68rem] font-extrabold text-lagoon-deep">
-          {num}
-        </span>
+        <Badge className="text-[0.68rem] font-extrabold">{num}</Badge>
         {title}
       </p>
       <p className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
@@ -309,19 +316,24 @@ function Home() {
               className="rise-in mt-8 flex flex-wrap items-center gap-3.5"
               style={{ animationDelay: '240ms' }}
             >
-              <Link
-                to="/app"
-                className="btn-primary group flex items-center gap-2 rounded-full px-6 py-3 text-[0.95rem] font-bold no-underline shadow-lg transition hover:shadow-xl hover:brightness-110"
+              <Button
+                asChild
+                size="lg"
+                className="group h-12 px-6 text-[0.95rem]"
               >
-                Start tracking
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <a
-                href="#flow"
-                className="rounded-full border border-(--chip-line) bg-(--chip-bg) px-6 py-3 text-[0.95rem] font-bold text-sea-ink no-underline transition hover:border-lagoon-deep hover:text-sea-ink"
+                <Link to="/app">
+                  Start tracking
+                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="secondary"
+                size="lg"
+                className="h-12 px-6 text-[0.95rem]"
               >
-                See the flow
-              </a>
+                <a href="#flow">See the flow</a>
+              </Button>
             </div>
             <div
               className="rise-in mt-9 flex flex-wrap gap-x-8 gap-y-3 text-sm font-semibold text-sea-ink-soft"
@@ -352,8 +364,9 @@ function Home() {
           <div className="grid gap-5 md:grid-cols-3 md:gap-0">
             {flowSteps.map((s, i) => (
               <div key={s.step} className="relative flex md:flex-col">
-                <div
-                  className="island-shell feature-card rise-in relative z-10 flex-1 rounded-2xl border p-6 md:mx-3"
+                <Card
+                  variant="island"
+                  className="feature-card rise-in relative z-10 flex-1 gap-0 rounded-2xl border p-6 md:mx-3"
                   style={{ animationDelay: `${i * 120}ms` }}
                 >
                   <div className="flex items-center justify-between">
@@ -370,7 +383,7 @@ function Home() {
                   <p className="mt-1.5 text-[0.92rem] leading-relaxed text-sea-ink-soft">
                     {s.body}
                   </p>
-                </div>
+                </Card>
                 {i < flowSteps.length - 1 && (
                   <div
                     className="flow-dash absolute top-1/2 right-0 z-0 hidden h-0.5 w-6 -translate-y-1/2 md:block"
@@ -390,9 +403,10 @@ function Home() {
           />
           <div className="grid gap-5 sm:grid-cols-2">
             {features.map((f, i) => (
-              <div
+              <Card
+                variant="island"
                 key={f.title}
-                className="island-shell feature-card rise-in rounded-2xl border p-6.5"
+                className="feature-card rise-in gap-0 rounded-2xl border p-6.5"
                 style={{ animationDelay: `${i * 100}ms` }}
               >
                 <div className="flex items-center gap-3.5">
@@ -406,7 +420,7 @@ function Home() {
                 <p className="mt-3.5 text-[0.94rem] leading-relaxed text-sea-ink-soft">
                   {f.body}
                 </p>
-              </div>
+              </Card>
             ))}
           </div>
         </section>
@@ -478,14 +492,20 @@ function Home() {
                       </p>
                     </div>
                     {r.drift ? (
-                      <span className="font-mono rounded-full bg-[#d96a4e]/12 px-2.5 py-1 text-[0.72rem] font-semibold text-[#c05a40] tabular-nums">
+                      <Badge
+                        variant="destructive"
+                        className="font-mono text-[0.72rem] font-semibold tracking-normal tabular-nums"
+                      >
                         {r.drift}
-                      </span>
+                      </Badge>
                     ) : (
-                      <span className="flex items-center gap-1 rounded-full bg-palm/12 px-2.5 py-1 text-[0.72rem] font-bold text-palm">
+                      <Badge
+                        variant="success"
+                        className="text-[0.72rem] tracking-normal"
+                      >
                         <Check className="size-3" strokeWidth={3} />
                         Matched
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 ))}
@@ -494,12 +514,12 @@ function Home() {
                 <p className="text-sm font-bold text-sea-ink">
                   One gap to close
                 </p>
-                <Link
-                  to="/app"
-                  className="flex items-center gap-1.5 text-sm font-bold text-lagoon-deep no-underline transition hover:gap-2.5"
-                >
-                  Close it <ArrowRight className="size-4" />
-                </Link>
+                <Button asChild variant="link" className="group">
+                  <Link to="/app">
+                    Close it
+                    <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -526,13 +546,12 @@ function Home() {
                 Install Misi on your home screen and log your first transaction
                 before the water settles.
               </p>
-              <Link
-                to="/app"
-                className="btn-primary group mt-7 inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-bold no-underline shadow-lg transition hover:shadow-xl hover:brightness-110"
-              >
-                Open Misi
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
+              <Button asChild size="lg" className="group mt-7">
+                <Link to="/app">
+                  Open Misi
+                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </Button>
             </div>
           </div>
         </section>

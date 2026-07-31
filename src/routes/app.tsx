@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Waves } from 'lucide-react'
-import { useState } from 'react'
+import { useReducer, useState } from 'react'
 
 import { AppHeader } from '#/components/app/app-header'
+import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
 import { BudgetCard } from '#/components/app/budget-card'
 import { IncomeCard } from '#/components/app/income-card'
@@ -38,26 +39,257 @@ interface AutoSaveState {
   sourceName: string
 }
 
+interface AppState {
+  accounts: typeof seedAccounts
+  transactions: Txn[]
+  budgets: typeof seedBudgets
+  autoSave: AutoSaveState
+  savingsBalance: number
+  reconcile: typeof seedReconcile
+}
+
+type AppAction =
+  | { type: 'transaction-saved'; payload: QuickAddPayload; id: string }
+  | { type: 'auto-save-amount-changed'; amount: number }
+  | { type: 'auto-save-dismissed' }
+  | { type: 'auto-save-confirmed'; id: string }
+  | { type: 'reconcile-actual-changed'; accountId: string; actual: number }
+  | { type: 'reconcile-adjustment-absorbed'; accountId: string; id: string }
+
+function createInitialState(): AppState {
+  return {
+    accounts: seedAccounts.map((account) => ({ ...account })),
+    transactions: seedTransactions.map((transaction) => ({ ...transaction })),
+    budgets: seedBudgets.map((budget) => ({ ...budget })),
+    autoSave: {
+      status: 'proposed',
+      amount: 370000,
+      sourceName: 'salary',
+    },
+    savingsBalance: 315000,
+    reconcile: seedReconcile.map((balance) => ({ ...balance })),
+  }
+}
+
+function prependTransaction(
+  transactions: Txn[],
+  transaction: Omit<Txn, 'id' | 'day'>,
+  id: string,
+) {
+  return [{ ...transaction, id, day: 'Today' }, ...transactions]
+}
+
+function changeAccountBalance(
+  accounts: AppState['accounts'],
+  accountId: string,
+  delta: number,
+) {
+  return accounts.map((account) =>
+    account.id === accountId
+      ? { ...account, balance: account.balance + delta }
+      : account,
+  )
+}
+
+function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case 'transaction-saved': {
+      const { payload, id } = action
+
+      if (payload.type === 'expense') {
+        const reconcile = payload.reconcile
+          ? state.reconcile.map((balance) =>
+              balance.accountId === payload.accountId
+                ? {
+                    ...balance,
+                    expected: balance.expected - payload.amount,
+                  }
+                : balance,
+            )
+          : state.reconcile
+
+        return {
+          ...state,
+          accounts: changeAccountBalance(
+            state.accounts,
+            payload.accountId,
+            -payload.amount,
+          ),
+          transactions: prependTransaction(
+            state.transactions,
+            {
+              type: 'expense',
+              amount: payload.amount,
+              payee: payload.payee,
+              categoryId: payload.categoryId,
+              accountId: payload.accountId,
+              walletId: 'spending',
+              items: payload.items,
+              note: payload.note,
+              reconcile: payload.reconcile,
+            },
+            id,
+          ),
+          budgets: payload.categoryId
+            ? state.budgets.map((budget) =>
+                budget.categoryId === payload.categoryId
+                  ? { ...budget, spent: budget.spent + payload.amount }
+                  : budget,
+              )
+            : state.budgets,
+          reconcile,
+        }
+      }
+
+      if (payload.type === 'income') {
+        return {
+          ...state,
+          accounts: changeAccountBalance(
+            state.accounts,
+            payload.accountId,
+            payload.amount,
+          ),
+          transactions: prependTransaction(
+            state.transactions,
+            {
+              type: 'income',
+              amount: payload.amount,
+              payee: payload.payee,
+              accountId: payload.accountId,
+              walletId: 'spending',
+              note: payload.note,
+            },
+            id,
+          ),
+          autoSave: {
+            status: 'proposed',
+            amount: Math.round(payload.amount * 0.2),
+            sourceName: 'income',
+          },
+        }
+      }
+
+      if (!payload.toAccountId) return state
+
+      return {
+        ...state,
+        accounts: state.accounts.map((account) => {
+          if (account.id === payload.accountId) {
+            return { ...account, balance: account.balance - payload.amount }
+          }
+          if (account.id === payload.toAccountId) {
+            return { ...account, balance: account.balance + payload.amount }
+          }
+          return account
+        }),
+        transactions: prependTransaction(
+          state.transactions,
+          {
+            type: 'transfer',
+            amount: payload.amount,
+            payee: payload.payee,
+            accountId: payload.accountId,
+            toAccountId: payload.toAccountId,
+            walletId: 'spending',
+            note: payload.note,
+          },
+          id,
+        ),
+      }
+    }
+    case 'auto-save-amount-changed':
+      return {
+        ...state,
+        autoSave: { ...state.autoSave, amount: action.amount },
+      }
+    case 'auto-save-dismissed':
+      return {
+        ...state,
+        autoSave: { ...state.autoSave, status: 'dismissed' },
+      }
+    case 'auto-save-confirmed':
+      return {
+        ...state,
+        savingsBalance: state.savingsBalance + state.autoSave.amount,
+        transactions: prependTransaction(
+          state.transactions,
+          {
+            type: 'transfer',
+            amount: state.autoSave.amount,
+            payee: `Auto-save — 20% of ${state.autoSave.sourceName}`,
+            accountId: 'nbm',
+            walletId: 'savings',
+          },
+          action.id,
+        ),
+        autoSave: { ...state.autoSave, status: 'saved' },
+      }
+    case 'reconcile-actual-changed':
+      return {
+        ...state,
+        reconcile: state.reconcile.map((balance) =>
+          balance.accountId === action.accountId
+            ? { ...balance, actual: action.actual }
+            : balance,
+        ),
+      }
+    case 'reconcile-adjustment-absorbed': {
+      const balance = state.reconcile.find(
+        (item) => item.accountId === action.accountId,
+      )
+      if (!balance) return state
+
+      const delta = balance.actual - balance.expected
+      return {
+        ...state,
+        accounts: changeAccountBalance(state.accounts, action.accountId, delta),
+        transactions: prependTransaction(
+          state.transactions,
+          {
+            type: 'expense',
+            amount: Math.abs(delta),
+            payee: 'Balance adjustment',
+            categoryId: 'adjustment',
+            accountId: action.accountId,
+            walletId: 'spending',
+            reconcile: true,
+            adjustment: true,
+            note: 'Reconcile 30 Jul',
+          },
+          action.id,
+        ),
+        reconcile: state.reconcile.map((item) =>
+          item.accountId === action.accountId
+            ? { ...item, expected: item.actual }
+            : item,
+        ),
+      }
+    }
+  }
+}
+
 function AppHome() {
-  const [accounts, setAccounts] = useState(() =>
-    seedAccounts.map((account) => ({ ...account })),
+  return (
+    <AppProviders>
+      <AppDashboard />
+    </AppProviders>
   )
-  const [transactions, setTransactions] = useState(() =>
-    seedTransactions.map((transaction) => ({ ...transaction })),
+}
+
+function AppDashboard() {
+  const [appState, dispatch] = useReducer(
+    appReducer,
+    undefined,
+    createInitialState,
   )
-  const [budgets, setBudgets] = useState(() =>
-    seedBudgets.map((budget) => ({ ...budget })),
-  )
-  const [autoSave, setAutoSave] = useState<AutoSaveState>({
-    status: 'proposed',
-    amount: 370000,
-    sourceName: 'salary',
-  })
-  const [savingsBalance, setSavingsBalance] = useState(315000)
-  const [reconcile, setReconcile] = useState(() =>
-    seedReconcile.map((balance) => ({ ...balance })),
-  )
-  const [reconcileClosed, setReconcileClosed] = useState(false)
+  const {
+    accounts,
+    transactions,
+    budgets,
+    autoSave,
+    savingsBalance,
+    reconcile,
+  } = appState
   const [sheet, setSheet] = useState<{
     open: boolean
     initial: QuickAddInitial
@@ -90,149 +322,37 @@ function AppHome() {
     setSheet((current) => ({ ...current, open: false }))
   }
 
-  function prependTransaction(transaction: Omit<Txn, 'id' | 'day'>) {
-    setTransactions((current) => [
-      {
-        ...transaction,
-        id: `new-${Date.now()}-${current.length}`,
-        day: 'Today',
-      },
-      ...current,
-    ])
-  }
-
-  function updateAccountBalance(accountId: string, delta: number) {
-    setAccounts((current) =>
-      current.map((account) =>
-        account.id === accountId
-          ? { ...account, balance: account.balance + delta }
-          : account,
-      ),
-    )
-  }
-
-  function closeReconcileGapWithExpense(accountId: string, amount: number) {
-    const next = reconcile.map((balance) =>
-      balance.accountId === accountId
-        ? { ...balance, expected: balance.expected - amount }
-        : balance,
-    )
-    setReconcile(next)
-    if (next.every((balance) => balance.expected === balance.actual)) {
-      setReconcileClosed(true)
-    }
+  function createTransactionId() {
+    return `new-${Date.now()}-${transactions.length}`
   }
 
   function saveTransaction(payload: QuickAddPayload) {
-    if (payload.type === 'expense') {
-      prependTransaction({
-        type: 'expense',
-        amount: payload.amount,
-        payee: payload.payee,
-        categoryId: payload.categoryId,
-        accountId: payload.accountId,
-        walletId: 'spending',
-        items: payload.items,
-        note: payload.note,
-        reconcile: payload.reconcile,
-      })
-      updateAccountBalance(payload.accountId, -payload.amount)
-      if (payload.categoryId) {
-        setBudgets((current) =>
-          current.map((budget) =>
-            budget.categoryId === payload.categoryId
-              ? { ...budget, spent: budget.spent + payload.amount }
-              : budget,
-          ),
-        )
-      }
-      if (payload.reconcile) {
-        closeReconcileGapWithExpense(payload.accountId, payload.amount)
-      }
-    } else if (payload.type === 'income') {
-      prependTransaction({
-        type: 'income',
-        amount: payload.amount,
-        payee: payload.payee,
-        accountId: payload.accountId,
-        walletId: 'spending',
-        note: payload.note,
-      })
-      updateAccountBalance(payload.accountId, payload.amount)
-      setAutoSave({
-        status: 'proposed',
-        amount: Math.round(payload.amount * 0.2),
-        sourceName: 'income',
-      })
-    } else if (payload.toAccountId) {
-      prependTransaction({
-        type: 'transfer',
-        amount: payload.amount,
-        payee: payload.payee,
-        accountId: payload.accountId,
-        toAccountId: payload.toAccountId,
-        walletId: 'spending',
-        note: payload.note,
-      })
-      setAccounts((current) =>
-        current.map((account) => {
-          if (account.id === payload.accountId) {
-            return { ...account, balance: account.balance - payload.amount }
-          }
-          if (account.id === payload.toAccountId) {
-            return { ...account, balance: account.balance + payload.amount }
-          }
-          return account
-        }),
-      )
-    }
+    dispatch({
+      type: 'transaction-saved',
+      payload,
+      id: createTransactionId(),
+    })
     closeSheet()
   }
 
   function confirmAutoSave() {
-    setSavingsBalance((current) => current + autoSave.amount)
-    prependTransaction({
-      type: 'transfer',
-      amount: autoSave.amount,
-      payee: `Auto-save — 20% of ${autoSave.sourceName}`,
-      accountId: 'nbm',
-      walletId: 'savings',
+    dispatch({
+      type: 'auto-save-confirmed',
+      id: createTransactionId(),
     })
-    setAutoSave((current) => ({ ...current, status: 'saved' }))
   }
 
   function absorbAdjustment(accountId: string) {
-    const balance = reconcile.find((item) => item.accountId === accountId)
-    if (!balance) return
-    const delta = balance.actual - balance.expected
-    const amount = Math.abs(delta)
-    updateAccountBalance(accountId, delta)
-    prependTransaction({
-      type: 'expense',
-      amount,
-      payee: 'Balance adjustment',
-      categoryId: 'adjustment',
+    dispatch({
+      type: 'reconcile-adjustment-absorbed',
       accountId,
-      walletId: 'spending',
-      reconcile: true,
-      adjustment: true,
-      note: 'Reconcile 30 Jul',
+      id: createTransactionId(),
     })
-    setReconcile((current) =>
-      current.map((item) =>
-        item.accountId === accountId
-          ? { ...item, expected: item.actual }
-          : item,
-      ),
-    )
-    if (
-      reconcile.every((item) =>
-        item.accountId === accountId ? true : item.expected === item.actual,
-      )
-    ) {
-      setReconcileClosed(true)
-    }
   }
+
+  const reconcileClosed = reconcile.every(
+    (balance) => balance.expected === balance.actual,
+  )
 
   return (
     <div className="min-h-screen">
@@ -264,15 +384,10 @@ function AppHome() {
               amount={autoSave.amount}
               sourceName={autoSave.sourceName}
               onAmountChange={(amount) =>
-                setAutoSave((current) => ({ ...current, amount }))
+                dispatch({ type: 'auto-save-amount-changed', amount })
               }
               onConfirm={confirmAutoSave}
-              onDismiss={() =>
-                setAutoSave((current) => ({
-                  ...current,
-                  status: 'dismissed',
-                }))
-              }
+              onDismiss={() => dispatch({ type: 'auto-save-dismissed' })}
               animationDelay="120ms"
             />
             <TransactionsCard
@@ -302,13 +417,11 @@ function AppHome() {
               balances={reconcile}
               closed={reconcileClosed}
               onActualChange={(accountId, actual) =>
-                setReconcile((current) =>
-                  current.map((balance) =>
-                    balance.accountId === accountId
-                      ? { ...balance, actual }
-                      : balance,
-                  ),
-                )
+                dispatch({
+                  type: 'reconcile-actual-changed',
+                  accountId,
+                  actual,
+                })
               }
               onAbsorb={absorbAdjustment}
               onLogMissing={openSheet}

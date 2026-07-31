@@ -1,7 +1,8 @@
-import {
-  type AbstractPowerSyncDatabase,
-  type PowerSyncBackendConnector,
-  UpdateType,
+import { UpdateType } from '@powersync/web'
+
+import type {
+  AbstractPowerSyncDatabase,
+  PowerSyncBackendConnector,
 } from '@powersync/web'
 
 export class BackendConnector implements PowerSyncBackendConnector {
