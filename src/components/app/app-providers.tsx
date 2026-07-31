@@ -4,6 +4,7 @@ import PowerSyncProvider from '#/integrations/powersync/provider'
 
 import type { ReactNode } from 'react'
 
+/** Backend/sync providers for authenticated app surfaces — not the marketing site. */
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ConvexProvider>

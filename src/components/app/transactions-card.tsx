@@ -1,7 +1,7 @@
 import { ArrowDownToLine, ArrowLeftRight } from 'lucide-react'
 
 import { Card } from '#/components/ui/card'
-import { categories, formatK } from '#/lib/app-data'
+import { CYCLE, categories, formatK } from '#/lib/app-data'
 
 import type { Account, Txn } from '#/lib/app-data'
 
@@ -35,7 +35,7 @@ export function TransactionsCard({
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Recent activity</p>
         <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-          Jul cycle
+          {CYCLE.label}
         </span>
       </div>
       {groups.map((group, groupIndex) => {
@@ -47,9 +47,7 @@ export function TransactionsCard({
             <div
               className={`${groupIndex === 0 ? 'mt-4' : 'mt-5'} flex items-baseline justify-between`}
             >
-              <p className="text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
-                {group.day}
-              </p>
+              <p className="field-label">{group.day}</p>
               {expenseTotal > 0 && (
                 <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
                   {formatK(-expenseTotal)}
@@ -96,7 +94,7 @@ export function TransactionsCard({
                 return (
                   <div
                     key={transaction.id}
-                    className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-(--chip-bg) ${transaction.id.startsWith('new-') ? 'rise-in' : ''}`}
+                    className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-(--chip-bg) ${transaction.provisional ? 'rise-in' : ''}`}
                   >
                     <span
                       className="grid size-9 shrink-0 place-items-center rounded-lg"

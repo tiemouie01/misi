@@ -4,7 +4,15 @@ import { useState } from 'react'
 import { Badge } from '#/components/ui/badge'
 import { Card } from '#/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { CYCLE_BUDGET, USD_RATE, formatK, seedWallets } from '#/lib/app-data'
+import {
+  CYCLE,
+  CYCLE_BUDGET,
+  USD_RATE,
+  accountKindColor,
+  accountMwkValue,
+  formatK,
+  seedWallets,
+} from '#/lib/app-data'
 
 import type { Account } from '#/lib/app-data'
 
@@ -82,18 +90,12 @@ export function NetWorthCard({
   const accountRows: DisplayRow[] = accounts.map((account) => ({
     id: account.id,
     name: account.name,
-    amount:
-      account.currency === 'USD' ? account.balance * USD_RATE : account.balance,
+    amount: accountMwkValue(account),
     amountLabel:
       account.currency === 'USD'
         ? `$${account.balance.toFixed(2)}`
         : formatK(account.balance),
-    color:
-      account.currency === 'USD' || account.kind === 'cash'
-        ? 'var(--palm)'
-        : account.kind === 'mobile'
-          ? 'var(--lagoon)'
-          : 'var(--lagoon-deep)',
+    color: accountKindColor(account),
   }))
   const walletRows: DisplayRow[] = seedWallets.map((wallet) => {
     const balance =
@@ -108,7 +110,7 @@ export function NetWorthCard({
         : wallet.id === 'unit-trust'
           ? 'var(--lagoon-deep)'
           : wallet.id === 'debt'
-            ? '#d96a4e'
+            ? 'var(--coral)'
             : 'var(--palm)'
     return {
       id: wallet.id,
@@ -134,7 +136,10 @@ export function NetWorthCard({
           </p>
           <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-palm">
             <Droplets className="size-3.5" />
-            <span className="font-mono tabular-nums">+K112,300</span> this cycle
+            <span className="font-mono tabular-nums">
+              +{formatK(CYCLE.cycleGain)}
+            </span>{' '}
+            this cycle
           </p>
         </div>
         <Badge variant="secondary" className="uppercase">
@@ -161,7 +166,7 @@ export function NetWorthCard({
       </Tabs>
       <div className="mt-5 flex flex-wrap gap-2 border-t border-dashed border-(--line) pt-4">
         <Badge variant="secondary" className="border-transparent">
-          USD @ K1,735
+          USD @ K{USD_RATE.toLocaleString('en-US')}
         </Badge>
         <Badge variant="secondary" className="border-transparent">
           Cycle anchored to the 20th

@@ -5,7 +5,7 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import { formatK } from '#/lib/app-data'
+import { CYCLE, formatK, isSpendableAccount } from '#/lib/app-data'
 
 import type { Account, QuickAddInitial, ReconcileBalance } from '#/lib/app-data'
 
@@ -46,12 +46,11 @@ export function ReconcileCard({
 }: ReconcileCardProps) {
   const [expanded, setExpanded] = useState(false)
   const visibleBalances = balances.filter((balance) =>
-    ['nbm', 'fdh', 'airtel', 'cash'].includes(balance.accountId),
+    isSpendableAccount(balance.accountId),
   )
   const gaps = visibleBalances.filter(
     (balance) => balance.actual !== balance.expected,
   )
-  const firstGap = gaps[0]
   const gapTotal = gaps.reduce(
     (sum, balance) => sum + Math.abs(balance.actual - balance.expected),
     0,
@@ -66,7 +65,7 @@ export function ReconcileCard({
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Reconcile</p>
         <span className="text-[0.72rem] font-semibold text-sea-ink-soft">
-          {closed ? 'closed just now' : 'last closed 26 Jul'}
+          {closed ? 'closed just now' : CYCLE.lastClosed}
         </span>
       </div>
       <p className="font-display mt-2 text-xl font-bold text-sea-ink">
@@ -121,42 +120,47 @@ export function ReconcileCard({
                       }
                     />
                   </div>
+                  {drift !== 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-(--line) pt-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          onLogMissing({
+                            mode: 'expense',
+                            amount: Math.abs(drift),
+                            accountId: balance.accountId,
+                            categoryId: 'groceries',
+                            reconcile: true,
+                          })
+                        }
+                      >
+                        Log missing expense
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => onAbsorb(balance.accountId)}
+                      >
+                        Absorb as adjustment
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
           {gaps.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#d96a4e]/8 px-4 py-3.5">
+            <div className="mt-4 rounded-xl bg-coral/8 px-4 py-3.5">
               <p className="text-sm font-bold text-sea-ink">
                 {gaps.length} {gaps.length === 1 ? 'gap' : 'gaps'} —{' '}
                 <span className="font-mono tabular-nums">
                   {formatK(gapTotal)}
-                </span>
+                </span>{' '}
+                total. Fix each account above.
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() =>
-                    onLogMissing({
-                      mode: 'expense',
-                      amount: Math.abs(firstGap.actual - firstGap.expected),
-                      accountId: firstGap.accountId,
-                      categoryId: 'groceries',
-                      reconcile: true,
-                    })
-                  }
-                >
-                  Log missing expense
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => onAbsorb(firstGap.accountId)}
-                >
-                  Absorb as adjustment
-                </Button>
-              </div>
             </div>
           )}
           <Button
@@ -184,7 +188,7 @@ export function ReconcileCard({
                   <span
                     className="size-2 shrink-0 rounded-full"
                     style={{
-                      background: drift ? '#d96a4e' : 'var(--palm)',
+                      background: drift ? 'var(--coral)' : 'var(--palm)',
                     }}
                   />
                   <span className="w-24 shrink-0 text-sm font-bold text-sea-ink">

@@ -8,35 +8,44 @@ import {
   PiggyBank,
   Scale,
   Sprout,
-  Waves,
   WifiOff,
   Zap,
 } from 'lucide-react'
 
+import { MisiMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
+import {
+  CYCLE,
+  USD_RATE,
+  accountKindColor,
+  accountMwkValue,
+  formatAccountAmount,
+  formatK,
+  seedAccounts,
+  seedReconcile,
+} from '#/lib/app-data'
 
 export const Route = createFileRoute('/')({ component: Home })
 
-const accounts = [
-  { name: 'Bank', amount: 'K842,100', pct: '72%', color: 'var(--lagoon-deep)' },
-  {
-    name: 'Mobile Money',
-    amount: 'K96,300',
-    pct: '26%',
-    color: 'var(--lagoon)',
-  },
-  { name: 'Cash', amount: 'K38,500', pct: '12%', color: 'var(--palm)' },
-  {
-    name: 'Investments',
-    amount: 'K1,412,000',
-    pct: '88%',
-    color: 'var(--lagoon-deep)',
-  },
-  { name: 'USD Account', amount: '$420.00', pct: '34%', color: 'var(--palm)' },
-]
+const largestAccount = Math.max(
+  ...seedAccounts.map((account) => accountMwkValue(account)),
+  1,
+)
+
+const accounts = seedAccounts.map((account) => ({
+  name: account.name,
+  amount: formatAccountAmount(account),
+  pct: `${Math.max(8, Math.round((accountMwkValue(account) / largestAccount) * 100))}%`,
+  color: accountKindColor(account),
+}))
+
+const netWorth = seedAccounts.reduce(
+  (sum, account) => sum + accountMwkValue(account),
+  0,
+)
 
 const features = [
   {
@@ -82,17 +91,16 @@ const flowSteps = [
   },
 ]
 
-const reconcileRows = [
-  { account: 'Bank 1', expected: 'K842,100', actual: 'K842,100', drift: null },
-  { account: 'Bank 2', expected: 'K210,450', actual: 'K210,450', drift: null },
-  {
-    account: 'Airtel Money',
-    expected: 'K96,300',
-    actual: 'K91,800',
-    drift: '-K4,500',
-  },
-  { account: 'Cash', expected: 'K38,500', actual: 'K38,500', drift: null },
-]
+const reconcileRows = seedReconcile.map((balance) => {
+  const account = seedAccounts.find((item) => item.id === balance.accountId)
+  const drift = balance.actual - balance.expected
+  return {
+    account: account?.name ?? balance.accountId,
+    expected: formatK(balance.expected),
+    actual: formatK(balance.actual),
+    drift: drift === 0 ? null : formatK(drift),
+  }
+})
 
 function Header() {
   return (
@@ -100,7 +108,7 @@ function Header() {
       <div className="page-wrap flex items-center justify-between gap-4 py-3.5">
         <a href="#top" className="flex items-center gap-2.5 no-underline">
           <span className="grid size-9 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
-            <Waves className="size-4.5" strokeWidth={2.4} />
+            <MisiMark className="size-5" />
           </span>
           <span className="font-display text-2xl font-bold tracking-tight text-sea-ink">
             Misi
@@ -166,11 +174,11 @@ function HeroVisual() {
             <div>
               <p className="island-kicker">Total across everything</p>
               <p className="font-display mt-1.5 text-4xl font-bold tracking-tight text-sea-ink tabular-nums sm:text-[2.6rem]">
-                K2,847,500
+                {formatK(netWorth)}
               </p>
               <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-palm">
                 <Droplets className="size-3.5" />
-                +K112,300 this cycle
+                +{formatK(CYCLE.cycleGain)} this cycle
               </p>
             </div>
             <Badge variant="secondary" className="px-3 uppercase">
@@ -209,7 +217,7 @@ function HeroVisual() {
               variant="secondary"
               className="border-transparent normal-case"
             >
-              USD @ K1,735
+              USD @ K{USD_RATE.toLocaleString('en-US')}
             </Badge>
             <Badge
               variant="secondary"
@@ -465,9 +473,9 @@ function Home() {
               style={{ animationDelay: '150ms' }}
             >
               <div className="flex items-center justify-between">
-                <p className="island-kicker">Reconcile · Jul cycle</p>
+                <p className="island-kicker">Reconcile · {CYCLE.label}</p>
                 <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-                  4 accounts
+                  {reconcileRows.length} accounts
                 </span>
               </div>
               <div className="mt-5 space-y-2.5">
@@ -479,7 +487,7 @@ function Home() {
                     <span
                       className="size-2 shrink-0 rounded-full"
                       style={{
-                        background: r.drift ? '#d96a4e' : 'var(--palm)',
+                        background: r.drift ? 'var(--coral)' : 'var(--palm)',
                       }}
                     />
                     <span className="w-24 shrink-0 text-sm font-bold text-sea-ink">
@@ -537,7 +545,7 @@ function Home() {
             />
             <div className="relative">
               <span className="mx-auto grid size-13 place-items-center rounded-2xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-lg">
-                <Waves className="size-6" strokeWidth={2.2} />
+                <MisiMark className="size-7" />
               </span>
               <h2 className="font-display mx-auto mt-5 max-w-xl text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
                 Ready when the money moves.
@@ -560,7 +568,7 @@ function Home() {
       <footer className="site-footer">
         <div className="page-wrap flex flex-col items-start justify-between gap-3 py-8 text-sm font-medium text-sea-ink-soft sm:flex-row sm:items-center">
           <span className="flex items-center gap-2">
-            <Waves className="size-4 text-lagoon-deep" />
+            <MisiMark className="size-4.5 text-lagoon-deep" />
             <span className="font-display text-base font-bold text-sea-ink">
               Misi
             </span>

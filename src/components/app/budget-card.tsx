@@ -4,6 +4,7 @@ import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Progress } from '#/components/ui/progress'
 import {
+  CYCLE,
   CYCLE_BUDGET,
   CYCLE_DAY,
   CYCLE_DAYS,
@@ -41,16 +42,19 @@ export function BudgetCard({
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Spending wallet</p>
         <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-          day 11 of 31
+          {CYCLE.dayOf}
         </span>
       </div>
       <p className="font-display mt-1.5 text-3xl font-bold tracking-tight text-sea-ink tabular-nums">
         {formatK(spendingLeft)} left
       </p>
       <p className="mt-1 text-sm text-sea-ink-soft">
-        of <span className="font-mono tabular-nums">K650,000</span> ·{' '}
-        <span className="font-mono tabular-nums">{formatK(perDay)}</span>/day
-        until 19 Aug
+        of{' '}
+        <span className="font-mono tabular-nums">
+          {formatK(CYCLE_BUDGET)}
+        </span>{' '}
+        · <span className="font-mono tabular-nums">{formatK(perDay)}</span>/day
+        until {CYCLE.endsOn}
       </p>
       <div className="mt-4">
         <div className="relative">
@@ -110,7 +114,7 @@ export function BudgetCard({
                 </span>
               </div>
               {budget.categoryId === 'eating-out' && (
-                <p className="mt-0.5 text-right text-[0.72rem] font-semibold text-[#c05a40]">
+                <p className="mt-0.5 text-right text-[0.72rem] font-semibold text-coral-deep">
                   runs out ~6 Aug
                 </p>
               )}

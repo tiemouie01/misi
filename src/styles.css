@@ -13,6 +13,8 @@
   --lagoon: #4fb8b2;
   --lagoon-deep: #328f97;
   --palm: #2f6a4a;
+  --coral: #d96a4e;
+  --coral-deep: #c05a40;
   --sand: #e7f0e8;
   --foam: #f3faf5;
   --surface: rgba(255, 255, 255, 0.74);
@@ -74,6 +76,8 @@
   --lagoon: #60d7cf;
   --lagoon-deep: #8de5db;
   --palm: #6ec89a;
+  --coral: #e08a72;
+  --coral-deep: #d96a4e;
   --sand: #0f1a1e;
   --foam: #101d22;
   --surface: rgba(16, 30, 34, 0.8);
@@ -136,6 +140,8 @@
   --color-lagoon: var(--lagoon);
   --color-lagoon-deep: var(--lagoon-deep);
   --color-palm: var(--palm);
+  --color-coral: var(--coral);
+  --color-coral-deep: var(--coral-deep);
   --color-sand: var(--sand);
   --color-foam: var(--foam);
   --color-background: var(--background);
@@ -332,6 +338,14 @@ a {
   font-weight: 700;
   font-size: 0.69rem;
   color: var(--kicker);
+}
+
+.field-label {
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--sea-ink-soft);
 }
 
 .nav-link {

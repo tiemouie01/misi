@@ -11,7 +11,18 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import { categories, formatK, oneTapRecents } from '#/lib/app-data'
+import {
+  CYCLE,
+  DEFAULT_EXPENSE_ACCOUNT_ID,
+  DEFAULT_TRANSFER_FROM_ACCOUNT_ID,
+  DEFAULT_TRANSFER_TO_ACCOUNT_ID,
+  autoSaveAmount,
+  autoSaveRateLabel,
+  categories,
+  formatK,
+  isSpendableAccount,
+  oneTapRecents,
+} from '#/lib/app-data'
 
 import type {
   Account,
@@ -27,7 +38,6 @@ interface QuickAddCardProps {
 }
 
 interface QuickAddSheetProps {
-  open: boolean
   initial: QuickAddInitial
   accounts: Account[]
   onClose: () => void
@@ -37,8 +47,6 @@ interface QuickAddSheetProps {
 interface QuickAddFabProps {
   onOpen: (initial: QuickAddInitial) => void
 }
-
-const selectableAccounts = ['nbm', 'fdh', 'airtel', 'cash']
 
 function RecentChips({
   onSelect,
@@ -101,9 +109,7 @@ export function QuickAddCard({ onOpen, animationDelay }: QuickAddCardProps) {
         </div>
       </div>
       <div className="mt-5 border-t border-dashed border-(--line) pt-4">
-        <p className="text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
-          One-tap recents
-        </p>
+        <p className="field-label">One-tap recents</p>
         <div className="mt-2.5">
           <RecentChips
             onSelect={(recent) =>
@@ -151,13 +157,10 @@ function AccountPicker({
 }) {
   return (
     <fieldset className="mt-5">
-      <legend className="mb-2 text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
-        {label}
-      </legend>
+      <legend className="field-label mb-2">{label}</legend>
       <div className="flex flex-wrap gap-2">
-        {accounts
-          .filter((account) => selectableAccounts.includes(account.id))
-          .map((account) => (
+        {accounts.filter((account) => isSpendableAccount(account.id)).map(
+          (account) => (
             <Button
               key={account.id}
               type="button"
@@ -169,14 +172,14 @@ function AccountPicker({
             >
               {account.name}
             </Button>
-          ))}
+          ),
+        )}
       </div>
     </fieldset>
   )
 }
 
 export function QuickAddSheet({
-  open,
   initial,
   accounts,
   onClose,
@@ -190,9 +193,14 @@ export function QuickAddSheet({
     initial.categoryId ?? 'groceries',
   )
   const [accountId, setAccountId] = useState(
-    initial.accountId ?? (initial.mode === 'transfer' ? 'nbm' : 'airtel'),
+    initial.accountId ??
+      (initial.mode === 'transfer'
+        ? DEFAULT_TRANSFER_FROM_ACCOUNT_ID
+        : DEFAULT_EXPENSE_ACCOUNT_ID),
   )
-  const [toAccountId, setToAccountId] = useState(initial.toAccountId ?? 'cash')
+  const [toAccountId, setToAccountId] = useState(
+    initial.toAccountId ?? DEFAULT_TRANSFER_TO_ACCOUNT_ID,
+  )
   const [payee, setPayee] = useState(initial.payee ?? '')
   const [items, setItems] = useState('')
   const [note, setNote] = useState('')
@@ -254,12 +262,9 @@ export function QuickAddSheet({
   })
 
   useEffect(() => {
-    if (!open) return
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open])
-
-  if (!open) return null
+  }, [])
 
   const amountDisplay = amount ? `K ${amount.toLocaleString('en-US')}` : 'K 0'
   const saveLabel =
@@ -279,16 +284,16 @@ export function QuickAddSheet({
   function switchMode(nextMode: TxnType) {
     setMode(nextMode)
     if (nextMode === 'transfer') {
-      setAccountId('nbm')
-      setToAccountId('cash')
+      setAccountId(DEFAULT_TRANSFER_FROM_ACCOUNT_ID)
+      setToAccountId(DEFAULT_TRANSFER_TO_ACCOUNT_ID)
     } else if (mode === 'transfer') {
-      setAccountId('airtel')
+      setAccountId(DEFAULT_EXPENSE_ACCOUNT_ID)
     }
   }
 
   return (
     <Dialog
-      open={open}
+      open
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onClose()
       }}
@@ -326,7 +331,7 @@ export function QuickAddSheet({
           </p>
           {initial.reconcile && (
             <Badge variant="destructive" className="mt-1">
-              Reconcile · 30 Jul
+              {CYCLE.reconcileNote}
             </Badge>
           )}
         </div>
@@ -357,15 +362,11 @@ export function QuickAddSheet({
         {mode === 'expense' && (
           <>
             <div className="mt-5">
-              <p className="mb-2 text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
-                One-tap recents
-              </p>
+              <p className="field-label mb-2">One-tap recents</p>
               <RecentChips onSelect={selectRecent} />
             </div>
             <div className="mt-5">
-              <p className="mb-2 text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase">
-                Category
-              </p>
+              <p className="field-label mb-2">Category</p>
               <div className="flex flex-wrap gap-2">
                 {categories
                   .filter((category) => category.id !== 'adjustment')
@@ -418,10 +419,7 @@ export function QuickAddSheet({
         )}
         {mode !== 'transfer' && (
           <div className="mt-5">
-            <label
-              htmlFor="quick-add-payee"
-              className="mb-2 block text-[0.72rem] font-bold tracking-widest text-sea-ink-soft uppercase"
-            >
+            <label htmlFor="quick-add-payee" className="field-label mb-2 block">
               Payee
             </label>
             <Input
@@ -454,9 +452,9 @@ export function QuickAddSheet({
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">
-              Auto-save 20% — Misi will propose{' '}
+              Auto-save {autoSaveRateLabel()} — Misi will propose{' '}
               <span className="font-mono tabular-nums">
-                {formatK(Math.round(amount * 0.2))}
+                {formatK(autoSaveAmount(amount))}
               </span>{' '}
               → Savings.
             </p>

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import { formatK } from '#/lib/app-data'
+import { autoSaveRateLabel, formatK } from '#/lib/app-data'
 
 export type AutoSaveStatus = 'proposed' | 'saved' | 'dismissed'
 
@@ -74,7 +74,7 @@ export function AutoSaveCard({
         <div className="min-w-0 flex-1">
           <p className="island-kicker">Auto-save proposed</p>
           <p className="mt-1 text-lg font-extrabold text-sea-ink">
-            Auto-save 20% of {sourceName}
+            Auto-save {autoSaveRateLabel()} of {sourceName}
           </p>
           <div className="mt-1 text-sm text-sea-ink-soft">
             {editing ? (

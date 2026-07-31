@@ -16,9 +16,16 @@ import {
 import { ReconcileCard } from '#/components/app/reconcile-card'
 import { TransactionsCard } from '#/components/app/transactions-card'
 import {
+  AUTO_SAVE_SOURCE_ACCOUNT_ID,
+  CYCLE,
   CYCLE_BUDGET,
   CYCLE_DAYS_REMAINING,
-  USD_RATE,
+  INITIAL_AUTO_SAVE_AMOUNT,
+  INITIAL_CYCLE_SPEND,
+  INITIAL_SAVINGS_BALANCE,
+  accountMwkValue,
+  autoSaveAmount,
+  autoSaveRateLabel,
   formatK,
   seedAccounts,
   seedBudgets,
@@ -31,8 +38,6 @@ import type { AutoSaveStatus } from '#/components/app/auto-save-card'
 
 export const Route = createFileRoute('/app')({ component: AppHome })
 
-const INITIAL_CYCLE_SPEND = 358000
-
 interface AutoSaveState {
   status: AutoSaveStatus
   amount: number
@@ -44,6 +49,8 @@ interface AppState {
   transactions: Txn[]
   budgets: typeof seedBudgets
   autoSave: AutoSaveState
+  /** Amount moved Spending → Savings this cycle (allocation, not location). */
+  autoSavedTotal: number
   savingsBalance: number
   reconcile: typeof seedReconcile
 }
@@ -63,20 +70,24 @@ function createInitialState(): AppState {
     budgets: seedBudgets.map((budget) => ({ ...budget })),
     autoSave: {
       status: 'proposed',
-      amount: 370000,
+      amount: INITIAL_AUTO_SAVE_AMOUNT,
       sourceName: 'salary',
     },
-    savingsBalance: 315000,
+    autoSavedTotal: 0,
+    savingsBalance: INITIAL_SAVINGS_BALANCE,
     reconcile: seedReconcile.map((balance) => ({ ...balance })),
   }
 }
 
 function prependTransaction(
   transactions: Txn[],
-  transaction: Omit<Txn, 'id' | 'day'>,
+  transaction: Omit<Txn, 'id' | 'day' | 'provisional'>,
   id: string,
 ) {
-  return [{ ...transaction, id, day: 'Today' }, ...transactions]
+  return [
+    { ...transaction, id, day: 'Today', provisional: true as const },
+    ...transactions,
+  ]
 }
 
 function changeAccountBalance(
@@ -163,7 +174,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
           ),
           autoSave: {
             status: 'proposed',
-            amount: Math.round(payload.amount * 0.2),
+            amount: autoSaveAmount(payload.amount),
             sourceName: 'income',
           },
         }
@@ -208,16 +219,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
         autoSave: { ...state.autoSave, status: 'dismissed' },
       }
     case 'auto-save-confirmed':
+      // Allocation change only — account location balances stay put.
       return {
         ...state,
+        autoSavedTotal: state.autoSavedTotal + state.autoSave.amount,
         savingsBalance: state.savingsBalance + state.autoSave.amount,
         transactions: prependTransaction(
           state.transactions,
           {
             type: 'transfer',
             amount: state.autoSave.amount,
-            payee: `Auto-save — 20% of ${state.autoSave.sourceName}`,
-            accountId: 'nbm',
+            payee: `Auto-save — ${autoSaveRateLabel()} of ${state.autoSave.sourceName}`,
+            accountId: AUTO_SAVE_SOURCE_ACCOUNT_ID,
             walletId: 'savings',
           },
           action.id,
@@ -240,21 +253,24 @@ function appReducer(state: AppState, action: AppAction): AppState {
       if (!balance) return state
 
       const delta = balance.actual - balance.expected
+      if (delta === 0) return state
+
+      const isShortfall = delta < 0
       return {
         ...state,
         accounts: changeAccountBalance(state.accounts, action.accountId, delta),
         transactions: prependTransaction(
           state.transactions,
           {
-            type: 'expense',
+            type: isShortfall ? 'expense' : 'income',
             amount: Math.abs(delta),
             payee: 'Balance adjustment',
-            categoryId: 'adjustment',
+            categoryId: isShortfall ? 'adjustment' : undefined,
             accountId: action.accountId,
             walletId: 'spending',
             reconcile: true,
             adjustment: true,
-            note: 'Reconcile 30 Jul',
+            note: CYCLE.reconcileNote,
           },
           action.id,
         ),
@@ -287,6 +303,7 @@ function AppDashboard() {
     transactions,
     budgets,
     autoSave,
+    autoSavedTotal,
     savingsBalance,
     reconcile,
   } = appState
@@ -300,17 +317,13 @@ function AppDashboard() {
     transactions
       .filter(
         (transaction) =>
-          transaction.id.startsWith('new-') && transaction.type === 'expense',
+          transaction.provisional && transaction.type === 'expense',
       )
       .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const spendingLeft = CYCLE_BUDGET - totalSpent
+  const spendingLeft = CYCLE_BUDGET - totalSpent - autoSavedTotal
   const perDay = Math.max(0, Math.round(spendingLeft / CYCLE_DAYS_REMAINING))
   const netWorth = accounts.reduce(
-    (sum, account) =>
-      sum +
-      (account.currency === 'USD'
-        ? account.balance * USD_RATE
-        : account.balance),
+    (sum, account) => sum + accountMwkValue(account),
     0,
   )
 
@@ -323,7 +336,7 @@ function AppDashboard() {
   }
 
   function createTransactionId() {
-    return `new-${Date.now()}-${transactions.length}`
+    return `txn-${Date.now()}-${transactions.length}`
   }
 
   function saveTransaction(payload: QuickAddPayload) {
@@ -362,7 +375,7 @@ function AppDashboard() {
           <div className="space-y-5">
             <section>
               <p className="island-kicker">
-                Thursday, 30 July · Jul cycle · day 11 of 31
+                {CYCLE.greetingDate} · {CYCLE.label} · {CYCLE.dayOf}
               </p>
               <h1 className="font-display mt-2 text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
                 Good afternoon.
@@ -375,7 +388,7 @@ function AppDashboard() {
                 <span className="font-mono font-semibold text-sea-ink tabular-nums">
                   {formatK(perDay)}
                 </span>
-                /day until 19 Aug.
+                /day until {CYCLE.endsOn}.
               </p>
             </section>
             <QuickAddCard onOpen={openSheet} animationDelay="60ms" />
@@ -445,7 +458,6 @@ function AppDashboard() {
       <QuickAddFab onOpen={openSheet} />
       {sheet.open && (
         <QuickAddSheet
-          open={sheet.open}
           initial={sheet.initial}
           accounts={accounts}
           onClose={closeSheet}

@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
-import { incomeSources } from '#/lib/app-data'
+import { CYCLE, autoSaveRateLabel, incomeSources } from '#/lib/app-data'
 
 interface IncomeCardProps {
   animationDelay: string
@@ -21,7 +21,7 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Expected income</p>
         <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-          Jul cycle
+          {CYCLE.label}
         </span>
       </div>
       <div className="mt-4 space-y-2.5">
@@ -34,7 +34,7 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
               className={
                 source.status === 'landed'
                   ? 'grid size-6 shrink-0 place-items-center rounded-full bg-palm/15 text-palm'
-                  : 'grid size-6 shrink-0 place-items-center rounded-full bg-[#d96a4e]/12 text-[#c05a40]'
+                  : 'grid size-6 shrink-0 place-items-center rounded-full bg-coral/12 text-coral-deep'
               }
             >
               {source.status === 'landed' ? (
@@ -57,7 +57,7 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
                 className={
                   source.status === 'landed'
                     ? 'text-[0.72rem] font-semibold text-palm'
-                    : 'text-[0.72rem] font-semibold text-[#c05a40]'
+                    : 'text-[0.72rem] font-semibold text-coral-deep'
                 }
               >
                 {source.statusNote}
@@ -67,8 +67,8 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
         ))}
       </div>
       <p className="mt-4 text-[0.8rem] leading-relaxed text-sea-ink-soft">
-        Each source carries its own savings split — salary 20%, allowance 50%.
-        Log income with + and Misi proposes the transfer.
+        Each source carries its own savings split — salary {autoSaveRateLabel()},
+        allowance 50%. Log income with + and Misi proposes the transfer.
       </p>
       <Button
         type="button"

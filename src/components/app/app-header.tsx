@@ -1,9 +1,11 @@
 import { Link } from '@tanstack/react-router'
-import { Settings, Waves, Wifi } from 'lucide-react'
+import { Settings, Wifi } from 'lucide-react'
 
+import { MisiMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
+import { CYCLE } from '#/lib/app-data'
 
 export function AppHeader() {
   return (
@@ -12,7 +14,7 @@ export function AppHeader() {
         <div className="flex items-center gap-3">
           <Link to="/app" className="flex items-center gap-2.5 no-underline">
             <span className="grid size-9 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
-              <Waves className="size-4.5" strokeWidth={2.4} />
+              <MisiMark className="size-5" />
             </span>
             <span className="font-display text-2xl font-bold tracking-tight text-sea-ink">
               Misi
@@ -22,7 +24,7 @@ export function AppHeader() {
             variant="secondary"
             className="hidden px-3 uppercase sm:inline-flex"
           >
-            Jul cycle · day 11
+            {CYCLE.headerBadge}
           </Badge>
         </div>
         <div className="flex items-center gap-2">
@@ -35,9 +37,9 @@ export function AppHeader() {
             type="button"
             variant="secondary"
             size="icon-sm"
-            aria-label="Settings"
+            aria-label="Settings (coming soon)"
             className="size-9"
-            onClick={() => undefined}
+            disabled
           >
             <Settings className="size-4" />
           </Button>

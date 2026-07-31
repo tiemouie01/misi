@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="misi-tile" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#328f97"/>
+      <stop offset="1" stop-color="#2f6a4a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#misi-tile)"/>
+  <g transform="translate(6.4 6.4) scale(1.6)" fill="none">
+    <circle cx="16" cy="9" r="2.6" fill="#ffffff"/>
+    <path d="M5 23.5 C7 14.5 12 14.5 14 18.5 C15 20.5 17 20.5 18 18.5 C20 14.5 25 14.5 27 23.5" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+</svg>

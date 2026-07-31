@@ -34,6 +34,8 @@ export interface Txn {
   day: string
   reconcile?: true
   adjustment?: true
+  /** Set on transactions created in the current session (not seed data). */
+  provisional?: true
 }
 
 export interface Category {
@@ -103,10 +105,62 @@ export interface RecentTransaction {
 }
 
 export const USD_RATE = 1735
-export const CYCLE_BUDGET = 650000
-export const CYCLE_DAY = 11
-export const CYCLE_DAYS = 31
-export const CYCLE_DAYS_REMAINING = 20
+export const AUTO_SAVE_RATE = 0.2
+export const AUTO_SAVE_SOURCE_ACCOUNT_ID = 'nbm'
+export const DEFAULT_EXPENSE_ACCOUNT_ID = 'airtel'
+export const DEFAULT_TRANSFER_FROM_ACCOUNT_ID = 'nbm'
+export const DEFAULT_TRANSFER_TO_ACCOUNT_ID = 'cash'
+export const INITIAL_CYCLE_SPEND = 358000
+export const INITIAL_SAVINGS_BALANCE = 315000
+export const INITIAL_AUTO_SAVE_AMOUNT = 370000
+
+export const SPENDABLE_ACCOUNT_IDS = [
+  'nbm',
+  'fdh',
+  'airtel',
+  'cash',
+] as const
+
+export type SpendableAccountId = (typeof SPENDABLE_ACCOUNT_IDS)[number]
+
+export function isSpendableAccount(id: string): id is SpendableAccountId {
+  return (SPENDABLE_ACCOUNT_IDS as readonly string[]).includes(id)
+}
+
+/** Prototype cycle copy and numbers — one source for UI strings and math. */
+export const CYCLE = {
+  budget: 650000,
+  day: 11,
+  days: 31,
+  daysRemaining: 20,
+  label: 'Jul cycle',
+  dayOf: 'day 11 of 31',
+  greetingDate: 'Thursday, 30 July',
+  endsOn: '19 Aug',
+  reconcileNote: 'Reconcile 30 Jul',
+  lastClosed: 'last closed 26 Jul',
+  headerBadge: 'Jul cycle · day 11',
+  cycleGain: 112300,
+} as const
+
+export const CYCLE_BUDGET = CYCLE.budget
+export const CYCLE_DAY = CYCLE.day
+export const CYCLE_DAYS = CYCLE.days
+export const CYCLE_DAYS_REMAINING = CYCLE.daysRemaining
+
+export function autoSaveAmount(income: number) {
+  return Math.round(income * AUTO_SAVE_RATE)
+}
+
+export function autoSaveRateLabel() {
+  return `${Math.round(AUTO_SAVE_RATE * 100)}%`
+}
+
+export function accountKindColor(account: Account) {
+  if (account.currency === 'USD' || account.kind === 'cash') return 'var(--palm)'
+  if (account.kind === 'mobile') return 'var(--lagoon)'
+  return 'var(--lagoon-deep)'
+}
 
 export const seedAccounts: Account[] = [
   {
@@ -164,7 +218,7 @@ export const seedWallets: Wallet[] = [
   {
     id: 'savings',
     name: 'Savings',
-    balance: 315000,
+    balance: INITIAL_SAVINGS_BALANCE,
     currency: 'MWK',
   },
   {
@@ -199,7 +253,7 @@ export const categories: Category[] = [
     id: 'eating-out',
     name: 'Eating out',
     icon: UtensilsCrossed,
-    color: '#d96a4e',
+    color: 'var(--coral)',
   },
   {
     id: 'airtime',
@@ -223,7 +277,7 @@ export const categories: Category[] = [
     id: 'adjustment',
     name: 'Adjustment',
     icon: Scale,
-    color: '#d96a4e',
+    color: 'var(--coral)',
   },
 ]
 
@@ -390,4 +444,16 @@ export const seedReconcile: ReconcileBalance[] = [
 export function formatK(value: number) {
   const absolute = Math.abs(value).toLocaleString('en-US')
   return `${value < 0 ? '-' : ''}K${absolute}`
+}
+
+export function formatAccountAmount(account: Account) {
+  return account.currency === 'USD'
+    ? `$${account.balance.toFixed(2)}`
+    : formatK(account.balance)
+}
+
+export function accountMwkValue(account: Account) {
+  return account.currency === 'USD'
+    ? account.balance * USD_RATE
+    : account.balance
 }
