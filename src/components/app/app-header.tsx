@@ -1,13 +1,13 @@
 import { Link } from '@tanstack/react-router'
-import { Settings, Wifi } from 'lucide-react'
+import { LogOut, Wifi } from 'lucide-react'
 
 import { MisiMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { CYCLE } from '#/lib/app-data'
+import { authClient } from '#/lib/auth-client'
 
-export function AppHeader() {
+export function AppHeader({ badge }: { badge: string }) {
   return (
     <header className="sticky top-0 z-20 border-b border-(--line) bg-(--header-bg) backdrop-blur-md">
       <div className="page-wrap flex items-center justify-between gap-4 py-3.5">
@@ -24,7 +24,7 @@ export function AppHeader() {
             variant="secondary"
             className="hidden px-3 uppercase sm:inline-flex"
           >
-            {CYCLE.headerBadge}
+            {badge}
           </Badge>
         </div>
         <div className="flex items-center gap-2">
@@ -37,11 +37,14 @@ export function AppHeader() {
             type="button"
             variant="secondary"
             size="icon-sm"
-            aria-label="Settings (coming soon)"
+            aria-label="Sign out"
             className="size-9"
-            disabled
+            onClick={async () => {
+              await authClient.signOut()
+              window.location.href = '/login'
+            }}
           >
-            <Settings className="size-4" />
+            <LogOut className="size-4" />
           </Button>
         </div>
       </div>

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@convex-dev/better-auth':
+        specifier: ^0.12.5
+        version: 0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.27.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.27.0)(jiti@2.7.0)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.14))(convex@1.42.3(react@19.2.8))(react@19.2.8)(typescript@6.0.3)
       '@convex-dev/react-query':
         specifier: 0.1.0
         version: 0.1.0(@tanstack/react-query@5.101.4(react@19.2.8))(convex@1.42.3(react@19.2.8))
@@ -296,6 +299,13 @@ packages:
 
   '@better-fetch/fetch@1.3.1':
     resolution: {integrity: sha512-ABkD1WhyfPZprKRQI3bhATjeiFuNWC9PXhfGWqL+sg/gKrM977oFrYkdb4msM3hgUGonr7KlOsOFT5TU2rht9g==}
+
+  '@convex-dev/better-auth@0.12.5':
+    resolution: {integrity: sha512-YFUbGk04OlINno9FpOTNZN67AP+kSQsblfep5zs1f/WTgMWjD5FymU6rSSh3mu52gukmDNnBJTjC/lj4QRpjlQ==}
+    peerDependencies:
+      better-auth: '>=1.6.11 <1.7.0'
+      convex: ^1.25.0
+      react: ^18.3.1 || ^19.0.0
 
   '@convex-dev/react-query@0.1.0':
     resolution: {integrity: sha512-ULmBZCtAQDUePdBhUv7hj1Yy4QiCelhi6uEIOtMpjW8db6W9CFKvQwLt9heLngccFyMFfAZdOfSrT+cP4AH0Jw==}
@@ -2480,6 +2490,10 @@ packages:
     resolution: {integrity: sha512-0h+uSNtQGW3D98eQt3jJ8L06Fves8hncB4V/PKdw/Qb8Hnk19VaKuTr55UNRYiSoVa7WwrFls+rh3ux9agmkeQ==}
     engines: {node: '>= 12.0.0'}
 
+  common-tags@1.8.2:
+    resolution: {integrity: sha512-gk/Z852D2Wtb//0I+kRFNKKE9dIIVirjoqPoA1wJU+XePVXZfGeBpk45+A1rKO4Q43prqWBNY/MiIeRLbPWUaA==}
+    engines: {node: '>=4.0.0'}
+
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
@@ -2489,6 +2503,28 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  convex-helpers@0.1.120:
+    resolution: {integrity: sha512-FPqtmN/10uoxmmhVq0ViNi08AnmHKT/eU1R8+ohmPZoHfg8noZEZCltApY/ASDdhq92o0kLZETggzBvMfHJDLQ==}
+    hasBin: true
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      convex: ^1.32.0
+      hono: ^4.0.5
+      react: ^17.0.2 || ^18.0.0 || ^19.0.0
+      typescript: ^5.5 || ^6.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@standard-schema/spec':
+        optional: true
+      hono:
+        optional: true
+      react:
+        optional: true
+      typescript:
+        optional: true
+      zod:
+        optional: true
 
   convex@1.42.3:
     resolution: {integrity: sha512-7Tz/lH6UlZdiqzLPF/zrlH6Rlo/DOp836dL+GZkUMEQ2jaGGNnBIiIDcOOiEqtfSehuQ65r/rdNMnb4LupowaA==}
@@ -3306,6 +3342,10 @@ packages:
     resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
     engines: {node: '>= 20.19.0'}
 
+  remeda@2.39.0:
+    resolution: {integrity: sha512-3Ki8dU1o3OVu4dwIQ2Pj+yiuP7OnEbmWAGmJ3yDRqopily5jsj8NWzPvbS89H85d6UdONKEcUnrfuHY6jN9vyw==}
+    engines: {node: '>=18.0.0'}
+
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
     engines: {node: '>=0.10.0'}
@@ -3409,6 +3449,10 @@ packages:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
 
+  tagged-tag@1.0.0:
+    resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
+    engines: {node: '>=20'}
+
   tailwind-merge@3.6.0:
     resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
 
@@ -3443,6 +3487,10 @@ packages:
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
+
+  type-fest@5.8.0:
+    resolution: {integrity: sha512-YGYEVz3Fm5iy/AybuA0oyNFq7H4CgQNfRp/qfe8nurE1kuCeNm3/vfm9X4Mtl+qLyaKJUh5xrFZwogr41SMjYA==}
+    engines: {node: '>=20'}
 
   typescript-eslint@8.65.0:
     resolution: {integrity: sha512-/ggrHAwyjENDusvyxbuqxAC2dTnZg/Z8F+fgQtYIz+L6n/9HfSlEZcFGV/NsMNa6CkGk0xUjUAFwC0vHOflvIA==}
@@ -3902,6 +3950,24 @@ snapshots:
       '@noble/hashes': 2.2.0
 
   '@better-fetch/fetch@1.3.1': {}
+
+  '@convex-dev/better-auth@0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.27.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.27.0)(jiti@2.7.0)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.14))(convex@1.42.3(react@19.2.8))(react@19.2.8)(typescript@6.0.3)':
+    dependencies:
+      '@better-fetch/fetch': 1.3.1
+      better-auth: 1.6.25(@tanstack/react-start@1.168.32(crossws@0.4.10(srvx@0.11.22))(esbuild@0.27.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rolldown@1.2.0)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.27.0)(jiti@2.7.0)))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.14)
+      common-tags: 1.8.2
+      convex: 1.42.3(react@19.2.8)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.3(react@19.2.8))(react@19.2.8)(typescript@6.0.3)(zod@4.4.3)
+      jose: 6.2.4
+      react: 19.2.8
+      remeda: 2.39.0
+      semver: 7.8.5
+      type-fest: 5.8.0
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - typescript
 
   '@convex-dev/react-query@0.1.0(@tanstack/react-query@5.101.4(react@19.2.8))(convex@1.42.3(react@19.2.8))':
     dependencies:
@@ -5994,11 +6060,22 @@ snapshots:
 
   comment-parser@1.4.7: {}
 
+  common-tags@1.8.2: {}
+
   concat-map@0.0.1: {}
 
   consola@3.4.2: {}
 
   convert-source-map@2.0.0: {}
+
+  convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.3(react@19.2.8))(react@19.2.8)(typescript@6.0.3)(zod@4.4.3):
+    dependencies:
+      convex: 1.42.3(react@19.2.8)
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      react: 19.2.8
+      typescript: 6.0.3
+      zod: 4.4.3
 
   convex@1.42.3(react@19.2.8):
     dependencies:
@@ -6787,6 +6864,8 @@ snapshots:
 
   readdirp@5.0.0: {}
 
+  remeda@2.39.0: {}
+
   require-directory@2.1.1: {}
 
   resolve-from@4.0.0: {}
@@ -6893,6 +6972,8 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
+  tagged-tag@1.0.0: {}
+
   tailwind-merge@3.6.0: {}
 
   tailwindcss@4.3.3: {}
@@ -6920,6 +7001,10 @@ snapshots:
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
+
+  type-fest@5.8.0:
+    dependencies:
+      tagged-tag: 1.0.0
 
   typescript-eslint@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3):
     dependencies:

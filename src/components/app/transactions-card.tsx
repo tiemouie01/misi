@@ -1,19 +1,21 @@
 import { ArrowDownToLine, ArrowLeftRight } from 'lucide-react'
 
 import { Card } from '#/components/ui/card'
-import { CYCLE, categories, formatK } from '#/lib/app-data'
+import { categories, formatK } from '#/lib/app-data'
 
 import type { Account, Txn } from '#/lib/app-data'
 
 interface TransactionsCardProps {
   transactions: Txn[]
   accounts: Account[]
+  cycleLabel: string
   animationDelay: string
 }
 
 export function TransactionsCard({
   transactions,
   accounts,
+  cycleLabel,
   animationDelay,
 }: TransactionsCardProps) {
   const groups = transactions.reduce<Array<{ day: string; txns: Txn[] }>>(
@@ -35,7 +37,7 @@ export function TransactionsCard({
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Recent activity</p>
         <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-          {CYCLE.label}
+          {cycleLabel}
         </span>
       </div>
       {groups.map((group, groupIndex) => {
@@ -94,7 +96,7 @@ export function TransactionsCard({
                 return (
                   <div
                     key={transaction.id}
-                    className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-(--chip-bg) ${transaction.provisional ? 'rise-in' : ''}`}
+                    className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-(--chip-bg)"
                   >
                     <span
                       className="grid size-9 shrink-0 place-items-center rounded-lg"
@@ -119,7 +121,7 @@ export function TransactionsCard({
                             </span>
                           </>
                         )}
-                        {transaction.reconcile && ' · Reconcile'}
+                        {transaction.adjustment && ' · Reconcile'}
                       </p>
                     </div>
                     <span

@@ -5,7 +5,7 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import { CYCLE, formatK, isSpendableAccount } from '#/lib/app-data'
+import { formatK, isSpendableAccount } from '#/lib/app-data'
 
 import type { Account, QuickAddInitial, ReconcileBalance } from '#/lib/app-data'
 
@@ -13,6 +13,7 @@ interface ReconcileCardProps {
   accounts: Account[]
   balances: ReconcileBalance[]
   closed: boolean
+  lastClosed: string
   onActualChange: (accountId: string, actual: number) => void
   onAbsorb: (accountId: string) => void
   onLogMissing: (initial: QuickAddInitial) => void
@@ -39,15 +40,17 @@ export function ReconcileCard({
   accounts,
   balances,
   closed,
+  lastClosed,
   onActualChange,
   onAbsorb,
   onLogMissing,
   animationDelay,
 }: ReconcileCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const visibleBalances = balances.filter((balance) =>
-    isSpendableAccount(balance.accountId),
-  )
+  const visibleBalances = balances.filter((balance) => {
+    const account = accounts.find((item) => item.id === balance.accountId)
+    return account ? isSpendableAccount(account) : false
+  })
   const gaps = visibleBalances.filter(
     (balance) => balance.actual !== balance.expected,
   )
@@ -65,7 +68,7 @@ export function ReconcileCard({
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Reconcile</p>
         <span className="text-[0.72rem] font-semibold text-sea-ink-soft">
-          {closed ? 'closed just now' : CYCLE.lastClosed}
+          {closed ? 'closed just now' : lastClosed}
         </span>
       </div>
       <p className="font-display mt-2 text-xl font-bold text-sea-ink">
@@ -75,15 +78,25 @@ export function ReconcileCard({
         Check each real balance. Any gap becomes a guided fix, not a spreadsheet
         chore.
       </p>
-      {closed ? (
-        <div className="mt-4 flex items-center gap-2.5 rounded-xl bg-palm/10 px-4 py-3.5">
-          <span className="grid size-6 place-items-center rounded-full bg-palm/15 text-palm">
-            <Check className="size-3.5" strokeWidth={3} />
-          </span>
-          <p className="text-sm font-bold text-sea-ink">
-            All matched — books agree with reality.
-          </p>
-        </div>
+      {closed && !expanded ? (
+        <>
+          <div className="mt-4 flex items-center gap-2.5 rounded-xl bg-palm/10 px-4 py-3.5">
+            <span className="grid size-6 place-items-center rounded-full bg-palm/15 text-palm">
+              <Check className="size-3.5" strokeWidth={3} />
+            </span>
+            <p className="text-sm font-bold text-sea-ink">
+              All matched — books agree with reality.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-3 w-full"
+            onClick={() => setExpanded(true)}
+          >
+            Check balances again
+          </Button>
+        </>
       ) : expanded ? (
         <>
           <div className="mt-4 space-y-2">

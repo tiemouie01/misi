@@ -12,12 +12,6 @@ import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import {
-  CYCLE,
-  DEFAULT_EXPENSE_ACCOUNT_ID,
-  DEFAULT_TRANSFER_FROM_ACCOUNT_ID,
-  DEFAULT_TRANSFER_TO_ACCOUNT_ID,
-  autoSaveAmount,
-  autoSaveRateLabel,
   categories,
   formatK,
   isSpendableAccount,
@@ -40,6 +34,14 @@ interface QuickAddCardProps {
 interface QuickAddSheetProps {
   initial: QuickAddInitial
   accounts: Account[]
+  defaultExpenseAccountId: string
+  defaultTransferFromAccountId: string
+  defaultTransferToAccountId: string
+  reconcileNote: string
+  autoSaveAmount: (income: number) => number
+  autoSaveRateLabel: string
+  resolveAccountId: (accountId: string) => string
+  error?: string | null
   onClose: () => void
   onSave: (payload: QuickAddPayload) => void
 }
@@ -159,8 +161,9 @@ function AccountPicker({
     <fieldset className="mt-5">
       <legend className="field-label mb-2">{label}</legend>
       <div className="flex flex-wrap gap-2">
-        {accounts.filter((account) => isSpendableAccount(account.id)).map(
-          (account) => (
+        {accounts
+          .filter((account) => isSpendableAccount(account))
+          .map((account) => (
             <Button
               key={account.id}
               type="button"
@@ -172,8 +175,7 @@ function AccountPicker({
             >
               {account.name}
             </Button>
-          ),
-        )}
+          ))}
       </div>
     </fieldset>
   )
@@ -182,6 +184,14 @@ function AccountPicker({
 export function QuickAddSheet({
   initial,
   accounts,
+  defaultExpenseAccountId,
+  defaultTransferFromAccountId,
+  defaultTransferToAccountId,
+  reconcileNote,
+  autoSaveAmount,
+  autoSaveRateLabel,
+  resolveAccountId,
+  error,
   onClose,
   onSave,
 }: QuickAddSheetProps) {
@@ -195,11 +205,11 @@ export function QuickAddSheet({
   const [accountId, setAccountId] = useState(
     initial.accountId ??
       (initial.mode === 'transfer'
-        ? DEFAULT_TRANSFER_FROM_ACCOUNT_ID
-        : DEFAULT_EXPENSE_ACCOUNT_ID),
+        ? defaultTransferFromAccountId
+        : defaultExpenseAccountId),
   )
   const [toAccountId, setToAccountId] = useState(
-    initial.toAccountId ?? DEFAULT_TRANSFER_TO_ACCOUNT_ID,
+    initial.toAccountId ?? defaultTransferToAccountId,
   )
   const [payee, setPayee] = useState(initial.payee ?? '')
   const [items, setItems] = useState('')
@@ -277,17 +287,17 @@ export function QuickAddSheet({
   function selectRecent(recent: RecentTransaction) {
     setDigits(String(recent.amount))
     setCategoryId(recent.categoryId)
-    setAccountId(recent.accountId)
+    setAccountId(resolveAccountId(recent.accountId))
     setPayee(recent.payee)
   }
 
   function switchMode(nextMode: TxnType) {
     setMode(nextMode)
     if (nextMode === 'transfer') {
-      setAccountId(DEFAULT_TRANSFER_FROM_ACCOUNT_ID)
-      setToAccountId(DEFAULT_TRANSFER_TO_ACCOUNT_ID)
+      setAccountId(defaultTransferFromAccountId)
+      setToAccountId(defaultTransferToAccountId)
     } else if (mode === 'transfer') {
-      setAccountId(DEFAULT_EXPENSE_ACCOUNT_ID)
+      setAccountId(defaultExpenseAccountId)
     }
   }
 
@@ -331,7 +341,7 @@ export function QuickAddSheet({
           </p>
           {initial.reconcile && (
             <Badge variant="destructive" className="mt-1">
-              {CYCLE.reconcileNote}
+              {reconcileNote}
             </Badge>
           )}
         </div>
@@ -452,7 +462,7 @@ export function QuickAddSheet({
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">
-              Auto-save {autoSaveRateLabel()} — Misi will propose{' '}
+              Auto-save {autoSaveRateLabel} — Misi will propose{' '}
               <span className="font-mono tabular-nums">
                 {formatK(autoSaveAmount(amount))}
               </span>{' '}
@@ -479,6 +489,14 @@ export function QuickAddSheet({
             onChange={(event) => setNote(event.target.value)}
           />
         </div>
+        {error && (
+          <p
+            role="alert"
+            className="mt-5 rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+          >
+            {error}
+          </p>
+        )}
         <Button
           type="button"
           disabled={!canSave}

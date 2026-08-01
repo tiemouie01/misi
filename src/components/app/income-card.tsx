@@ -1,17 +1,22 @@
 import { Check, Clock } from 'lucide-react'
-import { useState } from 'react'
 
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
-import { CYCLE, autoSaveRateLabel, incomeSources } from '#/lib/app-data'
+import type { IncomeSource } from '#/lib/app-data'
 
 interface IncomeCardProps {
+  sources: IncomeSource[]
+  cycleLabel: string
+  autoSaveRateLabel: string
   animationDelay: string
 }
 
-export function IncomeCard({ animationDelay }: IncomeCardProps) {
-  const [showNote, setShowNote] = useState(false)
-
+export function IncomeCard({
+  sources,
+  cycleLabel,
+  autoSaveRateLabel,
+  animationDelay,
+}: IncomeCardProps) {
   return (
     <Card
       variant="island"
@@ -21,11 +26,11 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
       <div className="flex items-center justify-between gap-3">
         <p className="island-kicker">Expected income</p>
         <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-          {CYCLE.label}
+          {cycleLabel}
         </span>
       </div>
       <div className="mt-4 space-y-2.5">
-        {incomeSources.map((source) => (
+        {sources.map((source) => (
           <div
             key={source.id}
             className="flex items-center gap-3 rounded-xl border border-(--line) bg-(--chip-bg) px-3.5 py-3"
@@ -67,22 +72,12 @@ export function IncomeCard({ animationDelay }: IncomeCardProps) {
         ))}
       </div>
       <p className="mt-4 text-[0.8rem] leading-relaxed text-sea-ink-soft">
-        Each source carries its own savings split — salary {autoSaveRateLabel()},
+        Each source carries its own savings split — salary {autoSaveRateLabel},
         allowance 50%. Log income with + and Misi proposes the transfer.
       </p>
-      <Button
-        type="button"
-        variant="secondary"
-        className="mt-3.5 self-start"
-        onClick={() => setShowNote(true)}
-      >
+      <Button type="button" variant="secondary" className="mt-3.5 self-start">
         + Add income source
       </Button>
-      {showNote && (
-        <p className="mt-2 text-[0.78rem] text-sea-ink-soft italic">
-          Setup flows arrive with the backend — this prototype uses sample data.
-        </p>
-      )}
     </Card>
   )
 }

@@ -4,23 +4,17 @@ import { useState } from 'react'
 import { Badge } from '#/components/ui/badge'
 import { Card } from '#/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import {
-  CYCLE,
-  CYCLE_BUDGET,
-  USD_RATE,
-  accountKindColor,
-  accountMwkValue,
-  formatK,
-  seedWallets,
-} from '#/lib/app-data'
+import { accountKindColor, accountMwkValue, formatK } from '#/lib/app-data'
 
-import type { Account } from '#/lib/app-data'
+import type { Account, Wallet } from '#/lib/app-data'
 
 interface NetWorthCardProps {
   accounts: Account[]
+  wallets: Wallet[]
   netWorth: number
-  spendingLeft: number
-  savingsBalance: number
+  cycleBudget: number
+  cycleGain: number
+  usdRate: number
   animationDelay: string
 }
 
@@ -80,9 +74,11 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
 
 export function NetWorthCard({
   accounts,
+  wallets,
   netWorth,
-  spendingLeft,
-  savingsBalance,
+  cycleBudget,
+  cycleGain,
+  usdRate,
   animationDelay,
 }: NetWorthCardProps) {
   const [view, setView] = useState<'accounts' | 'wallets'>('accounts')
@@ -90,36 +86,31 @@ export function NetWorthCard({
   const accountRows: DisplayRow[] = accounts.map((account) => ({
     id: account.id,
     name: account.name,
-    amount: accountMwkValue(account),
+    amount: accountMwkValue(account, usdRate),
     amountLabel:
       account.currency === 'USD'
         ? `$${account.balance.toFixed(2)}`
         : formatK(account.balance),
     color: accountKindColor(account),
   }))
-  const walletRows: DisplayRow[] = seedWallets.map((wallet) => {
-    const balance =
-      wallet.id === 'spending'
-        ? spendingLeft
-        : wallet.id === 'savings'
-          ? savingsBalance
-          : wallet.balance
+  const walletRows: DisplayRow[] = wallets.map((wallet) => {
+    const balance = wallet.balance
     const color =
       wallet.id === 'spending'
         ? 'var(--lagoon)'
-        : wallet.id === 'unit-trust'
+        : wallet.name === 'Unit Trust'
           ? 'var(--lagoon-deep)'
-          : wallet.id === 'debt'
+          : wallet.id.startsWith('debt')
             ? 'var(--coral)'
             : 'var(--palm)'
     return {
       id: wallet.id,
       name: wallet.name,
-      amount: wallet.currency === 'USD' ? balance * USD_RATE : balance,
+      amount: wallet.currency === 'USD' ? balance * usdRate : balance,
       amountLabel:
         wallet.currency === 'USD' ? `$${balance.toFixed(2)}` : formatK(balance),
       color,
-      ratioBase: wallet.id === 'spending' ? CYCLE_BUDGET : undefined,
+      ratioBase: wallet.id === 'spending' ? cycleBudget : undefined,
     }
   })
   return (
@@ -137,7 +128,8 @@ export function NetWorthCard({
           <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-palm">
             <Droplets className="size-3.5" />
             <span className="font-mono tabular-nums">
-              +{formatK(CYCLE.cycleGain)}
+              {cycleGain >= 0 ? '+' : ''}
+              {formatK(cycleGain)}
             </span>{' '}
             this cycle
           </p>
@@ -166,7 +158,7 @@ export function NetWorthCard({
       </Tabs>
       <div className="mt-5 flex flex-wrap gap-2 border-t border-dashed border-(--line) pt-4">
         <Badge variant="secondary" className="border-transparent">
-          USD @ K{USD_RATE.toLocaleString('en-US')}
+          USD @ K{usdRate.toLocaleString('en-US')}
         </Badge>
         <Badge variant="secondary" className="border-transparent">
           Cycle anchored to the 20th
