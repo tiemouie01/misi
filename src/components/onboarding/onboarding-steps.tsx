@@ -1,8 +1,15 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { CalendarIcon, Minus, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 
 import { Button } from '#/components/ui/button'
+import { Calendar } from '#/components/ui/calendar'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '#/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -27,6 +34,7 @@ import type {
   OnboardingDraft,
   OnboardingStep,
 } from '#/lib/onboarding-data'
+import type { DateRange } from 'react-day-picker'
 
 export interface StepProps {
   draft: OnboardingDraft
@@ -49,6 +57,160 @@ function ordinal(day: number) {
     default:
       return `${day}th`
   }
+}
+
+function dayInCurrentMonth(day: number) {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), day)
+}
+
+function parseExpectedWindow(expected: string): DateRange | undefined {
+  const trimmed = expected.trim()
+  if (!trimmed) return undefined
+
+  const rangeMatch = trimmed.match(
+    /^(\d{1,2})(?:st|nd|rd|th)?\s*[–-]\s*(\d{1,2})(?:st|nd|rd|th)?$/i,
+  )
+  if (rangeMatch) {
+    const fromDay = Number(rangeMatch[1])
+    const toDay = Number(rangeMatch[2])
+    if (fromDay < 1 || fromDay > 31 || toDay < 1 || toDay > 31) return undefined
+    return {
+      from: dayInCurrentMonth(fromDay),
+      to: dayInCurrentMonth(toDay),
+    }
+  }
+
+  const singleMatch = trimmed.match(/^(\d{1,2})(?:st|nd|rd|th)?$/i)
+  if (!singleMatch) return undefined
+  const day = Number(singleMatch[1])
+  if (day < 1 || day > 31) return undefined
+  const date = dayInCurrentMonth(day)
+  return { from: date, to: date }
+}
+
+function formatExpectedWindow(range: DateRange | undefined): string {
+  if (!range?.from) return ''
+  const fromDay = range.from.getDate()
+  if (!range.to) return ordinal(fromDay)
+  const toDay = range.to.getDate()
+  if (toDay === fromDay) return ordinal(fromDay)
+  return `${ordinal(fromDay)}–${ordinal(toDay)}`
+}
+
+function ExpectedWindowPicker({
+  value,
+  onChange,
+  id,
+}: {
+  value: string
+  onChange: (next: string) => void
+  id: string
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = parseExpectedWindow(value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          className={cn(
+            'h-10 w-full justify-start rounded-xl px-3 text-left text-sm font-normal shadow-sm',
+            !value && 'text-sea-ink-soft/70',
+          )}
+          aria-label="Expected landing window"
+        >
+          <CalendarIcon className="size-4 shrink-0 opacity-70" />
+          <span className="truncate">{value || 'Pick days'}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="range"
+          selected={selected}
+          defaultMonth={selected?.from}
+          numberOfMonths={1}
+          onSelect={(range) => {
+            onChange(formatExpectedWindow(range))
+            if (range?.from && range.to) setOpen(false)
+          }}
+        />
+        <p className="border-t border-(--line) px-3 py-2 text-[0.75rem] text-sea-ink-soft">
+          Day-of-month landing window each cycle
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+const SPLIT_STEP = 5
+
+function clampSplitPct(value: number) {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, value))
+}
+
+function SplitPctStepper({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: string
+  onChange: (next: string) => void
+}) {
+  const numeric = Number(value)
+  const current = Number.isFinite(numeric) ? numeric : 0
+
+  function stepBy(delta: number) {
+    onChange(String(clampSplitPct(current + delta)))
+  }
+
+  return (
+    <div className="flex h-10 items-stretch overflow-hidden rounded-xl border border-(--chip-line) bg-(--chip-bg) shadow-sm focus-within:border-lagoon-deep focus-within:ring-2 focus-within:ring-lagoon/25">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-10 shrink-0 rounded-none text-sea-ink-soft hover:bg-(--link-bg-hover) hover:text-sea-ink"
+        aria-label="Decrease auto-save by 5%"
+        disabled={current <= 0}
+        onClick={() => stepBy(-SPLIT_STEP)}
+      >
+        <Minus className="size-4" />
+      </Button>
+      <Input
+        id={id}
+        inputMode="numeric"
+        placeholder="20"
+        value={value}
+        aria-label="Auto-save percent"
+        className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-center shadow-none focus-visible:border-transparent focus-visible:ring-0"
+        onChange={(event) => {
+          const next = event.target.value.replace(/[^\d]/g, '')
+          if (next === '') {
+            onChange('')
+            return
+          }
+          onChange(String(clampSplitPct(Number(next))))
+        }}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-10 shrink-0 rounded-none text-sea-ink-soft hover:bg-(--link-bg-hover) hover:text-sea-ink"
+        aria-label="Increase auto-save by 5%"
+        disabled={current >= 100}
+        onClick={() => stepBy(SPLIT_STEP)}
+      >
+        <Plus className="size-4" />
+      </Button>
+    </div>
+  )
 }
 
 export function WelcomeStep({ draft, setDraft, error }: StepProps) {
@@ -423,32 +585,38 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
               <Trash2 className="size-4" />
             </Button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <Input
-              aria-label="Expected day"
-              placeholder="20th"
-              value={source.expected}
-              onChange={(event) =>
-                updateSource(source.key, { expected: event.target.value })
-              }
-            />
-            <Input
-              aria-label="Expected amount"
-              placeholder="K1,850,000"
-              value={source.amountLabel}
-              onChange={(event) =>
-                updateSource(source.key, { amountLabel: event.target.value })
-              }
-            />
-            <Input
-              aria-label="Auto-save %"
-              inputMode="numeric"
-              placeholder="Split %"
-              value={source.splitPct}
-              onChange={(event) =>
-                updateSource(source.key, { splitPct: event.target.value })
-              }
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`ob-income-window-${source.key}`}>
+                Landing window
+              </Label>
+              <ExpectedWindowPicker
+                id={`ob-income-window-${source.key}`}
+                value={source.expected}
+                onChange={(expected) => updateSource(source.key, { expected })}
+              />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`ob-income-amount-${source.key}`}>Amount</Label>
+              <Input
+                id={`ob-income-amount-${source.key}`}
+                placeholder="K1,850,000"
+                value={source.amountLabel}
+                onChange={(event) =>
+                  updateSource(source.key, { amountLabel: event.target.value })
+                }
+              />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`ob-income-split-${source.key}`}>
+                Auto-save %
+              </Label>
+              <SplitPctStepper
+                id={`ob-income-split-${source.key}`}
+                value={source.splitPct}
+                onChange={(splitPct) => updateSource(source.key, { splitPct })}
+              />
+            </div>
           </div>
         </div>
       ))}

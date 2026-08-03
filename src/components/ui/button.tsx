@@ -44,6 +44,7 @@ function Button({
   variant,
   size,
   asChild = false,
+  ref,
   ...props
 }: ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
@@ -57,6 +58,7 @@ function Button({
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
       {...props}
     />
   )
