@@ -23,6 +23,7 @@ import {
   clearDraft,
   defaultDraft,
   firstIncompleteStep,
+  formatAmountInput,
   loadDraft,
   parseAmount,
   saveDraft,
@@ -54,19 +55,23 @@ function draftFromPrefill(data: Prefill): OnboardingDraft {
     return defaultDraft()
   }
   return {
-    usdRate: String(data.settings?.usdRate ?? DEFAULT_USD_RATE),
+    usdRate: formatAmountInput(
+      String(data.settings?.usdRate ?? DEFAULT_USD_RATE),
+    ),
     autoSavePct: String(Math.round((data.settings?.autoSaveRate ?? 0.2) * 100)),
     paydayDay: data.settings?.paydayDay ?? 20,
     savingsOpeningBalance: data.settings?.savingsOpeningBalance
-      ? String(data.settings.savingsOpeningBalance)
+      ? formatAmountInput(String(data.settings.savingsOpeningBalance))
       : '',
-    totalBudget: data.cycleBudget ? String(data.cycleBudget) : '',
+    totalBudget: data.cycleBudget
+      ? formatAmountInput(String(data.cycleBudget))
+      : '',
     accounts: data.accounts.map((account) => ({
       key: account._id,
       name: account.name,
       kind: account.kind,
       currency: account.currency,
-      balance: String(account.balance),
+      balance: formatAmountInput(String(account.balance)),
       isPreset: accountIsPreset(account.name),
     })),
     incomeSources: data.incomeSources.map((source) => ({
@@ -76,13 +81,16 @@ function draftFromPrefill(data: Prefill): OnboardingDraft {
       amountLabel: source.amountLabel,
       splitPct: String(source.splitPct),
     })),
-    budgets: BUDGETABLE_CATEGORIES.map((category) => ({
-      categoryId: category.id,
-      amount: String(
-        data.budgets.find((budget) => budget.categoryId === category.id)
-          ?.budget ?? '',
-      ),
-    })),
+    budgets: BUDGETABLE_CATEGORIES.map((category) => {
+      const budget = data.budgets.find(
+        (item) => item.categoryId === category.id,
+      )?.budget
+      return {
+        categoryId: category.id,
+        amount:
+          budget === undefined ? '' : formatAmountInput(String(budget)),
+      }
+    }),
   }
 }
 

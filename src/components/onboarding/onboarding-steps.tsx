@@ -15,6 +15,7 @@ import {
   ACCOUNT_KIND_LABELS,
   ACCOUNT_PRESETS,
   BUDGETABLE_CATEGORIES,
+  formatAmountInput,
   newKey,
   parseAmount,
 } from '#/lib/onboarding-data'
@@ -69,7 +70,10 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
           onChange={(event) =>
-            setDraft((current) => ({ ...current, usdRate: event.target.value }))
+            setDraft((current) => ({
+              ...current,
+              usdRate: formatAmountInput(event.target.value),
+            }))
           }
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
@@ -111,7 +115,7 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           onChange={(event) =>
             setDraft((current) => ({
               ...current,
-              savingsOpeningBalance: event.target.value,
+              savingsOpeningBalance: formatAmountInput(event.target.value),
             }))
           }
         />
@@ -332,7 +336,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                   value={account.balance}
                   onChange={(event) =>
                     updateAccount(account.key, {
-                      balance: event.target.value,
+                      balance: formatAmountInput(event.target.value),
                     })
                   }
                 />
@@ -494,14 +498,18 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           id="ob-total-budget"
           className="mt-2"
           inputMode="numeric"
-          placeholder={categoryTotal > 0 ? String(categoryTotal) : '650000'}
+          placeholder={
+            categoryTotal > 0
+              ? formatAmountInput(String(categoryTotal))
+              : '650,000'
+          }
           value={draft.totalBudget}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
           onChange={(event) =>
             setDraft((current) => ({
               ...current,
-              totalBudget: event.target.value,
+              totalBudget: formatAmountInput(event.target.value),
             }))
           }
         />
@@ -535,7 +543,10 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
                     ...current,
                     budgets: current.budgets.map((item) =>
                       item.categoryId === category.id
-                        ? { ...item, amount: event.target.value }
+                        ? {
+                            ...item,
+                            amount: formatAmountInput(event.target.value),
+                          }
                         : item,
                     ),
                   }))

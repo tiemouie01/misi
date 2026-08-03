@@ -194,9 +194,9 @@ async function seedData(ctx: MutationCtx, userId: string) {
     return false
   }
 
-  const nbmAccountId = await ctx.db.insert('accounts', {
+  const nbsAccountId = await ctx.db.insert('accounts', {
     userId,
-    name: 'NBM Bank',
+    name: 'NBS Bank',
     kind: 'bank',
     currency: 'MWK',
     balance: 842100,
@@ -296,9 +296,9 @@ async function seedData(ctx: MutationCtx, userId: string) {
     userId,
     usdRate: 1735,
     autoSaveRate: 0.2,
-    autoSaveSourceAccountId: nbmAccountId,
+    autoSaveSourceAccountId: nbsAccountId,
     defaultExpenseAccountId: airtelAccountId,
-    defaultTransferFromAccountId: nbmAccountId,
+    defaultTransferFromAccountId: nbsAccountId,
     defaultTransferToAccountId: cashAccountId,
     savingsOpeningBalance: 315000,
   })

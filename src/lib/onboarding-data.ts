@@ -22,10 +22,11 @@ export interface AccountPreset {
 }
 
 export const ACCOUNT_PRESETS: AccountPreset[] = [
-  { name: 'NBM Bank', kind: 'bank', currency: 'MWK' },
+  { name: 'NBS Bank', kind: 'bank', currency: 'MWK' },
   { name: 'FDH Bank', kind: 'bank', currency: 'MWK' },
   { name: 'National Bank', kind: 'bank', currency: 'MWK' },
   { name: 'Standard Bank', kind: 'bank', currency: 'MWK' },
+  { name: 'First Capital Bank', kind: 'bank', currency: 'MWK' },
   { name: 'Airtel Money', kind: 'mobile', currency: 'MWK' },
   { name: 'TNM Mpamba', kind: 'mobile', currency: 'MWK' },
   { name: 'Cash', kind: 'cash', currency: 'MWK' },
@@ -78,11 +79,11 @@ export const BUDGETABLE_CATEGORIES = categories.filter(
 )
 
 export const BUDGET_SUGGESTIONS: Record<string, string> = {
-  groceries: '220000',
-  transport: '90000',
-  'eating-out': '60000',
-  airtime: '30000',
-  utilities: '80000',
+  groceries: '220,000',
+  transport: '90,000',
+  'eating-out': '60,000',
+  airtime: '30,000',
+  utilities: '80,000',
 }
 
 export function newKey() {
@@ -92,6 +93,23 @@ export function newKey() {
 export function parseAmount(value: string): number {
   const parsed = Number(value.replace(/,/g, ''))
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
+/** Format a numeric amount string with thousand separators while typing. */
+export function formatAmountInput(value: string): string {
+  const cleaned = value.replace(/,/g, '').replace(/[^\d.]/g, '')
+  if (cleaned === '') return ''
+
+  const dot = cleaned.indexOf('.')
+  const intRaw = dot === -1 ? cleaned : cleaned.slice(0, dot)
+  const decRaw =
+    dot === -1 ? null : cleaned.slice(dot + 1).replace(/\./g, '')
+  const formattedInt = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+  if (decRaw !== null) {
+    return `${formattedInt}.${decRaw}`
+  }
+  return formattedInt
 }
 
 export function isValidAmount(value: string): boolean {
@@ -167,7 +185,7 @@ export function firstIncompleteStep(draft: OnboardingDraft): OnboardingStep {
 
 export function defaultDraft(): OnboardingDraft {
   return {
-    usdRate: String(DEFAULT_USD_RATE),
+    usdRate: formatAmountInput(String(DEFAULT_USD_RATE)),
     autoSavePct: '20',
     paydayDay: 20,
     savingsOpeningBalance: '',

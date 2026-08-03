@@ -402,7 +402,7 @@ function AppDashboard({
     (accountId: string) => {
       if (accounts.some((account) => account.id === accountId)) return accountId
       const prototypeNames: Record<string, string> = {
-        nbm: 'nbm bank',
+        nbs: 'nbs bank',
         fdh: 'fdh bank',
         airtel: 'airtel money',
         cash: 'cash',

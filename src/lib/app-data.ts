@@ -106,7 +106,7 @@ export interface RecentTransaction {
 
 export const USD_RATE = 1735
 
-export const SPENDABLE_ACCOUNT_IDS = ['nbm', 'fdh', 'airtel', 'cash'] as const
+export const SPENDABLE_ACCOUNT_IDS = ['nbs', 'fdh', 'airtel', 'cash'] as const
 
 export type SpendableAccountId = (typeof SPENDABLE_ACCOUNT_IDS)[number]
 
@@ -140,8 +140,8 @@ export function accountKindColor(account: Account) {
 
 export const seedAccounts: Account[] = [
   {
-    id: 'nbm',
-    name: 'NBM Bank',
+    id: 'nbs',
+    name: 'NBS Bank',
     kind: 'bank',
     currency: 'MWK',
     balance: 842100,
@@ -245,12 +245,12 @@ export const oneTapRecents: RecentTransaction[] = [
     payee: 'Chipiku',
     amount: 42000,
     categoryId: 'groceries',
-    accountId: 'nbm',
+    accountId: 'nbs',
   },
 ]
 
 export const seedReconcile: ReconcileBalance[] = [
-  { accountId: 'nbm', expected: 842100, actual: 842100 },
+  { accountId: 'nbs', expected: 842100, actual: 842100 },
   { accountId: 'fdh', expected: 210450, actual: 210450 },
   { accountId: 'airtel', expected: 96300, actual: 91800 },
   { accountId: 'cash', expected: 38500, actual: 38500 },
