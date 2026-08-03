@@ -74,6 +74,8 @@ export default defineSchema({
     defaultTransferFromAccountId: v.optional(v.id('accounts')),
     defaultTransferToAccountId: v.optional(v.id('accounts')),
     savingsOpeningBalance: v.number(),
+    paydayDay: v.optional(v.number()),
+    onboardedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
   autoSaveEvents: defineTable({
     userId: v.string(),

@@ -35,14 +35,16 @@ function assertPositiveAmount(amount: number) {
   }
 }
 
-function getCyclePeriod(now: number) {
+const DEFAULT_PAYDAY_DAY = 20
+
+function getCyclePeriod(now: number, paydayDay = DEFAULT_PAYDAY_DAY) {
   const today = new Date(now)
   const year = today.getUTCFullYear()
   const month = today.getUTCMonth()
   const day = today.getUTCDate()
-  const startMonth = day >= 20 ? month : month - 1
-  const startsAt = Date.UTC(year, startMonth, 20)
-  const endsAt = Date.UTC(year, startMonth + 1, 20) - 1
+  const startMonth = day >= paydayDay ? month : month - 1
+  const startsAt = Date.UTC(year, startMonth, paydayDay)
+  const endsAt = Date.UTC(year, startMonth + 1, paydayDay) - 1
   const startDate = new Date(startsAt)
 
   return {
@@ -70,7 +72,8 @@ async function getSettings(ctx: ReadCtx, userId: string) {
 
 async function ensureCurrentCycle(ctx: MutationCtx, userId: string) {
   const now = Date.now()
-  const period = getCyclePeriod(now)
+  const settings = await getSettings(ctx, userId)
+  const period = getCyclePeriod(now, settings?.paydayDay ?? DEFAULT_PAYDAY_DAY)
   const cycles = await ctx.db
     .query('cycles')
     .withIndex('by_user', (q) => q.eq('userId', userId))
@@ -425,6 +428,387 @@ export const ensureSeedData = mutation({
     const seeded = await seedData(ctx, user._id)
     await ensureCurrentCycle(ctx, user._id)
     return seeded
+  },
+})
+
+export const onboardingData = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuthUser(ctx)
+    const settings = await getSettings(ctx, user._id)
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    const incomeSources = await ctx.db
+      .query('incomeSources')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    const currentCycle = await getLatestCycle(ctx, user._id)
+    const budgets = currentCycle
+      ? await ctx.db
+          .query('budgets')
+          .withIndex('by_user_and_cycle', (q) =>
+            q.eq('userId', user._id).eq('cycleId', currentCycle._id),
+          )
+          .collect()
+      : []
+
+    accounts.sort((a, b) => a.sortOrder - b.sortOrder)
+    incomeSources.sort((a, b) => a.sortOrder - b.sortOrder)
+
+    return {
+      settings,
+      accounts,
+      incomeSources,
+      budgets,
+      cycleBudget: currentCycle?.budget ?? null,
+    }
+  },
+})
+
+const onboardingAccount = v.object({
+  name: v.string(),
+  kind: v.union(
+    v.literal('bank'),
+    v.literal('mobile'),
+    v.literal('cash'),
+    v.literal('investment'),
+  ),
+  currency: v.union(v.literal('MWK'), v.literal('USD')),
+  balance: v.number(),
+})
+
+type OnboardingAccountInput = {
+  name: string
+  kind: 'bank' | 'mobile' | 'cash' | 'investment'
+  currency: 'MWK' | 'USD'
+  balance: number
+}
+
+type OnboardingIncomeSourceInput = {
+  name: string
+  expected: string
+  amountLabel: string
+  splitPct: number
+}
+
+type CompleteOnboardingArgs = {
+  usdRate: number
+  autoSaveRate: number
+  paydayDay: number
+  savingsOpeningBalance: number
+  cycleBudget: number
+  accounts: Array<OnboardingAccountInput>
+  incomeSources: Array<OnboardingIncomeSourceInput>
+  budgets: Array<{ categoryId: string; budget: number }>
+}
+
+function validateOnboardingArgs(args: CompleteOnboardingArgs) {
+  if (args.accounts.length === 0) {
+    throw new Error('Add at least one account')
+  }
+  const seenNames = new Set<string>()
+  for (const account of args.accounts) {
+    const name = account.name.trim()
+    if (!name) throw new Error('Account names cannot be empty')
+    const key = name.toLowerCase()
+    if (seenNames.has(key)) throw new Error(`Duplicate account: ${name}`)
+    seenNames.add(key)
+    if (!Number.isFinite(account.balance) || account.balance < 0) {
+      throw new Error('Account balances must be zero or more')
+    }
+  }
+  if (
+    !Number.isInteger(args.paydayDay) ||
+    args.paydayDay < 1 ||
+    args.paydayDay > 28
+  ) {
+    throw new Error('Payday must be a day of the month between 1 and 28')
+  }
+  if (!Number.isFinite(args.usdRate) || args.usdRate <= 0) {
+    throw new Error('USD rate must be a positive number')
+  }
+  if (
+    !Number.isFinite(args.autoSaveRate) ||
+    args.autoSaveRate < 0 ||
+    args.autoSaveRate > 0.95
+  ) {
+    throw new Error('Auto-save rate must be between 0% and 95%')
+  }
+  if (
+    !Number.isFinite(args.savingsOpeningBalance) ||
+    args.savingsOpeningBalance < 0
+  ) {
+    throw new Error('Savings balance must be zero or more')
+  }
+  if (!Number.isFinite(args.cycleBudget) || args.cycleBudget < 0) {
+    throw new Error('Cycle budget must be zero or more')
+  }
+  for (const source of args.incomeSources) {
+    if (!source.name.trim())
+      throw new Error('Income source names cannot be empty')
+    if (
+      !Number.isFinite(source.splitPct) ||
+      source.splitPct < 0 ||
+      source.splitPct > 100
+    ) {
+      throw new Error('Income split must be between 0% and 100%')
+    }
+  }
+  for (const budget of args.budgets) {
+    if (!Number.isFinite(budget.budget) || budget.budget < 0) {
+      throw new Error('Budget amounts must be zero or more')
+    }
+  }
+}
+
+async function reconcileAccounts(
+  ctx: MutationCtx,
+  userId: string,
+  accounts: Array<OnboardingAccountInput>,
+) {
+  const existingAccounts = await ctx.db
+    .query('accounts')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect()
+
+  const keptAccountIds = new Set<Id<'accounts'>>()
+  const accountIds: Array<Id<'accounts'>> = []
+  for (const [index, input] of accounts.entries()) {
+    const match = existingAccounts.find(
+      (account) =>
+        account.name.toLowerCase() === input.name.trim().toLowerCase() &&
+        !keptAccountIds.has(account._id),
+    )
+    if (match) {
+      await ctx.db.patch(match._id, {
+        name: input.name.trim(),
+        kind: input.kind,
+        currency: input.currency,
+        balance: input.balance,
+        sortOrder: index,
+      })
+      keptAccountIds.add(match._id)
+      accountIds.push(match._id)
+    } else {
+      const accountId = await ctx.db.insert('accounts', {
+        userId,
+        name: input.name.trim(),
+        kind: input.kind,
+        currency: input.currency,
+        balance: input.balance,
+        sortOrder: index,
+      })
+      accountIds.push(accountId)
+    }
+  }
+
+  const removedAccounts = existingAccounts.filter(
+    (account) => !keptAccountIds.has(account._id),
+  )
+  if (removedAccounts.length > 0) {
+    const userTransactions = await ctx.db
+      .query('transactions')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect()
+    const referencedIds = new Set(
+      userTransactions.flatMap((transaction) =>
+        transaction.toAccountId
+          ? [transaction.accountId, transaction.toAccountId]
+          : [transaction.accountId],
+      ),
+    )
+    let nextSortOrder = accounts.length
+    for (const account of removedAccounts) {
+      if (referencedIds.has(account._id)) {
+        await ctx.db.patch(account._id, { sortOrder: nextSortOrder })
+        nextSortOrder++
+      } else {
+        await ctx.db.delete(account._id)
+      }
+    }
+  }
+
+  return { accountIds, keptAccountIds }
+}
+
+async function reconcileIncomeSources(
+  ctx: MutationCtx,
+  userId: string,
+  incomeSources: Array<OnboardingIncomeSourceInput>,
+) {
+  const existingSources = await ctx.db
+    .query('incomeSources')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect()
+
+  const keptSourceIds = new Set<Id<'incomeSources'>>()
+  for (const [sortOrder, input] of incomeSources.entries()) {
+    const match = existingSources.find(
+      (source) =>
+        source.name.toLowerCase() === input.name.trim().toLowerCase() &&
+        !keptSourceIds.has(source._id),
+    )
+    if (match) {
+      await ctx.db.patch(match._id, {
+        name: input.name.trim(),
+        expected: input.expected.trim(),
+        amountLabel: input.amountLabel.trim(),
+        splitPct: input.splitPct,
+        sortOrder,
+      })
+      keptSourceIds.add(match._id)
+    } else {
+      const sourceId = await ctx.db.insert('incomeSources', {
+        userId,
+        name: input.name.trim(),
+        expected: input.expected.trim(),
+        amountLabel: input.amountLabel.trim(),
+        splitPct: input.splitPct,
+        sortOrder,
+      })
+      keptSourceIds.add(sourceId)
+    }
+  }
+
+  const removedSources = existingSources.filter(
+    (source) => !keptSourceIds.has(source._id),
+  )
+  if (removedSources.length > 0) {
+    const userTransactions = await ctx.db
+      .query('transactions')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect()
+    const referencedSourceIds = new Set(
+      userTransactions
+        .map((transaction) => transaction.sourceId)
+        .filter(
+          (sourceId): sourceId is Id<'incomeSources'> => sourceId !== undefined,
+        ),
+    )
+    let nextSortOrder = incomeSources.length
+    for (const source of removedSources) {
+      if (referencedSourceIds.has(source._id)) {
+        await ctx.db.patch(source._id, { sortOrder: nextSortOrder })
+        nextSortOrder++
+      } else {
+        await ctx.db.delete(source._id)
+      }
+    }
+  }
+}
+
+export const completeOnboarding = mutation({
+  args: {
+    usdRate: v.number(),
+    autoSaveRate: v.number(),
+    paydayDay: v.number(),
+    savingsOpeningBalance: v.number(),
+    cycleBudget: v.number(),
+    accounts: v.array(onboardingAccount),
+    incomeSources: v.array(
+      v.object({
+        name: v.string(),
+        expected: v.string(),
+        amountLabel: v.string(),
+        splitPct: v.number(),
+      }),
+    ),
+    budgets: v.array(
+      v.object({
+        categoryId: v.string(),
+        budget: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+
+    validateOnboardingArgs(args)
+
+    const { accountIds } = await reconcileAccounts(ctx, user._id, args.accounts)
+
+    const accountIdAt = (index: number) =>
+      index >= 0 ? accountIds[index] : undefined
+    const firstOfKind = (kind: (typeof args.accounts)[number]['kind']) =>
+      accountIdAt(args.accounts.findIndex((account) => account.kind === kind))
+    const firstAccountId = accountIds[0]
+    const autoSaveSourceAccountId = firstOfKind('bank') ?? firstAccountId
+    const defaultExpenseAccountId =
+      firstOfKind('mobile') ?? firstOfKind('cash') ?? firstAccountId
+    const defaultTransferFromAccountId = autoSaveSourceAccountId
+    const defaultTransferToAccountId =
+      firstOfKind('cash') ??
+      accountIds.find((id) => id !== defaultTransferFromAccountId) ??
+      defaultTransferFromAccountId
+
+    const settings = await getSettings(ctx, user._id)
+    const settingsValue = {
+      usdRate: args.usdRate,
+      autoSaveRate: args.autoSaveRate,
+      autoSaveSourceAccountId,
+      defaultExpenseAccountId,
+      defaultTransferFromAccountId,
+      defaultTransferToAccountId,
+      savingsOpeningBalance: args.savingsOpeningBalance,
+      paydayDay: args.paydayDay,
+      onboardedAt: Date.now(),
+    }
+    if (settings) {
+      await ctx.db.patch(settings._id, settingsValue)
+    } else {
+      await ctx.db.insert('settings', { userId: user._id, ...settingsValue })
+    }
+
+    const now = Date.now()
+    const cycles = await ctx.db
+      .query('cycles')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    const latestCycle =
+      cycles.sort((a, b) => b.startsAt - a.startsAt).at(0) ?? null
+    if (latestCycle) {
+      const coveringCycle =
+        cycles.find((cycle) => cycle.startsAt <= now && now <= cycle.endsAt) ??
+        latestCycle
+      const cycleTransactions = await ctx.db
+        .query('transactions')
+        .withIndex('by_user_and_cycle', (q) =>
+          q.eq('userId', user._id).eq('cycleId', coveringCycle._id),
+        )
+        .collect()
+      if (cycleTransactions.length === 0) {
+        const period = getCyclePeriod(now, args.paydayDay)
+        await ctx.db.patch(coveringCycle._id, period)
+      }
+      // Budgets attach to the current covering cycle until rollover when it already has transactions.
+    }
+
+    const cycle = await ensureCurrentCycle(ctx, user._id)
+    await ctx.db.patch(cycle._id, { budget: args.cycleBudget })
+
+    const existingBudgets = await ctx.db
+      .query('budgets')
+      .withIndex('by_user_and_cycle', (q) =>
+        q.eq('userId', user._id).eq('cycleId', cycle._id),
+      )
+      .collect()
+    for (const budget of existingBudgets) {
+      await ctx.db.delete(budget._id)
+    }
+    for (const budget of args.budgets) {
+      await ctx.db.insert('budgets', {
+        userId: user._id,
+        cycleId: cycle._id,
+        categoryId: budget.categoryId,
+        budget: budget.budget,
+      })
+    }
+
+    await reconcileIncomeSources(ctx, user._id, args.incomeSources)
+
+    return { cycleId: cycle._id }
   },
 })
 

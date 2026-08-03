@@ -56,9 +56,12 @@ export const Route = createFileRoute('/app')({
     if (!context.isAuthenticated) throw redirect({ to: '/login' })
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
+    const data = await context.queryClient.ensureQueryData(
       convexQuery(api.misi.bootstrap, {}),
     )
+    if (data === null || !data.settings?.onboardedAt) {
+      throw redirect({ to: '/onboarding' })
+    }
     return { now: Date.now() }
   },
   component: AppHome,
@@ -121,26 +124,25 @@ function AppHome() {
     data?.currentCycle != null && data.currentCycle.endsAt < now
 
   useEffect(() => {
-    if (requestedSeed.current) return
-    if (data !== null && !cycleNeedsRollover) return
+    if (requestedSeed.current || !cycleNeedsRollover) return
     requestedSeed.current = true
-    void ensureSeedData({})
-      .catch((error) => {
-        requestedSeed.current = false
-        setSetupError(
-          mutationErrorMessage(error, 'Unable to set up your Misi data'),
-        )
-        console.error('Unable to set up Misi data', error)
-      })
-  }, [cycleNeedsRollover, data, ensureSeedData])
+    void ensureSeedData({}).catch((error) => {
+      requestedSeed.current = false
+      setSetupError(
+        mutationErrorMessage(error, 'Unable to set up your Misi data'),
+      )
+      console.error('Unable to set up Misi data', error)
+    })
+  }, [cycleNeedsRollover, ensureSeedData])
 
-  if (data === null || cycleNeedsRollover) {
+  if (data === null) {
+    throw redirect({ to: '/onboarding' })
+  }
+
+  if (cycleNeedsRollover) {
     return (
       <LoadingState>
-        {setupError ??
-          (data === null
-            ? 'Setting up your accounts…'
-            : 'Starting your new cycle…')}
+        {setupError ?? 'Starting your new cycle…'}
       </LoadingState>
     )
   }
@@ -561,7 +563,9 @@ function AppDashboard({
             role="alert"
             className="flex items-start justify-between gap-3 rounded-2xl border border-coral/25 bg-coral/8 px-4 py-3"
           >
-            <p className="text-sm font-semibold text-coral-deep">{actionError}</p>
+            <p className="text-sm font-semibold text-coral-deep">
+              {actionError}
+            </p>
             <Button
               type="button"
               variant="ghost"
