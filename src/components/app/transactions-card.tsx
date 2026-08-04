@@ -1,13 +1,16 @@
-import { ArrowDownToLine, ArrowLeftRight } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeftRight, Tag } from 'lucide-react'
 
 import { Card } from '#/components/ui/card'
-import { categories, formatK } from '#/lib/app-data'
+import { formatK } from '#/lib/app-data'
+import { resolveCategory } from '#/lib/categories'
 
 import type { Account, Txn } from '#/lib/app-data'
+import type { Category } from '#/lib/categories'
 
 interface TransactionsCardProps {
   transactions: Txn[]
   accounts: Account[]
+  categories: Category[]
   cycleLabel: string
   animationDelay: string
 }
@@ -15,6 +18,7 @@ interface TransactionsCardProps {
 export function TransactionsCard({
   transactions,
   accounts,
+  categories,
   cycleLabel,
   animationDelay,
 }: TransactionsCardProps) {
@@ -64,15 +68,16 @@ export function TransactionsCard({
                 const toAccount = accounts.find(
                   (item) => item.id === transaction.toAccountId,
                 )
-                const category = categories.find(
-                  (item) => item.id === transaction.categoryId,
+                const category = resolveCategory(
+                  categories,
+                  transaction.categoryId,
                 )
                 const Icon =
                   transaction.type === 'transfer'
                     ? ArrowLeftRight
                     : transaction.type === 'income'
                       ? ArrowDownToLine
-                      : category?.icon
+                      : (category?.icon ?? Tag)
                 const color =
                   transaction.type === 'income'
                     ? 'var(--palm)'
@@ -86,7 +91,7 @@ export function TransactionsCard({
                       : `Savings · ${account?.name ?? 'Account'}`
                     : transaction.type === 'income'
                       ? `Income · ${account?.name ?? 'Account'}`
-                      : `${category?.name ?? 'Expense'} · ${account?.name ?? 'Account'}`
+                      : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
                 const amountLabel =
                   transaction.type === 'expense'
                     ? formatK(-transaction.amount)
@@ -105,7 +110,7 @@ export function TransactionsCard({
                         color,
                       }}
                     >
-                      {Icon && <Icon className="size-4" />}
+                      <Icon className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-sea-ink">

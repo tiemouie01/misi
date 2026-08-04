@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { LogOut, Wifi } from 'lucide-react'
+import { LogOut, Tags, Wifi } from 'lucide-react'
 
 import { MisiMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
@@ -33,6 +33,11 @@ export function AppHeader({ badge }: { badge: string }) {
             Synced
           </Badge>
           <ThemeToggle />
+          <Button asChild variant="secondary" size="icon-sm" className="size-9">
+            <Link to="/app/categories" aria-label="Manage categories">
+              <Tags className="size-4" />
+            </Link>
+          </Button>
           <Button
             type="button"
             variant="secondary"

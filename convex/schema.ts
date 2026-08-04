@@ -2,6 +2,16 @@ import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 
 export default defineSchema({
+  categories: defineTable({
+    userId: v.string(),
+    key: v.string(),
+    name: v.string(),
+    icon: v.string(),
+    color: v.string(),
+    sortOrder: v.number(),
+    isSystem: v.boolean(),
+    archivedAt: v.optional(v.number()),
+  }).index('by_user', ['userId']),
   accounts: defineTable({
     userId: v.string(),
     name: v.string(),
@@ -45,13 +55,16 @@ export default defineSchema({
   })
     .index('by_user_and_cycle', ['userId', 'cycleId'])
     .index('by_user', ['userId'])
-    .index('by_user_and_wallet', ['userId', 'walletId']),
+    .index('by_user_and_wallet', ['userId', 'walletId'])
+    .index('by_user_and_category', ['userId', 'categoryId']),
   budgets: defineTable({
     userId: v.string(),
     cycleId: v.id('cycles'),
     categoryId: v.string(),
     budget: v.number(),
-  }).index('by_user_and_cycle', ['userId', 'cycleId']),
+  })
+    .index('by_user_and_cycle', ['userId', 'cycleId'])
+    .index('by_user_and_category', ['userId', 'categoryId']),
   incomeSources: defineTable({
     userId: v.string(),
     name: v.string(),

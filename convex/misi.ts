@@ -2,6 +2,11 @@ import { v } from 'convex/values'
 
 import { mutation, query } from './_generated/server'
 import { requireAuthUser } from './auth'
+import {
+  CATEGORY_COLOR_IDS,
+  CATEGORY_ICON_IDS,
+  DEFAULT_CATEGORIES,
+} from './categories'
 
 import type { Doc, Id } from './_generated/dataModel'
 import type { MutationCtx, QueryCtx } from './_generated/server'
@@ -28,6 +33,109 @@ const monthLabels = [
 ] as const
 
 type ReadCtx = QueryCtx | MutationCtx
+
+async function getCategories(ctx: ReadCtx, userId: string) {
+  const categories = await ctx.db
+    .query('categories')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect()
+  return categories.sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+async function isCategoryReferenced(
+  ctx: ReadCtx,
+  userId: string,
+  categoryKey: string,
+) {
+  const [transaction, budget] = await Promise.all([
+    ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_category', (q) =>
+        q.eq('userId', userId).eq('categoryId', categoryKey),
+      )
+      .first(),
+    ctx.db
+      .query('budgets')
+      .withIndex('by_user_and_category', (q) =>
+        q.eq('userId', userId).eq('categoryId', categoryKey),
+      )
+      .first(),
+  ])
+  return transaction !== null || budget !== null
+}
+
+async function getCategoriesWithReferences(ctx: ReadCtx, userId: string) {
+  const categories = await getCategories(ctx, userId)
+  return await Promise.all(
+    categories.map(async (category) => ({
+      ...category,
+      referenced: await isCategoryReferenced(ctx, userId, category.key),
+    })),
+  )
+}
+
+async function seedDefaultCategoriesForUser(ctx: MutationCtx, userId: string) {
+  const existing = await ctx.db
+    .query('categories')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .first()
+  if (existing) return false
+
+  for (const [sortOrder, category] of DEFAULT_CATEGORIES.entries()) {
+    await ctx.db.insert('categories', {
+      userId,
+      ...category,
+      sortOrder,
+    })
+  }
+  return true
+}
+
+function validateCategoryName(name: string) {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Category name cannot be empty')
+  return trimmed
+}
+
+function validateCategoryIcon(icon: string) {
+  if (!(CATEGORY_ICON_IDS as readonly string[]).includes(icon)) {
+    throw new Error('Choose a valid category icon')
+  }
+}
+
+function validateCategoryColor(color: string) {
+  if (!(CATEGORY_COLOR_IDS as readonly string[]).includes(color)) {
+    throw new Error('Choose a valid category color')
+  }
+}
+
+async function assertUniqueCategoryName(
+  ctx: ReadCtx,
+  userId: string,
+  name: string,
+  excludeId?: Id<'categories'>,
+) {
+  const categories = await getCategories(ctx, userId)
+  const duplicate = categories.some(
+    (category) =>
+      category._id !== excludeId &&
+      category.archivedAt === undefined &&
+      category.name.toLowerCase() === name.toLowerCase(),
+  )
+  if (duplicate) throw new Error('A category with this name already exists')
+}
+
+async function requireOwnedCategory(
+  ctx: ReadCtx,
+  userId: string,
+  id: Id<'categories'>,
+) {
+  const category = await ctx.db.get(id)
+  if (!category || category.userId !== userId) {
+    throw new Error('Category not found')
+  }
+  return category
+}
 
 function assertPositiveAmount(amount: number) {
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -321,6 +429,7 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     .query('debts')
     .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect()
+  const categories = await getCategories(ctx, userId)
 
   accounts.sort((a, b) => a.sortOrder - b.sortOrder)
   incomeSources.sort((a, b) => a.sortOrder - b.sortOrder)
@@ -402,6 +511,7 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     budgets,
     incomeSources,
     debts,
+    categories,
     savingsBalance,
     pendingAutoSave,
   }
@@ -418,6 +528,124 @@ export const bootstrap = query({
     }
 
     return await loadBootstrapData(ctx, user._id)
+  },
+})
+
+export const listCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuthUser(ctx)
+    return await getCategoriesWithReferences(ctx, user._id)
+  },
+})
+
+export const createCategory = mutation({
+  args: {
+    name: v.string(),
+    icon: v.string(),
+    color: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const name = validateCategoryName(args.name)
+    validateCategoryIcon(args.icon)
+    validateCategoryColor(args.color)
+    await assertUniqueCategoryName(ctx, user._id, name)
+
+    const categories = await getCategories(ctx, user._id)
+    const sortOrder =
+      categories.reduce(
+        (highest, category) => Math.max(highest, category.sortOrder),
+        -1,
+      ) + 1
+    const id = await ctx.db.insert('categories', {
+      userId: user._id,
+      key: crypto.randomUUID(),
+      name,
+      icon: args.icon,
+      color: args.color,
+      sortOrder,
+      isSystem: false,
+    })
+    return await ctx.db.get(id)
+  },
+})
+
+export const updateCategory = mutation({
+  args: {
+    id: v.id('categories'),
+    name: v.optional(v.string()),
+    icon: v.optional(v.string()),
+    color: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const category = await requireOwnedCategory(ctx, user._id, args.id)
+
+    if (category.isSystem && args.name !== undefined) {
+      throw new Error('System categories cannot be renamed')
+    }
+    const name =
+      args.name === undefined ? undefined : validateCategoryName(args.name)
+    if (args.icon !== undefined) validateCategoryIcon(args.icon)
+    if (args.color !== undefined) validateCategoryColor(args.color)
+    if (name !== undefined) {
+      await assertUniqueCategoryName(
+        ctx,
+        user._id,
+        name,
+        category._id,
+      )
+    }
+
+    const patch: {
+      name?: string
+      icon?: string
+      color?: string
+    } = {}
+    if (name !== undefined) patch.name = name
+    if (args.icon !== undefined) patch.icon = args.icon
+    if (args.color !== undefined) patch.color = args.color
+    await ctx.db.patch(category._id, patch)
+    return await ctx.db.get(category._id)
+  },
+})
+
+export const restoreCategory = mutation({
+  args: { id: v.id('categories') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const category = await requireOwnedCategory(ctx, user._id, args.id)
+    await assertUniqueCategoryName(ctx, user._id, category.name, category._id)
+    await ctx.db.patch(category._id, { archivedAt: undefined })
+    return await ctx.db.get(category._id)
+  },
+})
+
+export const deleteCategory = mutation({
+  args: { id: v.id('categories') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const category = await requireOwnedCategory(ctx, user._id, args.id)
+    if (category.isSystem) {
+      throw new Error('System categories cannot be deleted')
+    }
+
+    if (await isCategoryReferenced(ctx, user._id, category.key)) {
+      await ctx.db.patch(category._id, { archivedAt: Date.now() })
+      return { archived: true }
+    }
+
+    await ctx.db.delete(category._id)
+    return { archived: false }
+  },
+})
+
+export const ensureDefaultCategories = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuthUser(ctx)
+    return await seedDefaultCategoriesForUser(ctx, user._id)
   },
 })
 
@@ -807,6 +1035,7 @@ export const completeOnboarding = mutation({
     }
 
     await reconcileIncomeSources(ctx, user._id, args.incomeSources)
+    await seedDefaultCategoriesForUser(ctx, user._id)
 
     return { cycleId: cycle._id }
   },

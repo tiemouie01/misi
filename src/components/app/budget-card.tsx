@@ -1,12 +1,17 @@
+import { Tag } from 'lucide-react'
+
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Progress } from '#/components/ui/progress'
-import { categories, formatK } from '#/lib/app-data'
+import { formatK } from '#/lib/app-data'
+import { resolveCategory } from '#/lib/categories'
 
 import type { BudgetCategory } from '#/lib/app-data'
+import type { Category } from '#/lib/categories'
 
 interface BudgetCardProps {
   budgets: BudgetCategory[]
+  categories: Category[]
   budget: number
   dayNumber: number
   totalDays: number
@@ -20,6 +25,7 @@ interface BudgetCardProps {
 
 export function BudgetCard({
   budgets,
+  categories,
   budget,
   dayNumber,
   totalDays,
@@ -73,24 +79,23 @@ export function BudgetCard({
       </div>
       <div className="mt-4 space-y-3">
         {budgets.map((categoryBudget) => {
-          const category = categories.find(
-            (item) => item.id === categoryBudget.categoryId,
+          const category = resolveCategory(
+            categories,
+            categoryBudget.categoryId,
           )
-          if (!category) return null
-          const Icon = category.icon
+          const Icon = category?.icon ?? Tag
+          const color = category?.color ?? 'var(--lagoon-deep)'
+          const name = category?.name ?? categoryBudget.categoryId
           return (
             <div key={categoryBudget.categoryId}>
               <div className="flex items-center gap-2">
-                <Icon
-                  className="size-4 shrink-0"
-                  style={{ color: category.color }}
-                />
+                <Icon className="size-4 shrink-0" style={{ color }} />
                 <span className="w-28 shrink-0 text-sm font-semibold text-sea-ink">
-                  {category.name}
+                  {name}
                 </span>
                 <div
                   role="progressbar"
-                  aria-label={`${category.name} budget spent`}
+                  aria-label={`${name} budget spent`}
                   aria-valuemin={0}
                   aria-valuemax={categoryBudget.budget}
                   aria-valuenow={Math.min(
@@ -104,7 +109,7 @@ export function BudgetCard({
                     className="h-full rounded-full"
                     style={{
                       width: `${Math.min((categoryBudget.spent / categoryBudget.budget) * 100, 100)}%`,
-                      background: category.color,
+                      background: color,
                     }}
                   />
                 </div>

@@ -11,12 +11,8 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import {
-  categories,
-  formatK,
-  isSpendableAccount,
-  oneTapRecents,
-} from '#/lib/app-data'
+import { formatK, isSpendableAccount, oneTapRecents } from '#/lib/app-data'
+import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
 
 import type {
   Account,
@@ -25,14 +21,17 @@ import type {
   RecentTransaction,
   TxnType,
 } from '#/lib/app-data'
+import type { Category } from '#/lib/categories'
 
 interface QuickAddCardProps {
+  categories: Category[]
   onOpen: (initial: QuickAddInitial) => void
   animationDelay: string
 }
 
 interface QuickAddSheetProps {
   initial: QuickAddInitial
+  categories: Category[]
   accounts: Account[]
   defaultExpenseAccountId: string
   defaultTransferFromAccountId: string
@@ -51,17 +50,17 @@ interface QuickAddFabProps {
 }
 
 function RecentChips({
+  categories,
   onSelect,
 }: {
+  categories: Category[]
   onSelect: (recent: RecentTransaction) => void
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {oneTapRecents.map((recent) => {
-        const category = categories.find(
-          (item) => item.id === recent.categoryId,
-        )
-        if (!category) return null
+        const category = resolveCategory(categories, recent.categoryId)
+        if (!category || category.archived || category.isSystem) return null
         const Icon = category.icon
         return (
           <Button
@@ -83,7 +82,11 @@ function RecentChips({
   )
 }
 
-export function QuickAddCard({ onOpen, animationDelay }: QuickAddCardProps) {
+export function QuickAddCard({
+  categories,
+  onOpen,
+  animationDelay,
+}: QuickAddCardProps) {
   return (
     <Card
       variant="island"
@@ -114,6 +117,7 @@ export function QuickAddCard({ onOpen, animationDelay }: QuickAddCardProps) {
         <p className="field-label">One-tap recents</p>
         <div className="mt-2.5">
           <RecentChips
+            categories={categories}
             onSelect={(recent) =>
               onOpen({
                 mode: 'expense',
@@ -183,6 +187,7 @@ function AccountPicker({
 
 export function QuickAddSheet({
   initial,
+  categories,
   accounts,
   defaultExpenseAccountId,
   defaultTransferFromAccountId,
@@ -200,7 +205,7 @@ export function QuickAddSheet({
     initial.amount ? String(initial.amount) : '',
   )
   const [categoryId, setCategoryId] = useState(
-    initial.categoryId ?? 'groceries',
+    initial.categoryId ?? firstExpenseCategoryKey(categories),
   )
   const [accountId, setAccountId] = useState(
     initial.accountId ??
@@ -239,8 +244,7 @@ export function QuickAddSheet({
           : payee.trim() ||
             (mode === 'income'
               ? 'Income'
-              : (categories.find((item) => item.id === categoryId)?.name ??
-                'Expense')),
+              : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
       items: mode === 'expense' && items.trim() ? items.trim() : undefined,
       note: note.trim() || undefined,
       reconcile: initial.reconcile,
@@ -373,24 +377,26 @@ export function QuickAddSheet({
           <>
             <div className="mt-5">
               <p className="field-label mb-2">One-tap recents</p>
-              <RecentChips onSelect={selectRecent} />
+              <RecentChips categories={categories} onSelect={selectRecent} />
             </div>
             <div className="mt-5">
               <p className="field-label mb-2">Category</p>
               <div className="flex flex-wrap gap-2">
                 {categories
-                  .filter((category) => category.id !== 'adjustment')
+                  .filter(
+                    (category) => !category.archived && !category.isSystem,
+                  )
                   .map((category) => {
                     const Icon = category.icon
                     return (
                       <Button
-                        key={category.id}
+                        key={category.key}
                         type="button"
                         variant="secondary"
                         size="sm"
-                        aria-pressed={categoryId === category.id}
+                        aria-pressed={categoryId === category.key}
                         className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
-                        onClick={() => setCategoryId(category.id)}
+                        onClick={() => setCategoryId(category.key)}
                       >
                         <Icon
                           className="size-4"

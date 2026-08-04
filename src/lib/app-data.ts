@@ -1,15 +1,3 @@
-import {
-  Bus,
-  HeartPulse,
-  PlugZap,
-  Scale,
-  ShoppingBasket,
-  Smartphone,
-  UtensilsCrossed,
-} from 'lucide-react'
-
-import type { LucideIcon } from 'lucide-react'
-
 export interface Account {
   id: string
   name: string
@@ -35,13 +23,6 @@ export interface Txn {
   day: string
   reconcile?: true
   adjustment?: true
-}
-
-export interface Category {
-  id: string
-  name: string
-  icon: LucideIcon
-  color: string
 }
 
 export interface IncomeSource {
@@ -180,51 +161,6 @@ export const seedAccounts: Account[] = [
     kind: 'investment',
     currency: 'USD',
     balance: 420,
-  },
-]
-
-export const categories: Category[] = [
-  {
-    id: 'groceries',
-    name: 'Groceries',
-    icon: ShoppingBasket,
-    color: 'var(--palm)',
-  },
-  {
-    id: 'transport',
-    name: 'Minibus & transport',
-    icon: Bus,
-    color: 'var(--lagoon-deep)',
-  },
-  {
-    id: 'eating-out',
-    name: 'Eating out',
-    icon: UtensilsCrossed,
-    color: 'var(--coral)',
-  },
-  {
-    id: 'airtime',
-    name: 'Airtime & data',
-    icon: Smartphone,
-    color: 'var(--lagoon)',
-  },
-  {
-    id: 'utilities',
-    name: 'Utilities',
-    icon: PlugZap,
-    color: 'var(--lagoon-deep)',
-  },
-  {
-    id: 'health',
-    name: 'Health',
-    icon: HeartPulse,
-    color: 'var(--palm)',
-  },
-  {
-    id: 'adjustment',
-    name: 'Adjustment',
-    icon: Scale,
-    color: 'var(--coral)',
   },
 ]
 

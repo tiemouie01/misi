@@ -6,11 +6,14 @@ import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { formatK, isSpendableAccount } from '#/lib/app-data'
+import { firstExpenseCategoryKey } from '#/lib/categories'
 
 import type { Account, QuickAddInitial, ReconcileBalance } from '#/lib/app-data'
+import type { Category } from '#/lib/categories'
 
 interface ReconcileCardProps {
   accounts: Account[]
+  categories: Category[]
   balances: ReconcileBalance[]
   closed: boolean
   lastClosed: string
@@ -38,6 +41,7 @@ function DriftChip({ drift }: { drift: number }) {
 
 export function ReconcileCard({
   accounts,
+  categories,
   balances,
   closed,
   lastClosed,
@@ -144,7 +148,7 @@ export function ReconcileCard({
                             mode: 'expense',
                             amount: Math.abs(drift),
                             accountId: balance.accountId,
-                            categoryId: 'groceries',
+                            categoryId: firstExpenseCategoryKey(categories),
                             reconcile: true,
                           })
                         }

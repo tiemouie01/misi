@@ -1,4 +1,8 @@
-import { categories } from './app-data'
+import {
+  DEFAULT_CATEGORIES,
+  resolveCategoryColor,
+  resolveCategoryIcon,
+} from './categories'
 
 import type { Account } from './app-data'
 
@@ -74,9 +78,14 @@ export interface OnboardingDraft {
   budgets: DraftBudget[]
 }
 
-export const BUDGETABLE_CATEGORIES = categories.filter(
-  (category) => category.id !== 'adjustment',
-)
+export const BUDGETABLE_CATEGORIES = DEFAULT_CATEGORIES.filter(
+  (category) => !category.isSystem,
+).map((category) => ({
+  id: category.key,
+  name: category.name,
+  icon: resolveCategoryIcon(category.icon),
+  color: resolveCategoryColor(category.color),
+}))
 
 export const BUDGET_SUGGESTIONS: Record<string, string> = {
   groceries: '220,000',
@@ -102,8 +111,7 @@ export function formatAmountInput(value: string): string {
 
   const dot = cleaned.indexOf('.')
   const intRaw = dot === -1 ? cleaned : cleaned.slice(0, dot)
-  const decRaw =
-    dot === -1 ? null : cleaned.slice(dot + 1).replace(/\./g, '')
+  const decRaw = dot === -1 ? null : cleaned.slice(dot + 1).replace(/\./g, '')
   const formattedInt = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
   if (decRaw !== null) {
