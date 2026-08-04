@@ -163,6 +163,7 @@ function AppDashboard({
   now: number
 }) {
   const addTransaction = useMutation(api.misi.addTransaction)
+  const updateTransaction = useMutation(api.misi.updateTransaction)
   const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
   const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
   const absorbAdjustmentMutation = useMutation(api.misi.absorbAdjustment)
@@ -215,8 +216,10 @@ function AppDashboard({
         sourceId: transaction.sourceId,
         items: transaction.items,
         note: transaction.note,
+        occurredAt: transaction.occurredAt,
         day: transactionDayLabel(transaction.occurredAt, now),
         adjustment: transaction.adjustment ? true : undefined,
+        autoSave: transaction.autoSave ? true : undefined,
       })),
     [data.transactions, now],
   )
@@ -463,6 +466,22 @@ function AppDashboard({
     setSheet((current) => ({ ...current, open: false }))
   }
 
+  function editTransaction(transaction: Txn) {
+    if (transaction.adjustment || transaction.autoSave) return
+    openSheet({
+      transactionId: transaction.id,
+      mode: transaction.type,
+      amount: transaction.amount,
+      categoryId: transaction.categoryId,
+      accountId: transaction.accountId,
+      toAccountId: transaction.toAccountId,
+      payee: transaction.payee,
+      items: transaction.items,
+      note: transaction.note,
+      occurredAt: transaction.occurredAt,
+    })
+  }
+
   const resolveIncomeSourceId = useCallback(
     (payload: QuickAddPayload): Id<'incomeSources'> | undefined => {
       if (payload.sourceId) return payload.sourceId as Id<'incomeSources'>
@@ -485,7 +504,7 @@ function AppDashboard({
     setQuickAddError(null)
     try {
       const sourceId = resolveIncomeSourceId(payload)
-      await addTransaction({
+      const transaction = {
         type: payload.type,
         amount: payload.amount,
         payee: payload.payee,
@@ -495,7 +514,22 @@ function AppDashboard({
         items: payload.items,
         note: payload.note,
         sourceId,
-      })
+      }
+      if (payload.transactionId) {
+        if (payload.occurredAt === undefined) {
+          throw new Error('Transaction date is missing')
+        }
+        await updateTransaction({
+          transactionId: payload.transactionId as Id<'transactions'>,
+          ...transaction,
+          occurredAt: payload.occurredAt,
+        })
+      } else {
+        await addTransaction({
+          ...transaction,
+          occurredAt: payload.occurredAt,
+        })
+      }
       closeSheet()
     } catch (error) {
       const message = mutationErrorMessage(
@@ -635,6 +669,7 @@ function AppDashboard({
               categories={categories}
               cycleLabel={cycleInfo.label}
               animationDelay="180ms"
+              onEdit={editTransaction}
             />
           </div>
           <div className="space-y-5">

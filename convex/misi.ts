@@ -34,6 +34,14 @@ const monthLabels = [
 
 type ReadCtx = QueryCtx | MutationCtx
 
+type TransactionInput = {
+  type: Doc<'transactions'>['type']
+  amount: number
+  accountId: Id<'accounts'>
+  toAccountId?: Id<'accounts'>
+  sourceId?: Id<'incomeSources'>
+}
+
 async function getCategories(ctx: ReadCtx, userId: string) {
   const categories = await ctx.db
     .query('categories')
@@ -258,6 +266,101 @@ async function requireOwnedAccount(
   }
 
   return account
+}
+
+async function requireOwnedTransaction(
+  ctx: ReadCtx,
+  userId: string,
+  transactionId: Id<'transactions'>,
+) {
+  const transaction = await ctx.db.get(transactionId)
+
+  if (!transaction || transaction.userId !== userId) {
+    throw new Error('Transaction not found')
+  }
+
+  return transaction
+}
+
+async function validateTransactionInput(
+  ctx: ReadCtx,
+  userId: string,
+  input: TransactionInput,
+) {
+  assertPositiveAmount(input.amount)
+  await requireOwnedAccount(ctx, userId, input.accountId)
+
+  if (input.sourceId) {
+    if (input.type !== 'income') {
+      throw new Error('sourceId is only valid for income transactions')
+    }
+    const source = await ctx.db.get(input.sourceId)
+    if (!source || source.userId !== userId) {
+      throw new Error('Income source not found')
+    }
+  }
+
+  if (input.type === 'transfer') {
+    if (!input.toAccountId) {
+      throw new Error('A destination account is required for transfers')
+    }
+    if (input.toAccountId === input.accountId) {
+      throw new Error('Transfer accounts must be different')
+    }
+    await requireOwnedAccount(ctx, userId, input.toAccountId)
+  } else if (input.toAccountId) {
+    throw new Error('A destination account is only valid for transfers')
+  }
+}
+
+function getAccountBalanceImpacts(input: TransactionInput) {
+  const impacts = new Map<Id<'accounts'>, number>()
+  const addImpact = (accountId: Id<'accounts'>, amount: number) => {
+    impacts.set(accountId, (impacts.get(accountId) ?? 0) + amount)
+  }
+
+  if (input.type === 'expense') {
+    addImpact(input.accountId, -input.amount)
+  } else if (input.type === 'income') {
+    addImpact(input.accountId, input.amount)
+  } else {
+    if (!input.toAccountId) {
+      throw new Error('A destination account is required for transfers')
+    }
+    addImpact(input.accountId, -input.amount)
+    addImpact(input.toAccountId, input.amount)
+  }
+
+  return impacts
+}
+
+async function applyTransactionBalanceTransition(
+  ctx: MutationCtx,
+  userId: string,
+  previous: TransactionInput | null,
+  next: TransactionInput | null,
+) {
+  const changes = new Map<Id<'accounts'>, number>()
+  const addChange = (accountId: Id<'accounts'>, amount: number) => {
+    changes.set(accountId, (changes.get(accountId) ?? 0) + amount)
+  }
+
+  if (previous) {
+    for (const [accountId, amount] of getAccountBalanceImpacts(previous)) {
+      addChange(accountId, -amount)
+    }
+  }
+  if (next) {
+    for (const [accountId, amount] of getAccountBalanceImpacts(next)) {
+      addChange(accountId, amount)
+    }
+  }
+
+  for (const [accountId, change] of changes) {
+    if (change === 0) continue
+    const account = await requireOwnedAccount(ctx, userId, accountId)
+    await ctx.db.patch(account._id, { balance: account.balance + change })
+  }
 }
 
 async function requireOwnedIncomeTransaction(
@@ -590,12 +693,7 @@ export const updateCategory = mutation({
     if (args.icon !== undefined) validateCategoryIcon(args.icon)
     if (args.color !== undefined) validateCategoryColor(args.color)
     if (name !== undefined) {
-      await assertUniqueCategoryName(
-        ctx,
-        user._id,
-        name,
-        category._id,
-      )
+      await assertUniqueCategoryName(ctx, user._id, name, category._id)
     }
 
     const patch: {
@@ -1056,33 +1154,8 @@ export const addTransaction = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
-    assertPositiveAmount(args.amount)
-
     const cycle = await ensureCurrentCycle(ctx, user._id)
-    const account = await requireOwnedAccount(ctx, user._id, args.accountId)
-    let toAccount: Doc<'accounts'> | null = null
-
-    if (args.sourceId) {
-      if (args.type !== 'income') {
-        throw new Error('sourceId is only valid for income transactions')
-      }
-      const source = await ctx.db.get(args.sourceId)
-      if (!source || source.userId !== user._id) {
-        throw new Error('Income source not found')
-      }
-    }
-
-    if (args.type === 'transfer') {
-      if (!args.toAccountId) {
-        throw new Error('A destination account is required for transfers')
-      }
-      if (args.toAccountId === args.accountId) {
-        throw new Error('Transfer accounts must be different')
-      }
-      toAccount = await requireOwnedAccount(ctx, user._id, args.toAccountId)
-    } else if (args.toAccountId) {
-      throw new Error('A destination account is only valid for transfers')
-    }
+    await validateTransactionInput(ctx, user._id, args)
 
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
@@ -1100,24 +1173,58 @@ export const addTransaction = mutation({
       occurredAt: args.occurredAt ?? Date.now(),
     })
 
-    if (args.type === 'expense') {
-      await ctx.db.patch(account._id, {
-        balance: account.balance - args.amount,
-      })
-    } else if (args.type === 'income') {
-      await ctx.db.patch(account._id, {
-        balance: account.balance + args.amount,
-      })
-    } else if (toAccount) {
-      await ctx.db.patch(account._id, {
-        balance: account.balance - args.amount,
-      })
-      await ctx.db.patch(toAccount._id, {
-        balance: toAccount.balance + args.amount,
-      })
-    }
+    await applyTransactionBalanceTransition(ctx, user._id, null, args)
 
     return transactionId
+  },
+})
+
+export const updateTransaction = mutation({
+  args: {
+    transactionId: v.id('transactions'),
+    type: transactionType,
+    amount: v.number(),
+    payee: v.string(),
+    categoryId: v.optional(v.string()),
+    accountId: v.id('accounts'),
+    toAccountId: v.optional(v.id('accounts')),
+    items: v.optional(v.string()),
+    note: v.optional(v.string()),
+    sourceId: v.optional(v.id('incomeSources')),
+    occurredAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const transaction = await requireOwnedTransaction(
+      ctx,
+      user._id,
+      args.transactionId,
+    )
+
+    if (
+      transaction.adjustment ||
+      transaction.autoSave ||
+      transaction.walletId !== 'spending'
+    ) {
+      throw new Error('Generated transactions cannot be edited')
+    }
+
+    await validateTransactionInput(ctx, user._id, args)
+    await applyTransactionBalanceTransition(ctx, user._id, transaction, args)
+    await ctx.db.patch(transaction._id, {
+      type: args.type,
+      amount: args.amount,
+      payee: args.payee,
+      categoryId: args.categoryId,
+      accountId: args.accountId,
+      toAccountId: args.toAccountId,
+      items: args.items,
+      note: args.note,
+      sourceId: args.sourceId,
+      occurredAt: args.occurredAt,
+    })
+
+    return transaction._id
   },
 })
 

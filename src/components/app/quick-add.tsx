@@ -49,6 +49,25 @@ interface QuickAddFabProps {
   onOpen: (initial: QuickAddInitial) => void
 }
 
+function transactionDateLabel(occurredAt?: number) {
+  if (occurredAt === undefined) return 'Today'
+
+  const date = new Date(occurredAt)
+  const today = new Date()
+  if (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  ) {
+    return 'Today'
+  }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  }).format(date)
+}
+
 function RecentChips({
   categories,
   onSelect,
@@ -200,6 +219,7 @@ export function QuickAddSheet({
   onClose,
   onSave,
 }: QuickAddSheetProps) {
+  const isEditing = initial.transactionId !== undefined
   const [mode, setMode] = useState<TxnType>(initial.mode)
   const [digits, setDigits] = useState(
     initial.amount ? String(initial.amount) : '',
@@ -217,9 +237,10 @@ export function QuickAddSheet({
     initial.toAccountId ?? defaultTransferToAccountId,
   )
   const [payee, setPayee] = useState(initial.payee ?? '')
-  const [items, setItems] = useState('')
-  const [note, setNote] = useState('')
+  const [items, setItems] = useState(initial.items ?? '')
+  const [note, setNote] = useState(initial.note ?? '')
   const amount = Number(digits || '0')
+  const dateLabel = transactionDateLabel(initial.occurredAt)
   const canSave =
     amount > 0 && (mode !== 'transfer' || accountId !== toAccountId)
 
@@ -233,6 +254,7 @@ export function QuickAddSheet({
   function save() {
     if (!canSave) return
     onSave({
+      transactionId: initial.transactionId,
       type: mode,
       amount,
       categoryId: mode === 'expense' ? categoryId : undefined,
@@ -247,6 +269,7 @@ export function QuickAddSheet({
               : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
       items: mode === 'expense' && items.trim() ? items.trim() : undefined,
       note: note.trim() || undefined,
+      occurredAt: initial.occurredAt,
       reconcile: initial.reconcile,
     })
   }
@@ -281,8 +304,9 @@ export function QuickAddSheet({
   }, [])
 
   const amountDisplay = amount ? `K ${amount.toLocaleString('en-US')}` : 'K 0'
-  const saveLabel =
-    mode === 'expense'
+  const saveLabel = isEditing
+    ? 'Save changes'
+    : mode === 'expense'
       ? `Log expense${amount ? ` — ${formatK(amount)}` : ''}`
       : mode === 'income'
         ? `Log income${amount ? ` — ${formatK(amount)}` : ''}`
@@ -313,9 +337,13 @@ export function QuickAddSheet({
       }}
     >
       <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
-        <DialogTitle className="sr-only">Log a transaction</DialogTitle>
+        <DialogTitle className="sr-only">
+          {isEditing ? 'Edit transaction' : 'Log a transaction'}
+        </DialogTitle>
         <DialogDescription className="sr-only">
-          Enter an amount and optional transaction details.
+          {isEditing
+            ? 'Update the transaction details.'
+            : 'Enter an amount and optional transaction details.'}
         </DialogDescription>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-(--line) sm:hidden" />
         <div className="mr-11 grid grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
@@ -375,10 +403,12 @@ export function QuickAddSheet({
         </div>
         {mode === 'expense' && (
           <>
-            <div className="mt-5">
-              <p className="field-label mb-2">One-tap recents</p>
-              <RecentChips categories={categories} onSelect={selectRecent} />
-            </div>
+            {!isEditing && (
+              <div className="mt-5">
+                <p className="field-label mb-2">One-tap recents</p>
+                <RecentChips categories={categories} onSelect={selectRecent} />
+              </div>
+            )}
             <div className="mt-5">
               <p className="field-label mb-2">Category</p>
               <div className="flex flex-wrap gap-2">
@@ -464,7 +494,7 @@ export function QuickAddSheet({
             </p>
           </div>
         )}
-        {mode === 'income' && (
+        {mode === 'income' && !isEditing && (
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">
@@ -482,7 +512,7 @@ export function QuickAddSheet({
             className="px-3 py-2 text-sm font-semibold tracking-normal text-sea-ink"
           >
             <Calendar className="size-4" />
-            Today
+            {dateLabel}
           </Badge>
           <label htmlFor="quick-add-note" className="sr-only">
             Note

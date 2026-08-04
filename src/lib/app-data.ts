@@ -20,9 +20,11 @@ export interface Txn {
   sourceId?: string
   items?: string
   note?: string
+  occurredAt: number
   day: string
   reconcile?: true
   adjustment?: true
+  autoSave?: true
 }
 
 export interface IncomeSource {
@@ -56,16 +58,21 @@ export interface ReconcileBalance {
 }
 
 export interface QuickAddInitial {
+  transactionId?: string
   mode: TxnType
   amount?: number
   categoryId?: string
   accountId?: string
   toAccountId?: string
   payee?: string
+  items?: string
+  note?: string
+  occurredAt?: number
   reconcile?: true
 }
 
 export interface QuickAddPayload {
+  transactionId?: string
   type: TxnType
   amount: number
   categoryId?: string
@@ -75,6 +82,7 @@ export interface QuickAddPayload {
   sourceId?: string
   items?: string
   note?: string
+  occurredAt?: number
   reconcile?: true
 }
 

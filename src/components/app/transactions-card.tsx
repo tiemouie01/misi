@@ -1,5 +1,6 @@
 import { ArrowDownToLine, ArrowLeftRight, Tag } from 'lucide-react'
 
+import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { formatK } from '#/lib/app-data'
 import { resolveCategory } from '#/lib/categories'
@@ -13,6 +14,7 @@ interface TransactionsCardProps {
   categories: Category[]
   cycleLabel: string
   animationDelay: string
+  onEdit: (transaction: Txn) => void
 }
 
 export function TransactionsCard({
@@ -21,6 +23,7 @@ export function TransactionsCard({
   categories,
   cycleLabel,
   animationDelay,
+  onEdit,
 }: TransactionsCardProps) {
   const groups = transactions.reduce<Array<{ day: string; txns: Txn[] }>>(
     (result, transaction) => {
@@ -98,10 +101,25 @@ export function TransactionsCard({
                     : transaction.type === 'income'
                       ? `+${formatK(transaction.amount)}`
                       : formatK(transaction.amount)
+                const canEdit = !transaction.adjustment && !transaction.autoSave
                 return (
-                  <div
+                  <Button
                     key={transaction.id}
-                    className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-(--chip-bg)"
+                    type="button"
+                    variant="ghost"
+                    disabled={!canEdit}
+                    aria-label={
+                      canEdit
+                        ? `Edit ${transaction.payee} transaction`
+                        : undefined
+                    }
+                    title={
+                      canEdit
+                        ? 'Edit transaction'
+                        : 'Generated transactions cannot be edited'
+                    }
+                    className="group h-auto w-full justify-start gap-3 whitespace-normal rounded-xl px-2 py-2.5 text-left disabled:opacity-100"
+                    onClick={() => onEdit(transaction)}
                   >
                     <span
                       className="grid size-9 shrink-0 place-items-center rounded-lg"
@@ -112,11 +130,11 @@ export function TransactionsCard({
                     >
                       <Icon className="size-4" />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-sea-ink">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-sea-ink">
                         {transaction.payee}
-                      </p>
-                      <p className="text-[0.75rem] text-sea-ink-soft">
+                      </span>
+                      <span className="block text-[0.75rem] text-sea-ink-soft">
                         {subline}
                         {transaction.items && (
                           <>
@@ -127,8 +145,8 @@ export function TransactionsCard({
                           </>
                         )}
                         {transaction.adjustment && ' · Reconcile'}
-                      </p>
-                    </div>
+                      </span>
+                    </span>
                     <span
                       className={`font-mono shrink-0 text-sm font-semibold tabular-nums ${
                         transaction.type === 'income'
@@ -140,7 +158,7 @@ export function TransactionsCard({
                     >
                       {amountLabel}
                     </span>
-                  </div>
+                  </Button>
                 )
               })}
             </div>
