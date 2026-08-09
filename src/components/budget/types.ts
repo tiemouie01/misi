@@ -20,8 +20,10 @@ export interface BudgetCategoryPlan {
 export interface BudgetIncomeSourcePlan {
   id: string
   name: string
-  planned: number
-  actual: number
+  expectedAmount: number
+  expectedAmountMax?: number
+  actualAmount: number
+  savingsRate: number
   status?: 'landed' | 'pending' | 'partial'
   note?: string
   icon?: LucideIcon
@@ -33,7 +35,6 @@ export interface BudgetCycle {
   rangeLabel?: string
   expectedIncome: number
   actualIncome?: number
-  plannedSavings: number
   actualSavings?: number
   spendingLimit: number
   categories: readonly BudgetCategoryPlan[]
@@ -57,9 +58,20 @@ export interface BudgetHistoryRow {
 export interface BudgetPlanUpdate {
   cycleId: string
   spendingLimit: number
-  plannedSavings: number
-  categoryPlans: Record<string, number>
-  incomeSourcePlans: Record<string, number>
+  categoryPlans: readonly BudgetCategoryPlanUpdate[]
+  incomePlans?: readonly BudgetIncomePlanUpdate[]
+}
+
+export interface BudgetCategoryPlanUpdate {
+  categoryId: string
+  plannedAmount: number
+}
+
+export interface BudgetIncomePlanUpdate {
+  sourceId: string
+  expectedAmount: number
+  expectedAmountMax?: number
+  savingsRate: number
 }
 
 export interface BudgetPageProps {

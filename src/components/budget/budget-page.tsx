@@ -62,9 +62,17 @@ import type {
 
 interface BudgetDraft {
   spendingLimit: string
-  plannedSavings: string
   categoryPlans: Record<string, string>
-  incomeSourcePlans: Record<string, string>
+  incomePlans: Partial<
+    Record<
+      string,
+      {
+        expectedAmount: string
+        expectedAmountMax: string
+        savingsRate: string
+      }
+    >
+  >
 }
 
 interface CategoryInsight {
@@ -131,20 +139,39 @@ function groupTotal(
   )
 }
 
+function plannedSavingsTotal(
+  incomeSources: readonly BudgetIncomeSourcePlan[] | undefined,
+) {
+  return (incomeSources ?? []).reduce(
+    (total, source) =>
+      total +
+      positiveAmount(source.expectedAmount) * Math.max(0, source.savingsRate),
+    0,
+  )
+}
+
 function createDraft(cycle: BudgetCycle): BudgetDraft {
   return {
     spendingLimit: String(Math.max(0, Math.round(cycle.spendingLimit))),
-    plannedSavings: String(Math.max(0, Math.round(cycle.plannedSavings))),
     categoryPlans: Object.fromEntries(
       cycle.categories.map((category) => [
         category.id,
         String(Math.max(0, Math.round(category.planned))),
       ]),
     ),
-    incomeSourcePlans: Object.fromEntries(
+    incomePlans: Object.fromEntries(
       (cycle.incomeSources ?? []).map((source) => [
         source.id,
-        String(Math.max(0, Math.round(source.planned))),
+        {
+          expectedAmount: String(
+            Math.max(0, Math.round(source.expectedAmount)),
+          ),
+          expectedAmountMax:
+            source.expectedAmountMax === undefined
+              ? ''
+              : String(Math.max(0, Math.round(source.expectedAmountMax))),
+          savingsRate: String(Math.max(0, source.savingsRate * 100)),
+        },
       ]),
     ),
   }
@@ -309,7 +336,7 @@ function AllocationBar({
   const expectedIncome = positiveAmount(cycle.expectedIncome)
   const needs = groupTotal(cycle.categories, 'needs')
   const wants = groupTotal(cycle.categories, 'wants')
-  const savings = positiveAmount(cycle.plannedSavings)
+  const savings = plannedSavingsTotal(cycle.incomeSources)
   const spendingLimit = positiveAmount(cycle.spendingLimit)
   const allocated = needs + wants + savings
   const unallocated = expectedIncome - allocated
@@ -645,8 +672,8 @@ function CategoryPlanCard({
 }
 
 function getIncomeSourceStatus(source: BudgetIncomeSourcePlan) {
-  const planned = positiveAmount(source.planned)
-  const actual = positiveAmount(source.actual)
+  const planned = positiveAmount(source.expectedAmount)
+  const actual = positiveAmount(source.actualAmount)
   if (source.status === 'landed' || (planned > 0 && actual >= planned))
     return 'Landed'
   if (source.status === 'partial' || actual > 0) return 'Part landed'
@@ -662,11 +689,11 @@ function IncomeSourcesCard({
 }) {
   const sources = cycle.incomeSources ?? []
   const planned = sources.reduce(
-    (total, source) => total + positiveAmount(source.planned),
+    (total, source) => total + positiveAmount(source.expectedAmount),
     0,
   )
   const actual = sources.reduce(
-    (total, source) => total + positiveAmount(source.actual),
+    (total, source) => total + positiveAmount(source.actualAmount),
     0,
   )
   const actualPercent = planned > 0 ? clampPercent((actual / planned) * 100) : 0
@@ -708,8 +735,8 @@ function IncomeSourcesCard({
             <div className="space-y-2.5">
               {sources.map((source) => {
                 const Icon = source.icon ?? Banknote
-                const sourcePlan = positiveAmount(source.planned)
-                const sourceActual = positiveAmount(source.actual)
+                const sourcePlan = positiveAmount(source.expectedAmount)
+                const sourceActual = positiveAmount(source.actualAmount)
                 const sourceProgress =
                   sourcePlan > 0
                     ? clampPercent((sourceActual / sourcePlan) * 100)
@@ -929,8 +956,7 @@ function BudgetEditDialog({
   if (!draft) return null
 
   const handleAmountChange =
-    (field: 'spendingLimit' | 'plannedSavings') =>
-    (event: ChangeEvent<HTMLInputElement>) => {
+    (field: 'spendingLimit') => (event: ChangeEvent<HTMLInputElement>) => {
       onDraftChange({ ...draft, [field]: event.target.value })
     }
 
@@ -943,12 +969,24 @@ function BudgetEditDialog({
     }
 
   const handleIncomeChange =
-    (id: string) => (event: ChangeEvent<HTMLInputElement>) => {
+    (
+      id: string,
+      field: 'expectedAmount' | 'expectedAmountMax' | 'savingsRate',
+    ) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const currentPlan = draft.incomePlans[id] ?? {
+        expectedAmount: '',
+        expectedAmountMax: '',
+        savingsRate: '',
+      }
       onDraftChange({
         ...draft,
-        incomeSourcePlans: {
-          ...draft.incomeSourcePlans,
-          [id]: event.target.value,
+        incomePlans: {
+          ...draft.incomePlans,
+          [id]: {
+            ...currentPlan,
+            [field]: event.target.value,
+          },
         },
       })
     }
@@ -958,19 +996,29 @@ function BudgetEditDialog({
     onSave({
       cycleId: cycle.id,
       spendingLimit: parseAmount(draft.spendingLimit),
-      plannedSavings: parseAmount(draft.plannedSavings),
-      categoryPlans: Object.fromEntries(
-        cycle.categories.map((category) => [
-          category.id,
-          parseAmount(draft.categoryPlans[category.id] ?? ''),
-        ]),
-      ),
-      incomeSourcePlans: Object.fromEntries(
-        (cycle.incomeSources ?? []).map((source) => [
-          source.id,
-          parseAmount(draft.incomeSourcePlans[source.id] ?? ''),
-        ]),
-      ),
+      categoryPlans: cycle.categories.map((category) => ({
+        categoryId: category.id,
+        plannedAmount: parseAmount(draft.categoryPlans[category.id] ?? ''),
+      })),
+      incomePlans: (cycle.incomeSources ?? []).map((source) => {
+        const incomePlan = draft.incomePlans[source.id] ?? {
+          expectedAmount: '',
+          expectedAmountMax: '',
+          savingsRate: '',
+        }
+        const expectedAmount = parseAmount(incomePlan.expectedAmount)
+        const expectedAmountMax = incomePlan.expectedAmountMax.trim()
+        const maximum =
+          expectedAmountMax.length > 0
+            ? Math.max(expectedAmount, parseAmount(expectedAmountMax))
+            : undefined
+        return {
+          sourceId: source.id,
+          expectedAmount,
+          ...(maximum === undefined ? {} : { expectedAmountMax: maximum }),
+          savingsRate: Math.min(1, parseAmount(incomePlan.savingsRate) / 100),
+        }
+      }),
     })
   }
 
@@ -983,8 +1031,8 @@ function BudgetEditDialog({
             Make this cycle work for you
           </DialogTitle>
           <DialogDescription className="text-sea-ink-soft">
-            Set the spending limit, savings target, and income plans. Your
-            changes stay attached to this payday cycle.
+            Set the spending limit and income plans. Savings is derived from
+            each source&apos;s rate and stays attached to this payday cycle.
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-6" onSubmit={handleSubmit}>
@@ -1015,20 +1063,20 @@ function BudgetEditDialog({
                   aria-label="Spending limit"
                 />
               </label>
-              <label className="space-y-1.5">
-                <span className="text-xs font-bold text-sea-ink-soft">
-                  Planned savings ({currency})
-                </span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  inputMode="numeric"
-                  value={draft.plannedSavings}
-                  onChange={handleAmountChange('plannedSavings')}
-                  aria-label="Planned savings"
-                />
-              </label>
+              <div className="rounded-xl border border-(--line) bg-(--chip-bg) px-3 py-2.5">
+                <p className="text-xs font-bold text-sea-ink-soft">
+                  Derived savings target
+                </p>
+                <p className="mt-1 font-mono text-lg font-bold text-palm tabular-nums">
+                  {formatBudgetMoney(
+                    plannedSavingsTotal(cycle.incomeSources),
+                    currency,
+                  )}
+                </p>
+                <p className="mt-0.5 text-[0.68rem] text-sea-ink-soft">
+                  Sum of expected income × each source rate
+                </p>
+              </div>
             </div>
           </section>
 
@@ -1102,35 +1150,86 @@ function BudgetEditDialog({
             <div className="space-y-2.5">
               {(cycle.incomeSources ?? []).length > 0 ? (
                 (cycle.incomeSources ?? []).map((source) => (
-                  <label
+                  <div
                     key={source.id}
-                    className="flex items-center gap-3 rounded-2xl border border-(--line) bg-(--chip-bg) px-3.5 py-3"
+                    className="rounded-2xl border border-(--line) bg-(--chip-bg) px-3.5 py-3"
                   >
-                    <span
-                      className="grid size-8 shrink-0 place-items-center rounded-xl bg-palm/10 text-palm"
-                      aria-hidden="true"
-                    >
-                      <Banknote className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-sea-ink">
-                      {source.name}
-                    </span>
-                    <span className="flex w-32 items-center gap-2">
-                      <span className="text-xs font-semibold text-sea-ink-soft">
-                        {currency}
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="grid size-8 shrink-0 place-items-center rounded-xl bg-palm/10 text-palm"
+                        aria-hidden="true"
+                      >
+                        <Banknote className="size-4" />
                       </span>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="1"
-                        inputMode="numeric"
-                        value={draft.incomeSourcePlans[source.id] ?? ''}
-                        onChange={handleIncomeChange(source.id)}
-                        aria-label={`${source.name} planned income`}
-                        className="h-9"
-                      />
-                    </span>
-                  </label>
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-sea-ink">
+                        {source.name}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <label className="space-y-1">
+                        <span className="text-[0.68rem] font-bold text-sea-ink-soft">
+                          Expected ({currency})
+                        </span>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          inputMode="numeric"
+                          value={
+                            draft.incomePlans[source.id]?.expectedAmount ?? ''
+                          }
+                          onChange={handleIncomeChange(
+                            source.id,
+                            'expectedAmount',
+                          )}
+                          aria-label={`${source.name} expected income`}
+                          className="h-9"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[0.68rem] font-bold text-sea-ink-soft">
+                          Max ({currency}, optional)
+                        </span>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          inputMode="numeric"
+                          value={
+                            draft.incomePlans[source.id]?.expectedAmountMax ??
+                            ''
+                          }
+                          onChange={handleIncomeChange(
+                            source.id,
+                            'expectedAmountMax',
+                          )}
+                          aria-label={`${source.name} maximum expected income`}
+                          className="h-9"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[0.68rem] font-bold text-sea-ink-soft">
+                          Save rate (%)
+                        </span>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          inputMode="decimal"
+                          value={
+                            draft.incomePlans[source.id]?.savingsRate ?? ''
+                          }
+                          onChange={handleIncomeChange(
+                            source.id,
+                            'savingsRate',
+                          )}
+                          aria-label={`${source.name} savings rate`}
+                          className="h-9"
+                        />
+                      </label>
+                    </div>
+                  </div>
                 ))
               ) : (
                 <p className="rounded-2xl border border-dashed border-(--line) px-4 py-4 text-sm text-sea-ink-soft">
@@ -1211,7 +1310,7 @@ export function BudgetPage({
 
   const expectedIncome = positiveAmount(selectedCycle.expectedIncome)
   const actualIncome = positiveAmount(selectedCycle.actualIncome)
-  const plannedSavings = positiveAmount(selectedCycle.plannedSavings)
+  const plannedSavings = plannedSavingsTotal(selectedCycle.incomeSources)
   const actualSavings = positiveAmount(selectedCycle.actualSavings)
   const spendingLimit = positiveAmount(selectedCycle.spendingLimit)
   const unallocated = expectedIncome - plannedSavings - spendingLimit

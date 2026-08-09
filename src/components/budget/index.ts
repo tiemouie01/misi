@@ -6,11 +6,13 @@ export {
 
 export type {
   BudgetCategoryPlan,
+  BudgetCategoryPlanUpdate,
   BudgetCategoryStatus,
   BudgetCycle,
   BudgetGroup,
   BudgetHistoryRow,
   BudgetIncomeSourcePlan,
+  BudgetIncomePlanUpdate,
   BudgetPageProps,
   BudgetPlanUpdate,
   BudgetTab,
