@@ -17,6 +17,7 @@ import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppBudgetRouteImport } from './routes/app/budget'
 import { Route as AppCategoriesRouteImport } from './routes/app/categories'
 import { Route as AppIncomeSourcesRouteImport } from './routes/app/income-sources'
+import { Route as AppReconcileRouteImport } from './routes/app/reconcile'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -59,6 +60,11 @@ const AppIncomeSourcesRoute = AppIncomeSourcesRouteImport.update({
   path: '/income-sources',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReconcileRoute = AppReconcileRouteImport.update({
+  id: '/reconcile',
+  path: '/reconcile',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
   '/app/income-sources': typeof AppIncomeSourcesRoute
+  '/app/reconcile': typeof AppReconcileRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
   '/app/income-sources': typeof AppIncomeSourcesRoute
+  '/app/reconcile': typeof AppReconcileRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
   '/app/income-sources': typeof AppIncomeSourcesRoute
+  '/app/reconcile': typeof AppReconcileRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/app/budget'
     | '/app/categories'
     | '/app/income-sources'
+    | '/app/reconcile'
     | '/app/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/app/budget'
     | '/app/categories'
     | '/app/income-sources'
+    | '/app/reconcile'
     | '/app'
     | '/api/auth/$'
   id:
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/app/budget'
     | '/app/categories'
     | '/app/income-sources'
+    | '/app/reconcile'
     | '/app/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -199,6 +211,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIncomeSourcesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/reconcile': {
+      id: '/app/reconcile'
+      path: '/reconcile'
+      fullPath: '/app/reconcile'
+      preLoaderRoute: typeof AppReconcileRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -213,6 +232,7 @@ interface AppRouteChildren {
   AppBudgetRoute: typeof AppBudgetRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
   AppIncomeSourcesRoute: typeof AppIncomeSourcesRoute
+  AppReconcileRoute: typeof AppReconcileRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -220,6 +240,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBudgetRoute: AppBudgetRoute,
   AppCategoriesRoute: AppCategoriesRoute,
   AppIncomeSourcesRoute: AppIncomeSourcesRoute,
+  AppReconcileRoute: AppReconcileRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

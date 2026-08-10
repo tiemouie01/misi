@@ -4,43 +4,36 @@ import {
   createFileRoute,
   Link,
   redirect,
-  useNavigate,
 } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { Waves } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../../../convex/_generated/api'
 import { AppHeader } from '#/components/app/app-header'
 import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
-import { BudgetCard } from '#/components/app/budget-card'
-import { IncomeCard } from '#/components/app/income-card'
+import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
 import { NetWorthCard } from '#/components/app/net-worth-card'
 import {
   QuickAddCard,
   QuickAddFab,
   QuickAddSheet,
 } from '#/components/app/quick-add'
-import { ReconcileCard } from '#/components/app/reconcile-card'
 import { TransactionsCard } from '#/components/app/transactions-card'
 import { Button } from '#/components/ui/button'
 import { accountMwkValue, formatK, isSpendableAccount } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import {
+  mutationErrorMessage,
+  useQuickAddSheet,
+} from '#/lib/use-quick-add-sheet'
 
 import type { FunctionReturnType } from 'convex/server'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { AutoSaveStatus } from '#/components/app/auto-save-card'
-import type {
-  Account,
-  BudgetCategory,
-  IncomeSource,
-  QuickAddInitial,
-  QuickAddPayload,
-  ReconcileBalance,
-  Txn,
-  Wallet,
-} from '#/lib/app-data'
+import type { PulseIncomeSource } from '#/components/app/cycle-pulse-card'
+import type { Account, Txn, Wallet } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
 
 const DAY_MS = 86_400_000
@@ -107,30 +100,6 @@ function shortDate(timestamp: number) {
   }).format(new Date(timestamp))
 }
 
-function ordinalDay(day: number) {
-  const suffix =
-    day % 100 >= 11 && day % 100 <= 13
-      ? 'th'
-      : day % 10 === 1
-        ? 'st'
-        : day % 10 === 2
-          ? 'nd'
-          : day % 10 === 3
-            ? 'rd'
-            : 'th'
-  return `${day}${suffix}`
-}
-
-function expectedWindowLabel(start: number, end: number) {
-  if (start === end) return ordinalDay(start)
-  return `${ordinalDay(start)}–${ordinalDay(end)}`
-}
-
-function mutationErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
-}
-
 function LoadingState({ children }: { children: string }) {
   return (
     <div className="page-wrap py-20 text-center text-sea-ink-soft">
@@ -189,20 +158,11 @@ function AppDashboard({
   data: ReadyBootstrapData
   now: number
 }) {
-  const navigate = useNavigate({ from: Route.fullPath })
-  const addTransaction = useMutation(api.misi.addTransaction)
-  const updateTransaction = useMutation(api.misi.updateTransaction)
   const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
   const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
-  const absorbAdjustmentMutation = useMutation(api.misi.absorbAdjustment)
-  const [sheet, setSheet] = useState<{
-    open: boolean
-    initial: QuickAddInitial
-  }>({ open: false, initial: { mode: 'expense' } })
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [quickAddError, setQuickAddError] = useState<string | null>(null)
 
   const accounts = useMemo<Account[]>(
     () =>
@@ -282,7 +242,6 @@ function AppDashboard({
       }).format(today),
       endsOn: shortDate(cycle.endsAt),
       reconcileNote: `Reconcile ${todayShort}`,
-      lastClosed: `opened ${shortDate(cycle.startsAt)}`,
       cycleGain: data.transactions.reduce((sum, transaction) => {
         if (transaction.type === 'income') return sum + transaction.amount
         if (transaction.type === 'expense') return sum - transaction.amount
@@ -309,41 +268,8 @@ function AppDashboard({
   )
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
-  const autoSaveRateForPayee = useCallback(
-    (payee: string) => {
-      const normalizedPayee = payee.trim().toLowerCase()
-      if (!normalizedPayee) return data.settings.defaultSavingsRate
-      const plan = data.cycleIncomePlans.find((candidate) => {
-        const sourceName = candidate.sourceName.toLowerCase()
-        return (
-          normalizedPayee === sourceName ||
-          normalizedPayee.includes(sourceName) ||
-          sourceName.includes(normalizedPayee)
-        )
-      })
-      return plan?.savingsRate ?? data.settings.defaultSavingsRate
-    },
-    [data.cycleIncomePlans, data.settings.defaultSavingsRate],
-  )
 
-  const budgets = useMemo<BudgetCategory[]>(
-    () =>
-      data.budgets.map((budget) => ({
-        categoryId: budget.categoryId,
-        plannedAmount: budget.plannedAmount,
-        spent: data.transactions
-          .filter(
-            (transaction) =>
-              transaction.type === 'expense' &&
-              transaction.excludeFromBudget !== true &&
-              transaction.categoryId === budget.categoryId,
-          )
-          .reduce((sum, transaction) => sum + transaction.amount, 0),
-      })),
-    [data.budgets, data.transactions],
-  )
-
-  const incomeSources = useMemo<IncomeSource[]>(
+  const incomeSources = useMemo<PulseIncomeSource[]>(
     () =>
       data.cycleIncomePlans.map((plan) => {
         const incomeTransactions = data.transactions.filter(
@@ -358,14 +284,9 @@ function AppDashboard({
           (sum, transaction) => sum + transaction.amount,
           0,
         )
-        const latestIncome = incomeTransactions.at(0)
         return {
           id: plan.sourceId,
           name: plan.sourceName,
-          expectedWindow: expectedWindowLabel(
-            plan.expectedDayStart,
-            plan.expectedDayEnd,
-          ),
           expectedAmount: plan.expectedAmount,
           expectedAmountMax: plan.expectedAmountMax,
           landedAmount,
@@ -375,13 +296,9 @@ function AppDashboard({
               : landedAmount > 0
                 ? 'partial'
                 : 'pending',
-          statusNote: latestIncome
-            ? `Landed ${transactionDayLabel(latestIncome.occurredAt, now)}`
-            : `Expected ${expectedWindowLabel(plan.expectedDayStart, plan.expectedDayEnd)}`,
-          savingsRate: plan.savingsRate,
         }
       }),
-    [data.cycleIncomePlans, data.transactions, now],
+    [data.cycleIncomePlans, data.transactions],
   )
 
   const unitTrustAccount = accounts.find((account) =>
@@ -446,23 +363,6 @@ function AppDashboard({
         })),
     [accounts],
   )
-  const [actualOverrides, setActualOverrides] = useState<
-    Record<string, { expected: number; actual: number } | undefined>
-  >({})
-
-  const reconcile: ReconcileBalance[] = expectedBalances.map((balance) => {
-    const override = actualOverrides[balance.accountId]
-    return {
-      ...balance,
-      actual:
-        override?.expected === balance.expected
-          ? override.actual
-          : balance.expected,
-    }
-  })
-  const reconcileClosed = reconcile.every(
-    (balance) => balance.expected === balance.actual,
-  )
 
   const defaultExpenseAccountId =
     data.settings.defaultExpenseAccountId ||
@@ -479,23 +379,24 @@ function AppDashboard({
     )?.accountId ??
     defaultTransferFromAccountId
 
-  const resolveAccountId = useCallback(
-    (accountId: string) => {
-      if (accounts.some((account) => account.id === accountId)) return accountId
-      const prototypeNames: Record<string, string> = {
-        nbs: 'nbs bank',
-        fdh: 'fdh bank',
-        airtel: 'airtel money',
-        cash: 'cash',
-      }
-      const expectedName = prototypeNames[accountId]
-      return (
-        accounts.find((account) => account.name.toLowerCase() === expectedName)
-          ?.id ?? defaultExpenseAccountId
-      )
-    },
-    [accounts, defaultExpenseAccountId],
-  )
+  const {
+    sheet,
+    error: quickAddError,
+    openSheet,
+    closeSheet,
+    saveTransaction,
+    resolveAccountId,
+    autoSaveRateForPayee,
+  } = useQuickAddSheet({
+    accounts,
+    incomeSources: data.incomeSources.map((source) => ({
+      id: source._id,
+      name: source.name,
+    })),
+    incomePlans: data.cycleIncomePlans,
+    defaultSavingsRate: data.settings.defaultSavingsRate,
+    defaultExpenseAccountId,
+  })
 
   const pendingAutoSave = data.pendingAutoSave
   const autoSaveUi: AutoSaveUiState | null = pendingAutoSave
@@ -514,28 +415,6 @@ function AppDashboard({
       ? localAutoSaveUi
       : null
 
-  function openSheet(initial: QuickAddInitial) {
-    setQuickAddError(null)
-    setSheet({
-      open: true,
-      initial: {
-        ...initial,
-        occurredAt: initial.occurredAt ?? Date.now(),
-        accountId: initial.accountId
-          ? resolveAccountId(initial.accountId)
-          : undefined,
-        toAccountId: initial.toAccountId
-          ? resolveAccountId(initial.toAccountId)
-          : undefined,
-      },
-    })
-  }
-
-  function closeSheet() {
-    setQuickAddError(null)
-    setSheet((current) => ({ ...current, open: false }))
-  }
-
   function editTransaction(transaction: Txn) {
     if (transaction.adjustment || transaction.autoSave) return
     openSheet({
@@ -552,66 +431,6 @@ function AppDashboard({
       occurredAt: transaction.occurredAt,
       excludeFromBudget: transaction.excludeFromBudget,
     })
-  }
-
-  const resolveIncomeSourceId = useCallback(
-    (payload: QuickAddPayload): Id<'incomeSources'> | undefined => {
-      if (payload.sourceId) return payload.sourceId as Id<'incomeSources'>
-      if (payload.type !== 'income') return undefined
-
-      const payee = payload.payee.trim().toLowerCase()
-      if (!payee) return undefined
-
-      const match = data.incomeSources.find((source) => {
-        const name = source.name.toLowerCase()
-        return payee === name || payee.includes(name) || name.includes(payee)
-      })
-
-      return match?._id
-    },
-    [data.incomeSources],
-  )
-
-  async function saveTransaction(payload: QuickAddPayload) {
-    setQuickAddError(null)
-    try {
-      const sourceId = resolveIncomeSourceId(payload)
-      const transaction = {
-        type: payload.type,
-        amount: payload.amount,
-        payee: payload.payee,
-        categoryId: payload.categoryId,
-        accountId: payload.accountId as Id<'accounts'>,
-        toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
-        items: payload.items,
-        note: payload.note,
-        sourceId,
-        excludeFromBudget: payload.excludeFromBudget,
-      }
-      if (payload.transactionId) {
-        if (payload.occurredAt === undefined) {
-          throw new Error('Transaction date is missing')
-        }
-        await updateTransaction({
-          transactionId: payload.transactionId as Id<'transactions'>,
-          ...transaction,
-          occurredAt: payload.occurredAt,
-        })
-      } else {
-        await addTransaction({
-          ...transaction,
-          occurredAt: payload.occurredAt,
-        })
-      }
-      closeSheet()
-    } catch (error) {
-      const message = mutationErrorMessage(
-        error,
-        'Unable to save transaction. Check the details and try again.',
-      )
-      setQuickAddError(message)
-      console.error('Unable to save transaction', error)
-    }
   }
 
   async function confirmAutoSave() {
@@ -649,26 +468,6 @@ function AppDashboard({
       )
       setActionError(message)
       console.error('Unable to dismiss auto-save', error)
-    }
-  }
-
-  async function absorbAdjustment(accountId: string) {
-    const balance = reconcile.find((item) => item.accountId === accountId)
-    if (!balance) return
-    setActionError(null)
-    try {
-      await absorbAdjustmentMutation({
-        accountId: accountId as Id<'accounts'>,
-        actual: balance.actual,
-        note: cycleInfo.reconcileNote,
-      })
-    } catch (error) {
-      const message = mutationErrorMessage(
-        error,
-        'Unable to absorb balance adjustment. Try again.',
-      )
-      setActionError(message)
-      console.error('Unable to absorb balance adjustment', error)
     }
   }
 
@@ -756,52 +555,16 @@ function AppDashboard({
               usdRate={data.settings.usdRate}
               animationDelay="240ms"
             />
-            <IncomeCard
-              sources={incomeSources}
+            <CyclePulseCard
               cycleLabel={cycleInfo.label}
-              animationDelay="300ms"
-              onAddIncomeSource={() =>
-                void navigate({ to: '/app/income-sources' })
-              }
-            />
-            <BudgetCard
-              budgets={budgets}
-              categories={categories}
               spendingLimit={cycleInfo.spendingLimit}
-              dayNumber={cycleInfo.dayNumber}
-              totalDays={cycleInfo.totalDays}
-              daysRemaining={cycleInfo.daysRemaining}
-              dayOf={cycleInfo.dayOf}
-              endsOn={cycleInfo.endsOn}
-              cycleStartsAt={data.currentCycle.startsAt}
-              now={now}
               totalSpent={totalSpent}
               spendingLeft={spendingLeft}
               perDay={perDay}
-              animationDelay="360ms"
-              onAdjustBudgets={() => void navigate({ to: '/app/budget' })}
-            />
-            <ReconcileCard
-              accounts={accounts}
-              categories={categories}
-              balances={reconcile}
-              closed={reconcileClosed}
-              lastClosed={cycleInfo.lastClosed}
-              onActualChange={(accountId, actual) =>
-                setActualOverrides((current) => ({
-                  ...current,
-                  [accountId]: {
-                    expected:
-                      expectedBalances.find(
-                        (balance) => balance.accountId === accountId,
-                      )?.expected ?? actual,
-                    actual,
-                  },
-                }))
-              }
-              onAbsorb={(accountId) => void absorbAdjustment(accountId)}
-              onLogMissing={openSheet}
-              animationDelay="420ms"
+              dayNumber={cycleInfo.dayNumber}
+              totalDays={cycleInfo.totalDays}
+              incomeSources={incomeSources}
+              animationDelay="300ms"
             />
           </div>
         </div>

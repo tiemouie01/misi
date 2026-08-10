@@ -21,6 +21,7 @@ interface ReconcileCardProps {
   onAbsorb: (accountId: string) => void
   onLogMissing: (initial: QuickAddInitial) => void
   animationDelay: string
+  startExpanded?: boolean
 }
 
 function DriftChip({ drift }: { drift: number }) {
@@ -49,8 +50,9 @@ export function ReconcileCard({
   onAbsorb,
   onLogMissing,
   animationDelay,
+  startExpanded = false,
 }: ReconcileCardProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(startExpanded)
   const visibleBalances = balances.filter((balance) => {
     const account = accounts.find((item) => item.id === balance.accountId)
     return account ? isSpendableAccount(account) : false
