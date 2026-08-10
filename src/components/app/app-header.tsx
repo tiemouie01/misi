@@ -1,10 +1,15 @@
 import { Link } from '@tanstack/react-router'
-import { LogOut, Tags, Wifi } from 'lucide-react'
+import { ChartNoAxesCombined, LogOut, Tags, Wifi } from 'lucide-react'
 
 import { MisiMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '#/components/ui/tooltip'
 import { authClient } from '#/lib/auth-client'
 
 export function AppHeader({ badge }: { badge: string }) {
@@ -28,29 +33,67 @@ export function AppHeader({ badge }: { badge: string }) {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="success" className="hidden px-3 uppercase sm:flex">
-            <Wifi className="size-3.5" />
-            Synced
-          </Badge>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="success"
+                className="hidden px-3 uppercase sm:flex"
+              >
+                <Wifi className="size-3.5" />
+                Synced
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>All changes are synced</TooltipContent>
+          </Tooltip>
           <ThemeToggle />
-          <Button asChild variant="secondary" size="icon-sm" className="size-9">
-            <Link to="/app/categories" aria-label="Manage categories">
-              <Tags className="size-4" />
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon-sm"
-            aria-label="Sign out"
-            className="size-9"
-            onClick={async () => {
-              await authClient.signOut()
-              window.location.href = '/login'
-            }}
-          >
-            <LogOut className="size-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                variant="secondary"
+                size="icon-sm"
+                className="size-9"
+              >
+                <Link to="/app/budget" aria-label="Budget plan">
+                  <ChartNoAxesCombined className="size-4" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Budget plan</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                variant="secondary"
+                size="icon-sm"
+                className="size-9"
+              >
+                <Link to="/app/categories" aria-label="Manage categories">
+                  <Tags className="size-4" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Manage categories</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon-sm"
+                aria-label="Sign out"
+                className="size-9"
+                onClick={async () => {
+                  await authClient.signOut()
+                  window.location.href = '/login'
+                }}
+              >
+                <LogOut className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Sign out</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </header>
