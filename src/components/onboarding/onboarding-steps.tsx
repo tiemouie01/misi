@@ -285,7 +285,11 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           placeholder="0"
           value={draft.savingsOpeningBalance}
           aria-invalid={invalid || undefined}
-          aria-describedby={invalid ? 'onboarding-error' : undefined}
+          aria-describedby={
+            invalid
+              ? 'onboarding-error ob-savings-balance-hint'
+              : 'ob-savings-balance-hint'
+          }
           onChange={(event) =>
             setDraft((current) => ({
               ...current,
@@ -293,6 +297,13 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
             }))
           }
         />
+        <p
+          id="ob-savings-balance-hint"
+          className="mt-1.5 text-[0.8rem] text-sea-ink-soft"
+        >
+          Money already set aside in Savings (MWK)—not your total across bank,
+          investment, or foreign-currency accounts.
+        </p>
       </div>
     </div>
   )
