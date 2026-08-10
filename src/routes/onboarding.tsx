@@ -22,13 +22,16 @@ export const Route = createFileRoute('/onboarding')({
     const data = await context.queryClient.ensureQueryData(
       convexQuery(api.misi.onboardingData, {}),
     )
-    if (data.settings?.onboardedAt) throw redirect({ to: '/app' })
+    if (data.settings?.onboardedAt) {
+      throw redirect({ to: '/app' })
+    }
   },
   component: OnboardingPage,
 })
 
 function OnboardingPage() {
-  const { step = 'welcome' } = Route.useSearch()
+  const { step } = Route.useSearch()
+  const activeStep = step ?? 'welcome'
   const navigate = useNavigate()
   const { data } = useSuspenseQuery(convexQuery(api.misi.onboardingData, {}))
   const { data: session, isPending } = authClient.useSession()
@@ -47,9 +50,12 @@ function OnboardingPage() {
       key={userKey}
       prefill={data}
       userKey={userKey}
-      step={step}
+      step={activeStep}
       onStepChange={(next) =>
-        void navigate({ to: '/onboarding', search: { step: next } })
+        void navigate({
+          to: '/onboarding',
+          search: { step: next },
+        })
       }
       onComplete={() => void navigate({ to: '/app' })}
     />

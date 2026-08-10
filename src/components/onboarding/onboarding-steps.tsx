@@ -22,6 +22,7 @@ import {
   ACCOUNT_KIND_LABELS,
   ACCOUNT_PRESETS,
   BUDGETABLE_CATEGORIES,
+  BUDGET_GROUP_LABELS,
   formatAmountInput,
   newKey,
   parseAmount,
@@ -34,6 +35,7 @@ import type {
   OnboardingDraft,
   OnboardingStep,
 } from '#/lib/onboarding-data'
+import type { BudgetGroup } from '../../../shared/category-defs'
 import type { DateRange } from 'react-day-picker'
 
 export interface StepProps {
@@ -64,51 +66,53 @@ function dayInCurrentMonth(day: number) {
   return new Date(now.getFullYear(), now.getMonth(), day)
 }
 
-function parseExpectedWindow(expected: string): DateRange | undefined {
-  const trimmed = expected.trim()
-  if (!trimmed) return undefined
-
-  const rangeMatch = trimmed.match(
-    /^(\d{1,2})(?:st|nd|rd|th)?\s*[–-]\s*(\d{1,2})(?:st|nd|rd|th)?$/i,
-  )
-  if (rangeMatch) {
-    const fromDay = Number(rangeMatch[1])
-    const toDay = Number(rangeMatch[2])
-    if (fromDay < 1 || fromDay > 31 || toDay < 1 || toDay > 31) return undefined
-    return {
-      from: dayInCurrentMonth(fromDay),
-      to: dayInCurrentMonth(toDay),
-    }
+function parseExpectedWindow(
+  expectedDayStart: string,
+  expectedDayEnd: string,
+): DateRange | undefined {
+  const fromDay = Number(expectedDayStart)
+  if (!Number.isInteger(fromDay) || fromDay < 1 || fromDay > 31) {
+    return undefined
   }
-
-  const singleMatch = trimmed.match(/^(\d{1,2})(?:st|nd|rd|th)?$/i)
-  if (!singleMatch) return undefined
-  const day = Number(singleMatch[1])
-  if (day < 1 || day > 31) return undefined
-  const date = dayInCurrentMonth(day)
-  return { from: date, to: date }
+  const toDay = Number(expectedDayEnd || expectedDayStart)
+  if (!Number.isInteger(toDay) || toDay < fromDay || toDay > 31) {
+    return undefined
+  }
+  return {
+    from: dayInCurrentMonth(fromDay),
+    to: dayInCurrentMonth(toDay),
+  }
 }
 
-function formatExpectedWindow(range: DateRange | undefined): string {
-  if (!range?.from) return ''
-  const fromDay = range.from.getDate()
-  if (!range.to) return ordinal(fromDay)
-  const toDay = range.to.getDate()
-  if (toDay === fromDay) return ordinal(fromDay)
-  return `${ordinal(fromDay)}–${ordinal(toDay)}`
+function formatExpectedWindow(
+  expectedDayStart: string,
+  expectedDayEnd: string,
+): string {
+  const fromDay = Number(expectedDayStart)
+  if (!Number.isInteger(fromDay) || fromDay < 1 || fromDay > 31) return ''
+  const toDay = Number(expectedDayEnd || expectedDayStart)
+  if (!Number.isInteger(toDay) || toDay < fromDay || toDay > 31) {
+    return ordinal(fromDay)
+  }
+  return toDay === fromDay
+    ? ordinal(fromDay)
+    : `${ordinal(fromDay)}–${ordinal(toDay)}`
 }
 
 function ExpectedWindowPicker({
-  value,
+  expectedDayStart,
+  expectedDayEnd,
   onChange,
   id,
 }: {
-  value: string
-  onChange: (next: string) => void
+  expectedDayStart: string
+  expectedDayEnd: string
+  onChange: (expectedDayStart: string, expectedDayEnd: string) => void
   id: string
 }) {
   const [open, setOpen] = useState(false)
-  const selected = parseExpectedWindow(value)
+  const selected = parseExpectedWindow(expectedDayStart, expectedDayEnd)
+  const value = formatExpectedWindow(expectedDayStart, expectedDayEnd)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -134,7 +138,12 @@ function ExpectedWindowPicker({
           defaultMonth={selected?.from}
           numberOfMonths={1}
           onSelect={(range) => {
-            onChange(formatExpectedWindow(range))
+            const fromDay = range?.from?.getDate()
+            const toDay = range?.to?.getDate() ?? fromDay
+            onChange(
+              fromDay === undefined ? '' : String(fromDay),
+              toDay === undefined ? '' : String(toDay),
+            )
             if (range?.from && range.to) setOpen(false)
           }}
         />
@@ -146,14 +155,14 @@ function ExpectedWindowPicker({
   )
 }
 
-const SPLIT_STEP = 5
+const SAVINGS_RATE_STEP = 5
 
-function clampSplitPct(value: number) {
+function clampSavingsRatePct(value: number) {
   if (!Number.isFinite(value)) return 0
   return Math.min(100, Math.max(0, value))
 }
 
-function SplitPctStepper({
+function SavingsRateStepper({
   id,
   value,
   onChange,
@@ -166,7 +175,7 @@ function SplitPctStepper({
   const current = Number.isFinite(numeric) ? numeric : 0
 
   function stepBy(delta: number) {
-    onChange(String(clampSplitPct(current + delta)))
+    onChange(String(clampSavingsRatePct(current + delta)))
   }
 
   return (
@@ -176,9 +185,9 @@ function SplitPctStepper({
         variant="ghost"
         size="icon"
         className="size-10 shrink-0 rounded-none text-sea-ink-soft hover:bg-(--link-bg-hover) hover:text-sea-ink"
-        aria-label="Decrease auto-save by 5%"
+        aria-label="Decrease savings rate by 5%"
         disabled={current <= 0}
-        onClick={() => stepBy(-SPLIT_STEP)}
+        onClick={() => stepBy(-SAVINGS_RATE_STEP)}
       >
         <Minus className="size-4" />
       </Button>
@@ -187,7 +196,7 @@ function SplitPctStepper({
         inputMode="numeric"
         placeholder="20"
         value={value}
-        aria-label="Auto-save percent"
+        aria-label="Savings rate percent"
         className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-center shadow-none focus-visible:border-transparent focus-visible:ring-0"
         onChange={(event) => {
           const next = event.target.value.replace(/[^\d]/g, '')
@@ -195,7 +204,7 @@ function SplitPctStepper({
             onChange('')
             return
           }
-          onChange(String(clampSplitPct(Number(next))))
+          onChange(String(clampSavingsRatePct(Number(next))))
         }}
       />
       <Button
@@ -203,9 +212,9 @@ function SplitPctStepper({
         variant="ghost"
         size="icon"
         className="size-10 shrink-0 rounded-none text-sea-ink-soft hover:bg-(--link-bg-hover) hover:text-sea-ink"
-        aria-label="Increase auto-save by 5%"
+        aria-label="Increase savings rate by 5%"
         disabled={current >= 100}
-        onClick={() => stepBy(SPLIT_STEP)}
+        onClick={() => stepBy(SAVINGS_RATE_STEP)}
       >
         <Plus className="size-4" />
       </Button>
@@ -243,23 +252,26 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
         </p>
       </div>
       <div>
-        <Label htmlFor="ob-auto-save">Auto-save % of income</Label>
+        <Label htmlFor="ob-default-savings-rate">
+          Default savings rate (% of income)
+        </Label>
         <Input
-          id="ob-auto-save"
+          id="ob-default-savings-rate"
           className="mt-2"
           inputMode="numeric"
-          value={draft.autoSavePct}
+          value={draft.defaultSavingsRate}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
           onChange={(event) =>
             setDraft((current) => ({
               ...current,
-              autoSavePct: event.target.value,
+              defaultSavingsRate: event.target.value.replace(/[^\d]/g, ''),
             }))
           }
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-          When income lands, Misi proposes moving this share into Savings.
+          Used as the starting rate for new income sources. Each source can have
+          its own rate.
         </p>
       </div>
       <div>
@@ -551,8 +563,9 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
   return (
     <div className="space-y-4">
       <p className="text-[0.9rem] text-sea-ink-soft">
-        What money do you expect each cycle? Misi tracks whether it landed and
-        proposes the auto-save split. Skip this if you'd rather add it later.
+        What money do you expect each cycle? Add a landing window and amount so
+        Misi can compare planned income with what actually lands. Skip this if
+        you'd rather add it later.
       </p>
       {draft.incomeSources.map((source) => (
         <div
@@ -585,39 +598,90 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
               <Trash2 className="size-4" />
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2">
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-window-${source.key}`}>
                 Landing window
               </Label>
               <ExpectedWindowPicker
                 id={`ob-income-window-${source.key}`}
-                value={source.expected}
-                onChange={(expected) => updateSource(source.key, { expected })}
-              />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`ob-income-amount-${source.key}`}>Amount</Label>
-              <Input
-                id={`ob-income-amount-${source.key}`}
-                placeholder="K1,850,000"
-                value={source.amountLabel}
-                onChange={(event) =>
-                  updateSource(source.key, { amountLabel: event.target.value })
+                expectedDayStart={source.expectedDayStart}
+                expectedDayEnd={source.expectedDayEnd}
+                onChange={(expectedDayStart, expectedDayEnd) =>
+                  updateSource(source.key, { expectedDayStart, expectedDayEnd })
                 }
               />
             </div>
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`ob-income-split-${source.key}`}>
-                Auto-save %
+              <Label htmlFor={`ob-income-amount-${source.key}`}>
+                Expected amount
               </Label>
-              <SplitPctStepper
-                id={`ob-income-split-${source.key}`}
-                value={source.splitPct}
-                onChange={(splitPct) => updateSource(source.key, { splitPct })}
+              <Input
+                id={`ob-income-amount-${source.key}`}
+                inputMode="numeric"
+                placeholder="1,850,000"
+                value={source.expectedAmount}
+                onChange={(event) =>
+                  updateSource(source.key, {
+                    expectedAmount: formatAmountInput(event.target.value),
+                  })
+                }
+              />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`ob-income-amount-max-${source.key}`}>
+                High end (optional)
+              </Label>
+              <Input
+                id={`ob-income-amount-max-${source.key}`}
+                inputMode="numeric"
+                placeholder="For variable income"
+                value={source.expectedAmountMax}
+                onChange={(event) =>
+                  updateSource(source.key, {
+                    expectedAmountMax: formatAmountInput(event.target.value),
+                  })
+                }
+              />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor={`ob-income-savings-rate-${source.key}`}>
+                Savings rate
+              </Label>
+              <SavingsRateStepper
+                id={`ob-income-savings-rate-${source.key}`}
+                value={source.savingsRate}
+                onChange={(savingsRate) =>
+                  updateSource(source.key, { savingsRate })
+                }
               />
             </div>
           </div>
+          <button
+            type="button"
+            aria-pressed={source.isAnchor}
+            onClick={() =>
+              setDraft((current) => ({
+                ...current,
+                incomeSources: current.incomeSources.map((item) => ({
+                  ...item,
+                  isAnchor: item.key === source.key,
+                })),
+              }))
+            }
+            className={cn(
+              'flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-[0.8rem] transition-colors',
+              source.isAnchor
+                ? 'border-lagoon-deep bg-lagoon/10 text-sea-ink'
+                : 'border-(--line) text-sea-ink-soft hover:border-lagoon-deep',
+            )}
+          >
+            <span>
+              <span className="font-semibold">Anchor income</span>
+              <span className="ml-2">Used to keep payday cycles aligned.</span>
+            </span>
+            <span className="font-bold">{source.isAnchor ? 'Yes' : 'Set'}</span>
+          </button>
         </div>
       ))}
       <Button
@@ -632,9 +696,12 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
               {
                 key: newKey(),
                 name: '',
-                expected: '',
-                amountLabel: '',
-                splitPct: current.autoSavePct,
+                expectedDayStart: '',
+                expectedDayEnd: '',
+                expectedAmount: '',
+                expectedAmountMax: '',
+                savingsRate: current.defaultSavingsRate,
+                isAnchor: current.incomeSources.length === 0,
               },
             ],
           }))
@@ -649,96 +716,153 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
 
 export function BudgetsStep({ draft, setDraft, error }: StepProps) {
   const categoryTotal = draft.budgets.reduce(
-    (sum, budget) => sum + parseAmount(budget.amount),
+    (sum, budget) => sum + parseAmount(budget.plannedAmount),
     0,
   )
+  const spendingLimit = parseAmount(draft.spendingLimit)
+  const unallocated = Math.max(spendingLimit - categoryTotal, 0)
+  const overallocated = Math.max(categoryTotal - spendingLimit, 0)
   const invalid = Boolean(error)
+
+  function updatePlannedAmount(categoryId: string, value: string) {
+    setDraft((current) => ({
+      ...current,
+      budgets: current.budgets.map((item) =>
+        item.categoryId === categoryId
+          ? { ...item, plannedAmount: formatAmountInput(value) }
+          : item,
+      ),
+    }))
+  }
 
   return (
     <div className="space-y-4">
       <p className="text-[0.9rem] text-sea-ink-soft">
-        How much can go out each cycle? Set a total, then optionally split it
-        across categories.
+        How much can go out each cycle? Set a spending limit, then split it
+        across Needs and Wants. Savings is tracked separately.
       </p>
       <div>
-        <Label htmlFor="ob-total-budget">Total spending budget per cycle</Label>
+        <Label htmlFor="ob-spending-limit">Spending limit per cycle</Label>
         <Input
-          id="ob-total-budget"
+          id="ob-spending-limit"
           className="mt-2"
           inputMode="numeric"
-          placeholder={
-            categoryTotal > 0
-              ? formatAmountInput(String(categoryTotal))
-              : '650,000'
-          }
-          value={draft.totalBudget}
+          placeholder="650,000"
+          value={draft.spendingLimit}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
           onChange={(event) =>
             setDraft((current) => ({
               ...current,
-              totalBudget: formatAmountInput(event.target.value),
+              spendingLimit: formatAmountInput(event.target.value),
             }))
           }
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-          Leave blank to use the sum of your category budgets.
+          This is your spending envelope from payday to payday. Savings sits
+          outside it.
         </p>
       </div>
-      <div className="space-y-2">
-        {BUDGETABLE_CATEGORIES.map((category) => {
-          const budget = draft.budgets.find(
-            (item) => item.categoryId === category.id,
-          )
-          return (
-            <div key={category.id} className="flex items-center gap-3">
-              <span className="flex flex-1 items-center gap-2 text-[0.9rem] font-semibold text-sea-ink">
-                <category.icon
-                  aria-hidden
-                  className="size-4"
-                  style={{ color: category.color }}
-                />
-                {category.name}
-              </span>
-              <Input
-                aria-label={`${category.name} budget`}
-                className="w-32"
-                inputMode="numeric"
-                placeholder="0"
-                value={budget?.amount ?? ''}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    budgets: current.budgets.map((item) =>
-                      item.categoryId === category.id
-                        ? {
-                            ...item,
-                            amount: formatAmountInput(event.target.value),
-                          }
-                        : item,
-                    ),
-                  }))
-                }
-              />
-            </div>
-          )
-        })}
+      <div
+        className={cn(
+          'grid grid-cols-3 gap-2 rounded-2xl border p-3',
+          overallocated > 0
+            ? 'border-coral/30 bg-coral/8'
+            : 'border-(--line) bg-(--chip-bg)',
+        )}
+        aria-live="polite"
+      >
+        <div>
+          <p className="text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
+            Planned
+          </p>
+          <p className="mt-1 font-mono text-sm font-bold text-sea-ink tabular-nums">
+            {formatK(categoryTotal)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
+            {overallocated > 0 ? 'Over' : 'Unallocated'}
+          </p>
+          <p
+            className={cn(
+              'mt-1 font-mono text-sm font-bold tabular-nums',
+              overallocated > 0 ? 'text-coral-deep' : 'text-palm',
+            )}
+          >
+            {formatK(overallocated || unallocated)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
+            Limit
+          </p>
+          <p className="mt-1 font-mono text-sm font-bold text-sea-ink tabular-nums">
+            {formatK(spendingLimit)}
+          </p>
+        </div>
       </div>
+
+      {overallocated > 0 && (
+        <p className="text-[0.8rem] font-semibold text-coral-deep">
+          Reduce category plans by {formatK(overallocated)} to continue.
+        </p>
+      )}
+
+      {(['needs', 'wants'] as BudgetGroup[]).map((group) => {
+        const categories = BUDGETABLE_CATEGORIES.filter(
+          (category) => category.budgetGroup === group,
+        )
+        if (categories.length === 0) return null
+        return (
+          <section key={group} className="space-y-2">
+            <h2 className="field-label">{BUDGET_GROUP_LABELS[group]}</h2>
+            <div className="space-y-2">
+              {categories.map((category) => {
+                const budget = draft.budgets.find(
+                  (item) => item.categoryId === category.id,
+                )
+                return (
+                  <div key={category.id} className="flex items-center gap-3">
+                    <span className="flex flex-1 items-center gap-2 text-[0.9rem] font-semibold text-sea-ink">
+                      <category.icon
+                        aria-hidden
+                        className="size-4"
+                        style={{ color: category.color }}
+                      />
+                      {category.name}
+                    </span>
+                    <Input
+                      aria-label={`${category.name} planned amount`}
+                      className="w-32"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={budget?.plannedAmount ?? ''}
+                      onChange={(event) =>
+                        updatePlannedAmount(category.id, event.target.value)
+                      }
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })}
     </div>
   )
 }
 
 export function ReviewStep({ draft, goToStep }: StepProps) {
   const categoryTotal = draft.budgets.reduce(
-    (sum, budget) => sum + parseAmount(budget.amount),
+    (sum, budget) => sum + parseAmount(budget.plannedAmount),
     0,
   )
-  const totalBudget =
-    draft.totalBudget.trim() === ''
-      ? categoryTotal
-      : parseAmount(draft.totalBudget)
+  const spendingLimit = parseAmount(draft.spendingLimit)
+  const unallocated = Math.max(spendingLimit - categoryTotal, 0)
+  const overallocated = Math.max(categoryTotal - spendingLimit, 0)
   const activeBudgets = draft.budgets.filter(
-    (budget) => parseAmount(budget.amount) > 0,
+    (budget) => parseAmount(budget.plannedAmount) > 0,
   )
 
   const sections: {
@@ -751,7 +875,10 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
       step: 'welcome',
       rows: [
         ['USD rate', `K${draft.usdRate || '—'} per $1`],
-        ['Auto-save', `${draft.autoSavePct || '0'}% of income`],
+        [
+          'Default savings rate',
+          `${draft.defaultSavingsRate || '0'}% for new sources`,
+        ],
         [
           'Savings balance',
           draft.savingsOpeningBalance
@@ -782,7 +909,7 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
         draft.incomeSources.length > 0
           ? draft.incomeSources.map((source) => [
               source.name,
-              `${source.amountLabel || '—'} · ${source.expected || '—'}`,
+              `${formatK(parseAmount(source.expectedAmount))}${source.expectedAmountMax ? `–${formatK(parseAmount(source.expectedAmountMax))}` : ''} · ${formatExpectedWindow(source.expectedDayStart, source.expectedDayEnd) || '—'}`,
             ])
           : [['None added', 'You can add income sources later']],
     },
@@ -791,10 +918,14 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
       step: 'budgets',
       rows: [
         [
-          'Total per cycle',
-          draft.totalBudget.trim() === '' && categoryTotal === 0
+          'Spending limit per cycle',
+          draft.spendingLimit.trim() === ''
             ? 'Not set'
-            : formatK(totalBudget),
+            : formatK(spendingLimit),
+        ],
+        [
+          overallocated > 0 ? 'Overallocated' : 'Unallocated',
+          formatK(overallocated || unallocated),
         ],
         ...activeBudgets.map((budget): [string, string] => {
           const category = BUDGETABLE_CATEGORIES.find(
@@ -802,7 +933,7 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
           )
           return [
             category?.name ?? budget.categoryId,
-            formatK(parseAmount(budget.amount)),
+            formatK(parseAmount(budget.plannedAmount)),
           ]
         }),
       ],

@@ -13,6 +13,7 @@ interface AutoSaveCardProps {
   amount: number
   sourceName: string
   rateLabel: string
+  landedLabel: string
   onAmountChange: (amount: number) => void
   onConfirm: () => void
   onDismiss: () => void
@@ -24,6 +25,7 @@ export function AutoSaveCard({
   amount,
   sourceName,
   rateLabel,
+  landedLabel,
   onAmountChange,
   onConfirm,
   onDismiss,
@@ -50,7 +52,7 @@ export function AutoSaveCard({
             Savings
           </p>
           <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
-            Today
+            {landedLabel}
           </span>
         </div>
       </Card>
@@ -104,7 +106,7 @@ export function AutoSaveCard({
                 <span className="font-mono font-semibold text-sea-ink tabular-nums">
                   {formatK(amount)}
                 </span>{' '}
-                → Savings. Proposed when your {sourceName} landed on the 20th.
+                → Savings. Proposed when your {sourceName} landed {landedLabel}.
               </>
             )}
           </div>

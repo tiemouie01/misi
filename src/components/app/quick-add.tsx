@@ -37,8 +37,7 @@ interface QuickAddSheetProps {
   defaultTransferFromAccountId: string
   defaultTransferToAccountId: string
   reconcileNote: string
-  autoSaveAmount: (income: number) => number
-  autoSaveRateLabel: string
+  autoSaveRateForPayee: (payee: string) => number
   resolveAccountId: (accountId: string) => string
   error?: string | null
   onClose: () => void
@@ -49,23 +48,17 @@ interface QuickAddFabProps {
   onOpen: (initial: QuickAddInitial) => void
 }
 
-function transactionDateLabel(occurredAt?: number) {
-  if (occurredAt === undefined) return 'Today'
-
+function transactionDateValue(occurredAt: number) {
   const date = new Date(occurredAt)
-  const today = new Date()
-  if (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  ) {
-    return 'Today'
-  }
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  }).format(date)
+function transactionDateTimestamp(value: string) {
+  const timestamp = new Date(`${value}T12:00:00`).getTime()
+  return Number.isFinite(timestamp) ? timestamp : Date.now()
 }
 
 function RecentChips({
@@ -76,7 +69,7 @@ function RecentChips({
   onSelect: (recent: RecentTransaction) => void
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 flex-wrap gap-2">
       {oneTapRecents.map((recent) => {
         const category = resolveCategory(categories, recent.categoryId)
         if (!category || category.archived || category.isSystem) return null
@@ -86,11 +79,11 @@ function RecentChips({
             key={recent.payee}
             type="button"
             variant="secondary"
-            className="h-auto px-3.5 py-2 font-semibold"
+            className="h-auto max-w-full px-3.5 py-2 font-semibold"
             onClick={() => onSelect(recent)}
           >
             <Icon className="size-4" style={{ color: category.color }} />
-            {recent.payee}
+            <span className="truncate">{recent.payee}</span>
             <span className="font-mono text-sea-ink-soft tabular-nums">
               {formatK(recent.amount)}
             </span>
@@ -183,7 +176,7 @@ function AccountPicker({
   return (
     <fieldset className="mt-5">
       <legend className="field-label mb-2">{label}</legend>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-0 flex-wrap gap-2">
         {accounts
           .filter((account) => isSpendableAccount(account))
           .map((account) => (
@@ -193,10 +186,10 @@ function AccountPicker({
               aria-pressed={selected === account.id}
               variant="secondary"
               size="sm"
-              className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+              className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
               onClick={() => onSelect(account.id)}
             >
-              {account.name}
+              <span className="truncate">{account.name}</span>
             </Button>
           ))}
       </div>
@@ -212,8 +205,7 @@ export function QuickAddSheet({
   defaultTransferFromAccountId,
   defaultTransferToAccountId,
   reconcileNote,
-  autoSaveAmount,
-  autoSaveRateLabel,
+  autoSaveRateForPayee,
   resolveAccountId,
   error,
   onClose,
@@ -239,8 +231,12 @@ export function QuickAddSheet({
   const [payee, setPayee] = useState(initial.payee ?? '')
   const [items, setItems] = useState(initial.items ?? '')
   const [note, setNote] = useState(initial.note ?? '')
+  const [excludeFromBudget, setExcludeFromBudget] = useState(
+    initial.excludeFromBudget ?? false,
+  )
+  const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
   const amount = Number(digits || '0')
-  const dateLabel = transactionDateLabel(initial.occurredAt)
+  const autoSaveRate = autoSaveRateForPayee(payee)
   const canSave =
     amount > 0 && (mode !== 'transfer' || accountId !== toAccountId)
 
@@ -267,9 +263,11 @@ export function QuickAddSheet({
             (mode === 'income'
               ? 'Income'
               : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
+      sourceId: mode === 'income' ? initial.sourceId : undefined,
       items: mode === 'expense' && items.trim() ? items.trim() : undefined,
       note: note.trim() || undefined,
-      occurredAt: initial.occurredAt,
+      occurredAt,
+      excludeFromBudget: mode === 'expense' && excludeFromBudget,
       reconcile: initial.reconcile,
     })
   }
@@ -336,7 +334,7 @@ export function QuickAddSheet({
         if (!nextOpen) onClose()
       }}
     >
-      <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
+      <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] w-full min-w-0 max-w-none translate-x-0 translate-y-0 gap-0 overflow-x-hidden overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
         <DialogTitle className="sr-only">
           {isEditing ? 'Edit transaction' : 'Log a transaction'}
         </DialogTitle>
@@ -346,7 +344,7 @@ export function QuickAddSheet({
             : 'Enter an amount and optional transaction details.'}
         </DialogDescription>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-(--line) sm:hidden" />
-        <div className="mr-11 grid grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
+        <div className="mr-11 grid min-w-0 grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
           {(['expense', 'income', 'transfer'] as const).map((type) => (
             <Button
               key={type}
@@ -354,20 +352,22 @@ export function QuickAddSheet({
               variant="ghost"
               size="sm"
               aria-pressed={mode === type}
-              className="w-full aria-pressed:bg-(--surface-strong) aria-pressed:text-sea-ink aria-pressed:shadow-sm"
+              className="min-w-0 w-full px-1.5 aria-pressed:bg-(--surface-strong) aria-pressed:text-sea-ink aria-pressed:shadow-sm"
               onClick={() => switchMode(type)}
             >
-              {type[0].toUpperCase()}
-              {type.slice(1)}
+              <span className="truncate">
+                {type[0].toUpperCase()}
+                {type.slice(1)}
+              </span>
             </Button>
           ))}
         </div>
-        <div className="mt-5 text-center">
+        <div className="mt-5 min-w-0 text-center">
           <p className="island-kicker">Amount (MWK)</p>
           <p
             aria-live="polite"
             aria-atomic="true"
-            className={`font-mono mt-1 text-[2.6rem] font-bold tracking-tight tabular-nums ${amount ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
+            className={`font-mono mt-1 max-w-full truncate text-[2.6rem] font-bold tracking-tight tabular-nums ${amount ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
           >
             {amountDisplay}
           </p>
@@ -377,14 +377,14 @@ export function QuickAddSheet({
             </Badge>
           )}
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-4 grid min-w-0 grid-cols-3 gap-2">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0'].map(
             (key) => (
               <Button
                 key={key}
                 type="button"
                 variant="secondary"
-                className="font-mono h-auto rounded-2xl py-3.5 text-lg font-semibold active:scale-95"
+                className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
                 onClick={() => appendDigits(key)}
               >
                 {key}
@@ -395,7 +395,7 @@ export function QuickAddSheet({
             type="button"
             aria-label="Delete digit"
             variant="secondary"
-            className="font-mono h-auto rounded-2xl py-3.5 text-lg font-semibold active:scale-95"
+            className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
             onClick={() => setDigits((current) => current.slice(0, -1))}
           >
             <Delete className="size-5" />
@@ -404,14 +404,14 @@ export function QuickAddSheet({
         {mode === 'expense' && (
           <>
             {!isEditing && (
-              <div className="mt-5">
+              <div className="mt-5 min-w-0">
                 <p className="field-label mb-2">One-tap recents</p>
                 <RecentChips categories={categories} onSelect={selectRecent} />
               </div>
             )}
-            <div className="mt-5">
+            <div className="mt-5 min-w-0">
               <p className="field-label mb-2">Category</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex min-w-0 flex-wrap gap-2">
                 {categories
                   .filter(
                     (category) => !category.archived && !category.isSystem,
@@ -425,14 +425,14 @@ export function QuickAddSheet({
                         variant="secondary"
                         size="sm"
                         aria-pressed={categoryId === category.key}
-                        className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                        className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                         onClick={() => setCategoryId(category.key)}
                       >
                         <Icon
                           className="size-4"
                           style={{ color: category.color }}
                         />
-                        {category.name}
+                        <span className="truncate">{category.name}</span>
                       </Button>
                     )
                   })}
@@ -494,26 +494,57 @@ export function QuickAddSheet({
             </p>
           </div>
         )}
+        {mode === 'expense' && (
+          <Button
+            type="button"
+            variant="secondary"
+            aria-pressed={excludeFromBudget}
+            className="mt-4 h-auto w-full min-w-0 justify-start whitespace-normal rounded-xl px-4 py-3 text-left aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
+            onClick={() => setExcludeFromBudget((current) => !current)}
+          >
+            <span
+              aria-hidden="true"
+              className="flex size-5 shrink-0 items-center justify-center rounded-md border border-(--line) bg-(--surface-strong) text-xs font-black text-lagoon-deep"
+            >
+              {excludeFromBudget ? '✓' : ''}
+            </span>
+            <span className="min-w-0">
+              <span className="block font-bold text-sea-ink">
+                Exclude from spending plan
+              </span>
+              <span className="block text-xs font-normal text-sea-ink-soft">
+                Keep the transaction in your records without counting it toward
+                this cycle's budget.
+              </span>
+            </span>
+          </Button>
+        )}
         {mode === 'income' && !isEditing && (
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">
-              Auto-save {autoSaveRateLabel} — Misi will propose{' '}
+              Auto-save {Math.round(autoSaveRate * 100)}% — Misi will propose{' '}
               <span className="font-mono tabular-nums">
-                {formatK(autoSaveAmount(amount))}
+                {formatK(Math.round(amount * autoSaveRate))}
               </span>{' '}
               → Savings.
             </p>
           </div>
         )}
-        <div className="mt-5 flex gap-2.5">
-          <Badge
-            variant="secondary"
-            className="px-3 py-2 text-sm font-semibold tracking-normal text-sea-ink"
-          >
-            <Calendar className="size-4" />
-            {dateLabel}
-          </Badge>
+        <div className="mt-5 flex min-w-0 gap-2.5">
+          <label className="relative min-w-0 shrink">
+            <span className="sr-only">Transaction date</span>
+            <Calendar className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-lagoon-deep" />
+            <Input
+              type="date"
+              aria-label="Transaction date"
+              className="w-[9.25rem] max-w-full pl-9 font-semibold"
+              value={transactionDateValue(occurredAt)}
+              onChange={(event) =>
+                setOccurredAt(transactionDateTimestamp(event.target.value))
+              }
+            />
+          </label>
           <label htmlFor="quick-add-note" className="sr-only">
             Note
           </label>

@@ -19,18 +19,31 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select'
+import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
   resolveCategoryColor,
   resolveCategoryIcon,
 } from '#/lib/categories'
+import {
+  CATEGORY_BUDGET_GROUP_LABELS,
+  CATEGORY_BUDGET_GROUPS,
+} from '../../../shared/category-defs'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Category } from '#/lib/categories'
+import type { BudgetGroup } from '../../../shared/category-defs'
 
 type ManagedCategory = Category & {
   iconId: string
   colorId: string
+  budgetGroup: BudgetGroup
   referenced: boolean
 }
 
@@ -39,6 +52,7 @@ type EditorState = {
   name: string
   iconId: string
   colorId: string
+  budgetGroup: BudgetGroup
   confirmDelete: boolean
 }
 
@@ -83,6 +97,7 @@ function CategoriesPage() {
     color: resolveCategoryColor(category.color),
     iconId: category.icon,
     colorId: category.color,
+    budgetGroup: category.budgetGroup,
     isSystem: category.isSystem,
     archived: category.archivedAt !== undefined,
     referenced: category.referenced,
@@ -97,6 +112,7 @@ function CategoriesPage() {
       name: '',
       iconId: CATEGORY_ICONS[0].id,
       colorId: CATEGORY_COLORS[0].id,
+      budgetGroup: 'needs',
       confirmDelete: false,
     })
   }
@@ -108,6 +124,7 @@ function CategoriesPage() {
       name: category.name,
       iconId: category.iconId,
       colorId: category.colorId,
+      budgetGroup: category.budgetGroup,
       confirmDelete,
     })
   }
@@ -138,6 +155,7 @@ function CategoriesPage() {
             name: editor.name,
             icon: editor.iconId,
             color: editor.colorId,
+            budgetGroup: editor.budgetGroup,
           })
         }
       } else {
@@ -145,6 +163,7 @@ function CategoriesPage() {
           name: editor.name,
           icon: editor.iconId,
           color: editor.colorId,
+          budgetGroup: editor.budgetGroup,
         })
       }
       await invalidateCategoryQueries()
@@ -299,6 +318,9 @@ function CategoryRow({
       <p className="min-w-0 flex-1 truncate text-sm font-bold text-sea-ink">
         {category.name}
       </p>
+      <Badge variant="outline">
+        {CATEGORY_BUDGET_GROUP_LABELS[category.budgetGroup]}
+      </Badge>
       {category.isSystem && <Badge variant="secondary">System</Badge>}
       {onEdit && (
         <Button
@@ -433,6 +455,38 @@ function CategoryDialog({
             ))}
           </div>
         </fieldset>
+
+        <div className="mt-5">
+          <label
+            htmlFor="category-budget-group"
+            className="field-label mb-2 block"
+          >
+            Budget group
+          </label>
+          <Select
+            value={editor.budgetGroup}
+            disabled={isSystem}
+            onValueChange={(value) =>
+              onChange({ ...editor, budgetGroup: value as BudgetGroup })
+            }
+          >
+            <SelectTrigger id="category-budget-group" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORY_BUDGET_GROUPS.map((group) => (
+                <SelectItem key={group} value={group}>
+                  {CATEGORY_BUDGET_GROUP_LABELS[group]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {isSystem && (
+            <p className="mt-1.5 text-xs text-sea-ink-soft">
+              System categories keep their group.
+            </p>
+          )}
+        </div>
 
         {error && (
           <p

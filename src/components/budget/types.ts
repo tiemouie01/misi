@@ -36,6 +36,8 @@ export interface BudgetCycle {
   expectedIncome: number
   actualIncome?: number
   actualSavings?: number
+  actualSpending?: number
+  isClosed?: boolean
   spendingLimit: number
   categories: readonly BudgetCategoryPlan[]
   incomeSources?: readonly BudgetIncomeSourcePlan[]
@@ -83,5 +85,6 @@ export interface BudgetPageProps {
   className?: string
   onCycleChange?: (cycleId: string) => void
   onTabChange?: (tab: BudgetTab) => void
-  onSavePlan?: (update: BudgetPlanUpdate) => void
+  onManageIncomeSources?: () => void
+  onSavePlan?: (update: BudgetPlanUpdate) => void | Promise<void>
 }

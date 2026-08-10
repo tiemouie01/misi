@@ -54,18 +54,25 @@ function draftFromPrefill(data: Prefill): OnboardingDraft {
   if (data.settings === null && data.accounts.length === 0) {
     return defaultDraft()
   }
+  const fallback = defaultDraft()
+  const cyclePlansBySource = new Map(
+    data.cycleIncomePlans.map((plan) => [plan.sourceId, plan]),
+  )
   return {
     usdRate: formatAmountInput(
       String(data.settings?.usdRate ?? DEFAULT_USD_RATE),
     ),
-    autoSavePct: String(Math.round((data.settings?.autoSaveRate ?? 0.2) * 100)),
+    defaultSavingsRate: String(
+      Math.round((data.settings?.defaultSavingsRate ?? 0.2) * 100),
+    ),
     paydayDay: data.settings?.paydayDay ?? 20,
     savingsOpeningBalance: data.settings?.savingsOpeningBalance
       ? formatAmountInput(String(data.settings.savingsOpeningBalance))
       : '',
-    totalBudget: data.cycleBudget
-      ? formatAmountInput(String(data.cycleBudget))
-      : '',
+    spendingLimit:
+      data.spendingLimit === null
+        ? fallback.spendingLimit
+        : formatAmountInput(String(data.spendingLimit)),
     accounts: data.accounts.map((account) => ({
       key: account._id,
       name: account.name,
@@ -74,20 +81,33 @@ function draftFromPrefill(data: Prefill): OnboardingDraft {
       balance: formatAmountInput(String(account.balance)),
       isPreset: accountIsPreset(account.name),
     })),
-    incomeSources: data.incomeSources.map((source) => ({
-      key: source._id,
-      name: source.name,
-      expected: source.expected,
-      amountLabel: source.amountLabel,
-      splitPct: String(source.splitPct),
-    })),
+    incomeSources: data.incomeSources.map((source) => {
+      const cyclePlan = cyclePlansBySource.get(source._id)
+      const expectedAmount = cyclePlan?.expectedAmount ?? source.expectedAmount
+      const expectedAmountMax =
+        cyclePlan?.expectedAmountMax ?? source.expectedAmountMax
+      const savingsRate = cyclePlan?.savingsRate ?? source.savingsRate
+      return {
+        key: source._id,
+        name: source.name,
+        expectedDayStart: String(source.expectedDayStart),
+        expectedDayEnd: String(source.expectedDayEnd),
+        expectedAmount: formatAmountInput(String(expectedAmount)),
+        expectedAmountMax:
+          expectedAmountMax === undefined
+            ? ''
+            : formatAmountInput(String(expectedAmountMax)),
+        savingsRate: String(Math.round(savingsRate * 100)),
+        isAnchor: source.isAnchor,
+      }
+    }),
     budgets: BUDGETABLE_CATEGORIES.map((category) => {
       const budget = data.budgets.find(
         (item) => item.categoryId === category.id,
-      )?.budget
+      )?.plannedAmount
       return {
         categoryId: category.id,
-        amount:
+        plannedAmount:
           budget === undefined ? '' : formatAmountInput(String(budget)),
       }
     }),
@@ -161,30 +181,29 @@ export function OnboardingWizard({
   }
 
   async function submit() {
-    setSubmitting(true)
     setError(null)
+    const budgetError = validateStep('budgets', draft)
+    if (budgetError) {
+      setError(budgetError)
+      onStepChange('budgets')
+      return
+    }
+    setSubmitting(true)
     const activeBudgets = draft.budgets
       .map((budget) => ({
         categoryId: budget.categoryId,
-        budget: parseAmount(budget.amount),
+        plannedAmount: parseAmount(budget.plannedAmount),
       }))
-      .filter((budget) => budget.budget > 0)
-    const categorySum = activeBudgets.reduce(
-      (sum, budget) => sum + budget.budget,
-      0,
-    )
-    const cycleBudget =
-      draft.totalBudget.trim() === ''
-        ? categorySum
-        : parseAmount(draft.totalBudget)
+      .filter((budget) => budget.plannedAmount > 0)
+    const spendingLimit = parseAmount(draft.spendingLimit)
 
     try {
       await completeOnboarding({
         usdRate: parseAmount(draft.usdRate),
-        autoSaveRate: Number(draft.autoSavePct) / 100,
+        defaultSavingsRate: Number(draft.defaultSavingsRate) / 100,
         paydayDay: draft.paydayDay,
         savingsOpeningBalance: parseAmount(draft.savingsOpeningBalance),
-        cycleBudget,
+        spendingLimit,
         accounts: draft.accounts.map((account) => ({
           name: account.name.trim(),
           kind: account.kind,
@@ -193,9 +212,14 @@ export function OnboardingWizard({
         })),
         incomeSources: draft.incomeSources.map((source) => ({
           name: source.name.trim(),
-          expected: source.expected.trim(),
-          amountLabel: source.amountLabel.trim(),
-          splitPct: Number(source.splitPct) || 0,
+          expectedDayStart: Number(source.expectedDayStart),
+          expectedDayEnd: Number(source.expectedDayEnd),
+          expectedAmount: parseAmount(source.expectedAmount),
+          ...(source.expectedAmountMax.trim() === ''
+            ? {}
+            : { expectedAmountMax: parseAmount(source.expectedAmountMax) }),
+          savingsRate: Number(source.savingsRate) / 100,
+          isAnchor: source.isAnchor,
         })),
         budgets: activeBudgets,
       })

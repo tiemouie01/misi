@@ -1,6 +1,11 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { Waves } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -51,6 +56,8 @@ interface AutoSaveUiState {
   status: AutoSaveStatus
   amount: number
   sourceName: string
+  savingsRate: number
+  occurredAt: number
 }
 
 export const Route = createFileRoute('/app/')({
@@ -96,7 +103,27 @@ function shortDate(timestamp: number) {
   return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'short',
+    timeZone: 'Africa/Blantyre',
   }).format(new Date(timestamp))
+}
+
+function ordinalDay(day: number) {
+  const suffix =
+    day % 100 >= 11 && day % 100 <= 13
+      ? 'th'
+      : day % 10 === 1
+        ? 'st'
+        : day % 10 === 2
+          ? 'nd'
+          : day % 10 === 3
+            ? 'rd'
+            : 'th'
+  return `${day}${suffix}`
+}
+
+function expectedWindowLabel(start: number, end: number) {
+  if (start === end) return ordinalDay(start)
+  return `${ordinalDay(start)}–${ordinalDay(end)}`
 }
 
 function mutationErrorMessage(error: unknown, fallback: string) {
@@ -135,7 +162,7 @@ function AppHome() {
   }, [cycleNeedsRollover, ensureSeedData])
 
   if (data === null) {
-    throw redirect({ to: '/onboarding' })
+    return <LoadingState>Loading your accounts…</LoadingState>
   }
 
   if (cycleNeedsRollover) {
@@ -162,6 +189,7 @@ function AppDashboard({
   data: ReadyBootstrapData
   now: number
 }) {
+  const navigate = useNavigate({ from: Route.fullPath })
   const addTransaction = useMutation(api.misi.addTransaction)
   const updateTransaction = useMutation(api.misi.updateTransaction)
   const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
@@ -216,6 +244,7 @@ function AppDashboard({
         sourceId: transaction.sourceId,
         items: transaction.items,
         note: transaction.note,
+        excludeFromBudget: transaction.excludeFromBudget,
         occurredAt: transaction.occurredAt,
         day: transactionDayLabel(transaction.occurredAt, now),
         adjustment: transaction.adjustment ? true : undefined,
@@ -226,18 +255,21 @@ function AppDashboard({
 
   const cycleInfo = useMemo(() => {
     const cycle = data.currentCycle
-    const totalDays = Math.round((cycle.endsAt + 1 - cycle.startsAt) / DAY_MS)
+    const totalDays = Math.max(
+      1,
+      Math.ceil((cycle.endsAt + 1 - cycle.startsAt) / DAY_MS),
+    )
     const dayNumber = Math.min(
       totalDays,
       Math.max(1, Math.floor((now - cycle.startsAt) / DAY_MS) + 1),
     )
-    const daysRemaining = Math.max(1, Math.ceil((cycle.endsAt - now) / DAY_MS))
+    const daysRemaining = Math.max(0, Math.ceil((cycle.endsAt - now) / DAY_MS))
     const today = new Date(now)
     const todayShort = shortDate(now)
 
     return {
       label: cycle.label,
-      budget: cycle.budget,
+      spendingLimit: cycle.spendingLimit,
       totalDays,
       dayNumber,
       daysRemaining,
@@ -260,30 +292,50 @@ function AppDashboard({
   }, [data.currentCycle, data.transactions, now])
 
   const totalSpent = data.transactions
-    .filter((transaction) => transaction.type === 'expense')
+    .filter(
+      (transaction) =>
+        transaction.type === 'expense' &&
+        transaction.excludeFromBudget !== true,
+    )
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const autoSavedTotal = data.transactions
-    .filter((transaction) => transaction.walletId === 'savings')
-    .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const spendingLeft = cycleInfo.budget - totalSpent - autoSavedTotal
-  const perDay = Math.max(0, Math.round(spendingLeft / cycleInfo.daysRemaining))
+  const spendingLeft = cycleInfo.spendingLimit - totalSpent
+  const perDay =
+    cycleInfo.daysRemaining > 0
+      ? Math.max(0, Math.round(spendingLeft / cycleInfo.daysRemaining))
+      : 0
   const netWorth = accounts.reduce(
     (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
     0,
   )
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
-  const autoSaveRateLabel = `${Math.round(data.settings.autoSaveRate * 100)}%`
+  const autoSaveRateForPayee = useCallback(
+    (payee: string) => {
+      const normalizedPayee = payee.trim().toLowerCase()
+      if (!normalizedPayee) return data.settings.defaultSavingsRate
+      const plan = data.cycleIncomePlans.find((candidate) => {
+        const sourceName = candidate.sourceName.toLowerCase()
+        return (
+          normalizedPayee === sourceName ||
+          normalizedPayee.includes(sourceName) ||
+          sourceName.includes(normalizedPayee)
+        )
+      })
+      return plan?.savingsRate ?? data.settings.defaultSavingsRate
+    },
+    [data.cycleIncomePlans, data.settings.defaultSavingsRate],
+  )
 
   const budgets = useMemo<BudgetCategory[]>(
     () =>
       data.budgets.map((budget) => ({
         categoryId: budget.categoryId,
-        budget: budget.budget,
+        plannedAmount: budget.plannedAmount,
         spent: data.transactions
           .filter(
             (transaction) =>
               transaction.type === 'expense' &&
+              transaction.excludeFromBudget !== true &&
               transaction.categoryId === budget.categoryId,
           )
           .reduce((sum, transaction) => sum + transaction.amount, 0),
@@ -293,28 +345,43 @@ function AppDashboard({
 
   const incomeSources = useMemo<IncomeSource[]>(
     () =>
-      data.incomeSources.map((source) => {
-        const income = data.transactions.find(
+      data.cycleIncomePlans.map((plan) => {
+        const incomeTransactions = data.transactions.filter(
           (transaction) =>
             transaction.type === 'income' &&
-            (transaction.sourceId === source._id ||
+            (transaction.sourceId === plan.sourceId ||
               transaction.payee
                 .toLowerCase()
-                .includes(source.name.toLowerCase())),
+                .includes(plan.sourceName.toLowerCase())),
         )
+        const landedAmount = incomeTransactions.reduce(
+          (sum, transaction) => sum + transaction.amount,
+          0,
+        )
+        const latestIncome = incomeTransactions.at(0)
         return {
-          id: source._id,
-          name: source.name,
-          expected: source.expected,
-          amountLabel: source.amountLabel,
-          status: income ? 'landed' : 'pending',
-          statusNote: income
-            ? `Landed ${transactionDayLabel(income.occurredAt, now)}`
-            : `Expected ${source.expected}`,
-          splitPct: source.splitPct,
+          id: plan.sourceId,
+          name: plan.sourceName,
+          expectedWindow: expectedWindowLabel(
+            plan.expectedDayStart,
+            plan.expectedDayEnd,
+          ),
+          expectedAmount: plan.expectedAmount,
+          expectedAmountMax: plan.expectedAmountMax,
+          landedAmount,
+          status:
+            landedAmount >= plan.expectedAmount
+              ? 'landed'
+              : landedAmount > 0
+                ? 'partial'
+                : 'pending',
+          statusNote: latestIncome
+            ? `Landed ${transactionDayLabel(latestIncome.occurredAt, now)}`
+            : `Expected ${expectedWindowLabel(plan.expectedDayStart, plan.expectedDayEnd)}`,
+          savingsRate: plan.savingsRate,
         }
       }),
-    [data.incomeSources, data.transactions, now],
+    [data.cycleIncomePlans, data.transactions, now],
   )
 
   const unitTrustAccount = accounts.find((account) =>
@@ -330,7 +397,7 @@ function AppDashboard({
       name: 'Spending',
       balance: spendingLeft,
       currency: 'MWK',
-      detail: `K${spendingLeft.toLocaleString()} left of K${cycleInfo.budget.toLocaleString()}`,
+      detail: `K${spendingLeft.toLocaleString()} left of K${cycleInfo.spendingLimit.toLocaleString()}`,
     },
     {
       id: 'savings',
@@ -439,6 +506,8 @@ function AppDashboard({
           status: 'proposed',
           amount: pendingAutoSave.amount,
           sourceName: pendingAutoSave.sourceName,
+          savingsRate: pendingAutoSave.savingsRate,
+          occurredAt: pendingAutoSave.occurredAt,
         }
     : localAutoSaveUi?.status === 'saved' ||
         localAutoSaveUi?.status === 'dismissed'
@@ -451,6 +520,7 @@ function AppDashboard({
       open: true,
       initial: {
         ...initial,
+        occurredAt: initial.occurredAt ?? Date.now(),
         accountId: initial.accountId
           ? resolveAccountId(initial.accountId)
           : undefined,
@@ -476,9 +546,11 @@ function AppDashboard({
       accountId: transaction.accountId,
       toAccountId: transaction.toAccountId,
       payee: transaction.payee,
+      sourceId: transaction.sourceId,
       items: transaction.items,
       note: transaction.note,
       occurredAt: transaction.occurredAt,
+      excludeFromBudget: transaction.excludeFromBudget,
     })
   }
 
@@ -514,6 +586,7 @@ function AppDashboard({
         items: payload.items,
         note: payload.note,
         sourceId,
+        excludeFromBudget: payload.excludeFromBudget,
       }
       if (payload.transactionId) {
         if (payload.occurredAt === undefined) {
@@ -654,7 +727,8 @@ function AppDashboard({
                 status={autoSaveUi.status}
                 amount={autoSaveUi.amount}
                 sourceName={autoSaveUi.sourceName}
-                rateLabel={autoSaveRateLabel}
+                rateLabel={`${Math.round(autoSaveUi.savingsRate * 100)}%`}
+                landedLabel={transactionDayLabel(autoSaveUi.occurredAt, now)}
                 onAmountChange={(amount) =>
                   setLocalAutoSaveUi({ ...autoSaveUi, amount })
                 }
@@ -677,7 +751,7 @@ function AppDashboard({
               accounts={accounts}
               wallets={wallets}
               netWorth={netWorth}
-              cycleBudget={cycleInfo.budget}
+              cycleBudget={cycleInfo.spendingLimit}
               cycleGain={cycleInfo.cycleGain}
               usdRate={data.settings.usdRate}
               animationDelay="240ms"
@@ -685,21 +759,27 @@ function AppDashboard({
             <IncomeCard
               sources={incomeSources}
               cycleLabel={cycleInfo.label}
-              autoSaveRateLabel={autoSaveRateLabel}
               animationDelay="300ms"
+              onAddIncomeSource={() =>
+                void navigate({ to: '/app/income-sources' })
+              }
             />
             <BudgetCard
               budgets={budgets}
               categories={categories}
-              budget={cycleInfo.budget}
+              spendingLimit={cycleInfo.spendingLimit}
               dayNumber={cycleInfo.dayNumber}
               totalDays={cycleInfo.totalDays}
+              daysRemaining={cycleInfo.daysRemaining}
               dayOf={cycleInfo.dayOf}
               endsOn={cycleInfo.endsOn}
+              cycleStartsAt={data.currentCycle.startsAt}
+              now={now}
               totalSpent={totalSpent}
               spendingLeft={spendingLeft}
               perDay={perDay}
               animationDelay="360ms"
+              onAdjustBudgets={() => void navigate({ to: '/app/budget' })}
             />
             <ReconcileCard
               accounts={accounts}
@@ -746,10 +826,7 @@ function AppDashboard({
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}
           reconcileNote={cycleInfo.reconcileNote}
-          autoSaveAmount={(income) =>
-            Math.round(income * data.settings.autoSaveRate)
-          }
-          autoSaveRateLabel={autoSaveRateLabel}
+          autoSaveRateForPayee={autoSaveRateForPayee}
           resolveAccountId={resolveAccountId}
           error={quickAddError}
           onClose={closeSheet}

@@ -177,6 +177,16 @@ function createDraft(cycle: BudgetCycle): BudgetDraft {
   }
 }
 
+function draftSavingsTotal(cycle: BudgetCycle, draft: BudgetDraft) {
+  return (cycle.incomeSources ?? []).reduce((total, source) => {
+    const plan = draft.incomePlans[source.id]
+    if (!plan) return total
+    const expectedAmount = parseAmount(plan.expectedAmount)
+    const savingsRate = Math.min(1, parseAmount(plan.savingsRate) / 100)
+    return total + expectedAmount * savingsRate
+  }, 0)
+}
+
 function parseAmount(value: string) {
   const amount = Number(value)
   return Number.isFinite(amount) && amount >= 0 ? amount : 0
@@ -683,9 +693,11 @@ function getIncomeSourceStatus(source: BudgetIncomeSourcePlan) {
 function IncomeSourcesCard({
   cycle,
   currency,
+  onManage,
 }: {
   cycle: BudgetCycle
   currency: string
+  onManage?: () => void
 }) {
   const sources = cycle.incomeSources ?? []
   const planned = sources.reduce(
@@ -709,12 +721,24 @@ function IncomeSourcesCard({
               Plan each payday, then watch what actually lands.
             </CardDescription>
           </div>
-          <span
-            className="grid size-10 place-items-center rounded-xl bg-palm/12 text-palm"
-            aria-hidden="true"
-          >
-            <Landmark className="size-5" />
-          </span>
+          <div className="flex items-center gap-2">
+            {onManage ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onManage}
+              >
+                Manage sources
+              </Button>
+            ) : null}
+            <span
+              className="grid size-10 place-items-center rounded-xl bg-palm/12 text-palm"
+              aria-hidden="true"
+            >
+              <Landmark className="size-5" />
+            </span>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 p-0">
@@ -827,7 +851,7 @@ function HistoryCard({
               How your paydays are trending
             </CardTitle>
             <CardDescription className="mt-1">
-              Compare plan-to-actual results across closed cycles.
+              Compare actual results across closed payday cycles.
             </CardDescription>
           </div>
           <span
@@ -951,8 +975,11 @@ function BudgetEditDialog({
   draft: BudgetDraft | undefined
   onOpenChange: (open: boolean) => void
   onDraftChange: (draft: BudgetDraft) => void
-  onSave: (update: BudgetPlanUpdate) => void
+  onSave: (update: BudgetPlanUpdate) => void | Promise<void>
 }) {
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   if (!draft) return null
 
   const handleAmountChange =
@@ -991,15 +1018,28 @@ function BudgetEditDialog({
       })
     }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    onSave({
+    const spendingLimit = parseAmount(draft.spendingLimit)
+    const categoryPlans = cycle.categories.map((category) => ({
+      categoryId: category.id,
+      plannedAmount: parseAmount(draft.categoryPlans[category.id] ?? ''),
+    }))
+    const categoryTotal = categoryPlans.reduce(
+      (sum, plan) => sum + plan.plannedAmount,
+      0,
+    )
+    if (categoryTotal > spendingLimit) {
+      setSaveError(
+        `Category plans exceed the spending limit by ${formatBudgetMoney(categoryTotal - spendingLimit, currency)}.`,
+      )
+      return
+    }
+
+    const update = {
       cycleId: cycle.id,
-      spendingLimit: parseAmount(draft.spendingLimit),
-      categoryPlans: cycle.categories.map((category) => ({
-        categoryId: category.id,
-        plannedAmount: parseAmount(draft.categoryPlans[category.id] ?? ''),
-      })),
+      spendingLimit,
+      categoryPlans,
       incomePlans: (cycle.incomeSources ?? []).map((source) => {
         const incomePlan = draft.incomePlans[source.id] ?? {
           expectedAmount: '',
@@ -1019,11 +1059,31 @@ function BudgetEditDialog({
           savingsRate: Math.min(1, parseAmount(incomePlan.savingsRate) / 100),
         }
       }),
-    })
+    } satisfies BudgetPlanUpdate
+
+    setSaveError(null)
+    setSaving(true)
+    try {
+      await onSave(update)
+    } catch (error) {
+      setSaveError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Unable to save this cycle plan.',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (saving) return
+    setSaveError(null)
+    onOpenChange(nextOpen)
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong) p-5 sm:p-7">
         <DialogHeader className="pr-8 text-left">
           <p className="island-kicker">Edit plan · {cycle.label}</p>
@@ -1068,10 +1128,7 @@ function BudgetEditDialog({
                   Derived savings target
                 </p>
                 <p className="mt-1 font-mono text-lg font-bold text-palm tabular-nums">
-                  {formatBudgetMoney(
-                    plannedSavingsTotal(cycle.incomeSources),
-                    currency,
-                  )}
+                  {formatBudgetMoney(draftSavingsTotal(cycle, draft), currency)}
                 </p>
                 <p className="mt-0.5 text-[0.68rem] text-sea-ink-soft">
                   Sum of expected income × each source rate
@@ -1239,17 +1296,27 @@ function BudgetEditDialog({
             </div>
           </section>
 
+          {saveError && (
+            <p
+              role="alert"
+              className="rounded-xl border border-coral/25 bg-coral/8 px-3.5 py-3 text-sm font-semibold text-coral-deep"
+            >
+              {saveError}
+            </p>
+          )}
+
           <DialogFooter className="border-t border-(--line) pt-4">
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              disabled={saving}
+              onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button type="submit">
+            <Button type="submit" disabled={saving}>
               <Check aria-hidden="true" />
-              Save cycle plan
+              {saving ? 'Saving…' : 'Save cycle plan'}
             </Button>
           </DialogFooter>
         </form>
@@ -1292,6 +1359,7 @@ export function BudgetPage({
   className,
   onCycleChange,
   onTabChange,
+  onManageIncomeSources,
   onSavePlan,
 }: BudgetPageProps) {
   const selectedCycle =
@@ -1314,10 +1382,12 @@ export function BudgetPage({
   const actualSavings = positiveAmount(selectedCycle.actualSavings)
   const spendingLimit = positiveAmount(selectedCycle.spendingLimit)
   const unallocated = expectedIncome - plannedSavings - spendingLimit
-  const totalSpent = selectedCycle.categories.reduce(
-    (total, category) => total + positiveAmount(category.spent),
-    0,
-  )
+  const totalSpent =
+    selectedCycle.actualSpending ??
+    selectedCycle.categories.reduce(
+      (total, category) => total + positiveAmount(category.spent),
+      0,
+    )
   const spendingRemaining = spendingLimit - totalSpent
   const progress = cycleProgress(selectedCycle)
   const paceLabel =
@@ -1327,6 +1397,7 @@ export function BudgetPage({
       : (selectedCycle.rangeLabel ?? 'Payday cycle')
 
   const openEdit = () => {
+    if (selectedCycle.isClosed) return
     setDraft(createDraft(selectedCycle))
     setDialogOpen(true)
   }
@@ -1338,8 +1409,8 @@ export function BudgetPage({
     onTabChange?.(nextTab)
   }
 
-  const handleSavePlan = (update: BudgetPlanUpdate) => {
-    onSavePlan?.(update)
+  const handleSavePlan = async (update: BudgetPlanUpdate) => {
+    await onSavePlan?.(update)
     setDialogOpen(false)
   }
 
@@ -1377,8 +1448,14 @@ export function BudgetPage({
                 ))}
               </SelectContent>
             </Select>
-            <Button type="button" variant="secondary" onClick={openEdit}>
-              <Pencil aria-hidden="true" /> Edit plan
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={selectedCycle.isClosed}
+              onClick={openEdit}
+            >
+              <Pencil aria-hidden="true" />
+              {selectedCycle.isClosed ? 'Closed cycle' : 'Edit plan'}
             </Button>
           </div>
         </header>
@@ -1457,7 +1534,11 @@ export function BudgetPage({
           <TabsContent value="current" className="space-y-5 pt-4">
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
               <CategoryPlanCard cycle={selectedCycle} currency={currency} />
-              <IncomeSourcesCard cycle={selectedCycle} currency={currency} />
+              <IncomeSourcesCard
+                cycle={selectedCycle}
+                currency={currency}
+                onManage={onManageIncomeSources}
+              />
             </div>
             <Card
               variant="subtle"

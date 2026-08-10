@@ -14,7 +14,9 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as AppBudgetRouteImport } from './routes/app/budget'
 import { Route as AppCategoriesRouteImport } from './routes/app/categories'
+import { Route as AppIncomeSourcesRouteImport } from './routes/app/income-sources'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -42,9 +44,19 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBudgetRoute = AppBudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCategoriesRoute = AppCategoriesRouteImport.update({
   id: '/categories',
   path: '/categories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIncomeSourcesRoute = AppIncomeSourcesRouteImport.update({
+  id: '/income-sources',
+  path: '/income-sources',
   getParentRoute: () => AppRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -58,7 +70,9 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
+  '/app/income-sources': typeof AppIncomeSourcesRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -66,7 +80,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
+  '/app/income-sources': typeof AppIncomeSourcesRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -76,7 +92,9 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
+  '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
+  '/app/income-sources': typeof AppIncomeSourcesRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -87,19 +105,30 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/onboarding'
+    | '/app/budget'
     | '/app/categories'
+    | '/app/income-sources'
     | '/app/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/login' | '/onboarding' | '/app/categories' | '/app' | '/api/auth/$'
+    | '/'
+    | '/login'
+    | '/onboarding'
+    | '/app/budget'
+    | '/app/categories'
+    | '/app/income-sources'
+    | '/app'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/login'
     | '/onboarding'
+    | '/app/budget'
     | '/app/categories'
+    | '/app/income-sources'
     | '/app/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -149,11 +178,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/budget': {
+      id: '/app/budget'
+      path: '/budget'
+      fullPath: '/app/budget'
+      preLoaderRoute: typeof AppBudgetRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/categories': {
       id: '/app/categories'
       path: '/categories'
       fullPath: '/app/categories'
       preLoaderRoute: typeof AppCategoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/income-sources': {
+      id: '/app/income-sources'
+      path: '/income-sources'
+      fullPath: '/app/income-sources'
+      preLoaderRoute: typeof AppIncomeSourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/api/auth/$': {
@@ -167,12 +210,16 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppBudgetRoute: typeof AppBudgetRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
+  AppIncomeSourcesRoute: typeof AppIncomeSourcesRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBudgetRoute: AppBudgetRoute,
   AppCategoriesRoute: AppCategoriesRoute,
+  AppIncomeSourcesRoute: AppIncomeSourcesRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
