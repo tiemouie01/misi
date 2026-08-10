@@ -5,6 +5,7 @@ import {
 } from './categories'
 
 import type { Account } from './app-data'
+import { CATEGORY_BUDGET_GROUP_LABELS } from '../../shared/category-defs'
 
 export const DEFAULT_USD_RATE = 1735
 
@@ -57,22 +58,25 @@ export interface DraftAccount {
 export interface DraftIncomeSource {
   key: string
   name: string
-  expected: string
-  amountLabel: string
-  splitPct: string
+  expectedDayStart: string
+  expectedDayEnd: string
+  expectedAmount: string
+  expectedAmountMax: string
+  savingsRate: string
+  isAnchor: boolean
 }
 
 export interface DraftBudget {
   categoryId: string
-  amount: string
+  plannedAmount: string
 }
 
 export interface OnboardingDraft {
   usdRate: string
-  autoSavePct: string
+  defaultSavingsRate: string
   paydayDay: number
   savingsOpeningBalance: string
-  totalBudget: string
+  spendingLimit: string
   accounts: DraftAccount[]
   incomeSources: DraftIncomeSource[]
   budgets: DraftBudget[]
@@ -85,7 +89,10 @@ export const BUDGETABLE_CATEGORIES = DEFAULT_CATEGORIES.filter(
   name: category.name,
   icon: resolveCategoryIcon(category.icon),
   color: resolveCategoryColor(category.color),
+  budgetGroup: category.budgetGroup,
 }))
+
+export const BUDGET_GROUP_LABELS = CATEGORY_BUDGET_GROUP_LABELS
 
 export const BUDGET_SUGGESTIONS: Record<string, string> = {
   groceries: '220,000',
@@ -134,14 +141,14 @@ export function validateStep(
     if (parseAmount(draft.usdRate) <= 0 || !isValidAmount(draft.usdRate)) {
       return 'Enter a valid USD rate'
     }
-    const autoSave = Number(draft.autoSavePct)
+    const defaultSavingsRate = Number(draft.defaultSavingsRate) / 100
     if (
-      !Number.isFinite(autoSave) ||
-      autoSave < 0 ||
-      autoSave > 95 ||
-      draft.autoSavePct.trim() === ''
+      !Number.isFinite(defaultSavingsRate) ||
+      defaultSavingsRate < 0 ||
+      defaultSavingsRate > 1 ||
+      draft.defaultSavingsRate.trim() === ''
     ) {
-      return 'Auto-save must be between 0% and 95%'
+      return 'Default savings rate must be between 0% and 100%'
     }
     if (!isValidAmount(draft.savingsOpeningBalance)) {
       return 'Savings balance must be a valid amount'
@@ -162,22 +169,70 @@ export function validateStep(
     }
   }
   if (step === 'income') {
+    const names = new Set<string>()
     for (const source of draft.incomeSources) {
-      if (!source.name.trim()) return 'Every income source needs a name'
-      if (source.splitPct.trim() !== '') {
-        const split = Number(source.splitPct)
-        if (!Number.isFinite(split) || split < 0 || split > 100) {
-          return `Auto-save split for ${source.name} must be between 0% and 100%`
-        }
+      const name = source.name.trim()
+      if (!name) return 'Every income source needs a name'
+      const key = name.toLowerCase()
+      if (names.has(key)) return `Duplicate income source: ${name}`
+      names.add(key)
+      const dayStart = Number(source.expectedDayStart)
+      const dayEnd = Number(source.expectedDayEnd)
+      if (
+        !Number.isInteger(dayStart) ||
+        dayStart < 1 ||
+        dayStart > 31 ||
+        !Number.isInteger(dayEnd) ||
+        dayEnd < dayStart ||
+        dayEnd > 31
+      ) {
+        return `Choose a valid landing window for ${source.name}`
+      }
+      if (
+        source.expectedAmount.trim() === '' ||
+        !isValidAmount(source.expectedAmount) ||
+        parseAmount(source.expectedAmount) <= 0
+      ) {
+        return `Enter an expected amount for ${source.name}`
+      }
+      if (
+        !isValidAmount(source.expectedAmountMax) ||
+        (source.expectedAmountMax.trim() !== '' &&
+          parseAmount(source.expectedAmountMax) <
+            parseAmount(source.expectedAmount))
+      ) {
+        return `The high end for ${source.name} must be at least its expected amount`
+      }
+      const savingsRate = Number(source.savingsRate) / 100
+      if (
+        !Number.isFinite(savingsRate) ||
+        savingsRate < 0 ||
+        savingsRate > 1 ||
+        source.savingsRate.trim() === ''
+      ) {
+        return `Savings rate for ${source.name} must be between 0% and 100%`
       }
     }
   }
   if (step === 'budgets') {
-    if (!isValidAmount(draft.totalBudget)) {
-      return 'Enter a valid total budget'
+    if (
+      draft.spendingLimit.trim() === '' ||
+      !isValidAmount(draft.spendingLimit)
+    ) {
+      return 'Enter a valid spending limit'
     }
     for (const budget of draft.budgets) {
-      if (!isValidAmount(budget.amount)) return 'Budget amounts must be valid'
+      if (!isValidAmount(budget.plannedAmount)) {
+        return 'Category plans must be valid amounts'
+      }
+    }
+    const categoryTotal = draft.budgets.reduce(
+      (sum, budget) => sum + parseAmount(budget.plannedAmount),
+      0,
+    )
+    const spendingLimit = parseAmount(draft.spendingLimit)
+    if (categoryTotal > spendingLimit) {
+      return 'Category plans cannot exceed the spending limit'
     }
   }
   return null
@@ -192,12 +247,17 @@ export function firstIncompleteStep(draft: OnboardingDraft): OnboardingStep {
 }
 
 export function defaultDraft(): OnboardingDraft {
+  const suggestedSpendingLimit = BUDGETABLE_CATEGORIES.reduce(
+    (sum, category) => sum + parseAmount(BUDGET_SUGGESTIONS[category.id] ?? ''),
+    0,
+  )
+
   return {
     usdRate: formatAmountInput(String(DEFAULT_USD_RATE)),
-    autoSavePct: '20',
+    defaultSavingsRate: '20',
     paydayDay: 20,
     savingsOpeningBalance: '',
-    totalBudget: '',
+    spendingLimit: formatAmountInput(String(suggestedSpendingLimit)),
     accounts: [
       {
         key: newKey(),
@@ -211,7 +271,7 @@ export function defaultDraft(): OnboardingDraft {
     incomeSources: [],
     budgets: BUDGETABLE_CATEGORIES.map((category) => ({
       categoryId: category.id,
-      amount: BUDGET_SUGGESTIONS[category.id] ?? '',
+      plannedAmount: BUDGET_SUGGESTIONS[category.id] ?? '',
     })),
   }
 }
@@ -277,15 +337,21 @@ function parseDraftIncomeSource(raw: unknown): DraftIncomeSource | null {
   const source = raw as Record<string, unknown>
   if (typeof source.key !== 'string') return null
   if (typeof source.name !== 'string') return null
-  if (typeof source.expected !== 'string') return null
-  if (typeof source.amountLabel !== 'string') return null
-  if (typeof source.splitPct !== 'string') return null
+  if (typeof source.expectedDayStart !== 'string') return null
+  if (typeof source.expectedDayEnd !== 'string') return null
+  if (typeof source.expectedAmount !== 'string') return null
+  if (typeof source.expectedAmountMax !== 'string') return null
+  if (typeof source.savingsRate !== 'string') return null
+  if (typeof source.isAnchor !== 'boolean') return null
   return {
     key: source.key,
     name: source.name,
-    expected: source.expected,
-    amountLabel: source.amountLabel,
-    splitPct: source.splitPct,
+    expectedDayStart: source.expectedDayStart,
+    expectedDayEnd: source.expectedDayEnd,
+    expectedAmount: source.expectedAmount,
+    expectedAmountMax: source.expectedAmountMax,
+    savingsRate: source.savingsRate,
+    isAnchor: source.isAnchor,
   }
 }
 
@@ -293,10 +359,10 @@ function parseDraftBudget(raw: unknown): DraftBudget | null {
   if (!raw || typeof raw !== 'object') return null
   const budget = raw as Record<string, unknown>
   if (typeof budget.categoryId !== 'string') return null
-  if (typeof budget.amount !== 'string') return null
+  if (typeof budget.plannedAmount !== 'string') return null
   return {
     categoryId: budget.categoryId,
-    amount: budget.amount,
+    plannedAmount: budget.plannedAmount,
   }
 }
 
@@ -304,10 +370,10 @@ function parseOnboardingDraft(raw: unknown): OnboardingDraft | null {
   if (!raw || typeof raw !== 'object') return null
   const draft = raw as Record<string, unknown>
   if (typeof draft.usdRate !== 'string') return null
-  if (typeof draft.autoSavePct !== 'string') return null
+  if (typeof draft.defaultSavingsRate !== 'string') return null
   if (typeof draft.paydayDay !== 'number') return null
   if (typeof draft.savingsOpeningBalance !== 'string') return null
-  if (typeof draft.totalBudget !== 'string') return null
+  if (typeof draft.spendingLimit !== 'string') return null
   if (!Array.isArray(draft.accounts)) return null
   if (!Array.isArray(draft.incomeSources)) return null
   if (!Array.isArray(draft.budgets)) return null
@@ -329,10 +395,10 @@ function parseOnboardingDraft(raw: unknown): OnboardingDraft | null {
 
   return {
     usdRate: draft.usdRate,
-    autoSavePct: draft.autoSavePct,
+    defaultSavingsRate: draft.defaultSavingsRate,
     paydayDay: draft.paydayDay,
     savingsOpeningBalance: draft.savingsOpeningBalance,
-    totalBudget: draft.totalBudget,
+    spendingLimit: draft.spendingLimit,
     accounts,
     incomeSources,
     budgets,

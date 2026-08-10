@@ -20,6 +20,7 @@ export interface Txn {
   sourceId?: string
   items?: string
   note?: string
+  excludeFromBudget?: boolean
   occurredAt: number
   day: string
   reconcile?: true
@@ -30,16 +31,18 @@ export interface Txn {
 export interface IncomeSource {
   id: string
   name: string
-  expected: string
-  amountLabel: string
-  status: 'landed' | 'pending'
+  expectedWindow: string
+  expectedAmount: number
+  expectedAmountMax?: number
+  landedAmount: number
+  status: 'landed' | 'partial' | 'pending'
   statusNote: string
-  splitPct: number
+  savingsRate: number
 }
 
 export interface BudgetCategory {
   categoryId: string
-  budget: number
+  plannedAmount: number
   spent: number
 }
 
@@ -65,9 +68,11 @@ export interface QuickAddInitial {
   accountId?: string
   toAccountId?: string
   payee?: string
+  sourceId?: string
   items?: string
   note?: string
   occurredAt?: number
+  excludeFromBudget?: boolean
   reconcile?: true
 }
 
@@ -83,6 +88,7 @@ export interface QuickAddPayload {
   items?: string
   note?: string
   occurredAt?: number
+  excludeFromBudget?: boolean
   reconcile?: true
 }
 
@@ -106,7 +112,7 @@ export function isSpendableAccount(account: Account | string) {
 
 /** Prototype cycle copy and numbers — one source for UI strings and math. */
 export const CYCLE = {
-  budget: 650000,
+  spendingLimit: 650000,
   day: 11,
   days: 31,
   daysRemaining: 20,

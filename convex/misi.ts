@@ -37,9 +37,11 @@ type ReadCtx = QueryCtx | MutationCtx
 type TransactionInput = {
   type: Doc<'transactions'>['type']
   amount: number
+  categoryId?: string
   accountId: Id<'accounts'>
   toAccountId?: Id<'accounts'>
   sourceId?: Id<'incomeSources'>
+  excludeFromBudget?: boolean
 }
 
 async function getCategories(ctx: ReadCtx, userId: string) {
@@ -152,16 +154,19 @@ function assertPositiveAmount(amount: number) {
 }
 
 const DEFAULT_PAYDAY_DAY = 20
+const BLANTYRE_UTC_OFFSET_MS = 2 * 60 * 60 * 1000
 
 function getCyclePeriod(now: number, paydayDay = DEFAULT_PAYDAY_DAY) {
-  const today = new Date(now)
+  const today = new Date(now + BLANTYRE_UTC_OFFSET_MS)
   const year = today.getUTCFullYear()
   const month = today.getUTCMonth()
   const day = today.getUTCDate()
   const startMonth = day >= paydayDay ? month : month - 1
-  const startsAt = Date.UTC(year, startMonth, paydayDay)
-  const endsAt = Date.UTC(year, startMonth + 1, paydayDay) - 1
-  const startDate = new Date(startsAt)
+  const startsAt =
+    Date.UTC(year, startMonth, paydayDay) - BLANTYRE_UTC_OFFSET_MS
+  const endsAt =
+    Date.UTC(year, startMonth + 1, paydayDay) - BLANTYRE_UTC_OFFSET_MS - 1
+  const startDate = new Date(startsAt + BLANTYRE_UTC_OFFSET_MS)
 
   return {
     label: `${monthLabels[startDate.getUTCMonth()]} cycle`,
@@ -175,8 +180,30 @@ async function getLatestCycle(ctx: ReadCtx, userId: string) {
     .query('cycles')
     .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect()
+  const now = Date.now()
+  const covering = cycles.find(
+    (cycle) => cycle.startsAt <= now && now <= cycle.endsAt,
+  )
+  if (covering) return covering
+  return (
+    cycles
+      .filter((cycle) => cycle.startsAt <= now)
+      .sort((a, b) => b.startsAt - a.startsAt)
+      .at(0) ?? null
+  )
+}
 
-  return cycles.sort((a, b) => b.startsAt - a.startsAt).at(0) ?? null
+async function getCycleIncomePlans(
+  ctx: ReadCtx,
+  userId: string,
+  cycleId: Id<'cycles'>,
+) {
+  return await ctx.db
+    .query('cycleIncomePlans')
+    .withIndex('by_user_and_cycle', (q) =>
+      q.eq('userId', userId).eq('cycleId', cycleId),
+    )
+    .collect()
 }
 
 async function getSettings(ctx: ReadCtx, userId: string) {
@@ -186,10 +213,101 @@ async function getSettings(ctx: ReadCtx, userId: string) {
     .first()
 }
 
-async function ensureCurrentCycle(ctx: MutationCtx, userId: string) {
-  const now = Date.now()
+async function syncCycleIncomePlans(
+  ctx: MutationCtx,
+  userId: string,
+  cycleId: Id<'cycles'>,
+) {
+  const [existingPlans, allIncomeSources] = await Promise.all([
+    getCycleIncomePlans(ctx, userId, cycleId),
+    ctx.db
+      .query('incomeSources')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect(),
+  ])
+  const incomeSources = allIncomeSources.filter(
+    (source) => source.archivedAt === undefined,
+  )
+  const existingSourceIds = new Set(existingPlans.map((plan) => plan.sourceId))
+  for (const source of incomeSources) {
+    if (existingSourceIds.has(source._id)) continue
+    await ctx.db.insert('cycleIncomePlans', {
+      userId,
+      cycleId,
+      sourceId: source._id,
+      sourceName: source.name,
+      expectedDayStart: source.expectedDayStart,
+      expectedDayEnd: source.expectedDayEnd,
+      expectedAmount: source.expectedAmount,
+      expectedAmountMax: source.expectedAmountMax,
+      savingsRate: source.savingsRate,
+      isAnchor: source.isAnchor,
+    })
+  }
+}
+
+async function copyCyclePlans(
+  ctx: MutationCtx,
+  userId: string,
+  fromCycleId: Id<'cycles'>,
+  toCycleId: Id<'cycles'>,
+) {
+  const [previousBudgets, previousIncomePlans] = await Promise.all([
+    ctx.db
+      .query('budgets')
+      .withIndex('by_user_and_cycle', (q) =>
+        q.eq('userId', userId).eq('cycleId', fromCycleId),
+      )
+      .collect(),
+    getCycleIncomePlans(ctx, userId, fromCycleId),
+  ])
+
+  for (const budget of previousBudgets) {
+    await ctx.db.insert('budgets', {
+      userId,
+      cycleId: toCycleId,
+      categoryId: budget.categoryId,
+      plannedAmount: budget.plannedAmount,
+    })
+  }
+
+  for (const plan of previousIncomePlans) {
+    const source = await ctx.db.get(plan.sourceId)
+    if (
+      !source ||
+      source.userId !== userId ||
+      source.archivedAt !== undefined
+    ) {
+      continue
+    }
+    await ctx.db.insert('cycleIncomePlans', {
+      userId,
+      cycleId: toCycleId,
+      sourceId: plan.sourceId,
+      sourceName: source.name,
+      expectedDayStart: source.expectedDayStart,
+      expectedDayEnd: source.expectedDayEnd,
+      expectedAmount: plan.expectedAmount,
+      expectedAmountMax: plan.expectedAmountMax,
+      savingsRate: plan.savingsRate,
+      isAnchor: source.isAnchor,
+    })
+  }
+}
+
+async function ensureCycleForDate(
+  ctx: MutationCtx,
+  userId: string,
+  occurredAt: number,
+) {
+  if (!Number.isFinite(occurredAt)) {
+    throw new Error('Transaction date must be a finite number')
+  }
   const settings = await getSettings(ctx, userId)
-  const period = getCyclePeriod(now, settings?.paydayDay ?? DEFAULT_PAYDAY_DAY)
+  const period = getCyclePeriod(
+    occurredAt,
+    settings?.paydayDay ?? DEFAULT_PAYDAY_DAY,
+  )
   const cycles = await ctx.db
     .query('cycles')
     .withIndex('by_user', (q) => q.eq('userId', userId))
@@ -203,36 +321,25 @@ async function ensureCurrentCycle(ctx: MutationCtx, userId: string) {
   }
 
   const covering = cycles.find(
-    (cycle) => cycle.startsAt <= now && now <= cycle.endsAt,
+    (cycle) => cycle.startsAt <= occurredAt && occurredAt <= cycle.endsAt,
   )
   if (covering) {
     return covering
   }
 
-  const latestCycle =
-    cycles.sort((a, b) => b.startsAt - a.startsAt).at(0) ?? null
+  const previousCycle =
+    cycles
+      .filter((cycle) => cycle.startsAt < period.startsAt)
+      .sort((a, b) => b.startsAt - a.startsAt)
+      .at(0) ?? null
   const cycleId = await ctx.db.insert('cycles', {
     userId,
     ...period,
-    budget: latestCycle?.budget ?? 0,
+    spendingLimit: previousCycle?.spendingLimit ?? 0,
   })
 
-  if (latestCycle) {
-    const previousBudgets = await ctx.db
-      .query('budgets')
-      .withIndex('by_user_and_cycle', (q) =>
-        q.eq('userId', userId).eq('cycleId', latestCycle._id),
-      )
-      .collect()
-
-    for (const budget of previousBudgets) {
-      await ctx.db.insert('budgets', {
-        userId,
-        cycleId,
-        categoryId: budget.categoryId,
-        budget: budget.budget,
-      })
-    }
+  if (previousCycle) {
+    await copyCyclePlans(ctx, userId, previousCycle._id, cycleId)
   }
 
   const cycle = await ctx.db.get(cycleId)
@@ -241,7 +348,12 @@ async function ensureCurrentCycle(ctx: MutationCtx, userId: string) {
     throw new Error('Failed to create cycle')
   }
 
+  await syncCycleIncomePlans(ctx, userId, cycle._id)
   return cycle
+}
+
+async function ensureCurrentCycle(ctx: MutationCtx, userId: string) {
+  return await ensureCycleForDate(ctx, userId, Date.now())
 }
 
 async function requireSettings(ctx: ReadCtx, userId: string) {
@@ -282,6 +394,18 @@ async function requireOwnedTransaction(
   return transaction
 }
 
+async function requireOwnedCycle(
+  ctx: ReadCtx,
+  userId: string,
+  cycleId: Id<'cycles'>,
+) {
+  const cycle = await ctx.db.get(cycleId)
+  if (!cycle || cycle.userId !== userId) {
+    throw new Error('Cycle not found')
+  }
+  return cycle
+}
+
 async function validateTransactionInput(
   ctx: ReadCtx,
   userId: string,
@@ -290,12 +414,34 @@ async function validateTransactionInput(
   assertPositiveAmount(input.amount)
   await requireOwnedAccount(ctx, userId, input.accountId)
 
+  if (input.type === 'expense') {
+    if (!input.categoryId) {
+      throw new Error('A category is required for expenses')
+    }
+    const category = (await getCategories(ctx, userId)).find(
+      (candidate) => candidate.key === input.categoryId,
+    )
+    if (!category || category.archivedAt !== undefined) {
+      throw new Error('Expense category not found')
+    }
+  } else if (input.categoryId) {
+    throw new Error('A category is only valid for expenses')
+  }
+
+  if (input.excludeFromBudget && input.type !== 'expense') {
+    throw new Error('Only expenses can be excluded from the spending plan')
+  }
+
   if (input.sourceId) {
     if (input.type !== 'income') {
       throw new Error('sourceId is only valid for income transactions')
     }
     const source = await ctx.db.get(input.sourceId)
-    if (!source || source.userId !== userId) {
+    if (
+      !source ||
+      source.userId !== userId ||
+      source.archivedAt !== undefined
+    ) {
       throw new Error('Income source not found')
     }
   }
@@ -458,7 +604,7 @@ async function seedData(ctx: MutationCtx, userId: string) {
   const cycleId = await ctx.db.insert('cycles', {
     userId,
     ...period,
-    budget: 650000,
+    spendingLimit: 650000,
   })
 
   const budgets = [
@@ -469,33 +615,62 @@ async function seedData(ctx: MutationCtx, userId: string) {
     ['utilities', 80000],
   ] as const
 
-  for (const [categoryId, budget] of budgets) {
-    await ctx.db.insert('budgets', { userId, cycleId, categoryId, budget })
+  for (const [categoryId, plannedAmount] of budgets) {
+    await ctx.db.insert('budgets', {
+      userId,
+      cycleId,
+      categoryId,
+      plannedAmount,
+    })
   }
 
   const incomeSources = [
     {
       name: 'Salary',
-      expected: '20th',
-      amountLabel: 'K1,850,000',
-      splitPct: 20,
+      expectedDayStart: 20,
+      expectedDayEnd: 20,
+      expectedAmount: 1850000,
+      savingsRate: 0.2,
+      isAnchor: true,
     },
     {
       name: 'Allowance',
-      expected: '10th',
-      amountLabel: 'K150,000',
-      splitPct: 50,
+      expectedDayStart: 10,
+      expectedDayEnd: 10,
+      expectedAmount: 150000,
+      savingsRate: 0.5,
+      isAnchor: false,
     },
     {
       name: 'Secondary income',
-      expected: '24th–30th',
-      amountLabel: 'K300,000 – 450,000',
-      splitPct: 20,
+      expectedDayStart: 24,
+      expectedDayEnd: 30,
+      expectedAmount: 300000,
+      expectedAmountMax: 450000,
+      savingsRate: 0.2,
+      isAnchor: false,
     },
   ] as const
 
   for (const [sortOrder, source] of incomeSources.entries()) {
-    await ctx.db.insert('incomeSources', { userId, ...source, sortOrder })
+    const sourceId = await ctx.db.insert('incomeSources', {
+      userId,
+      ...source,
+      sortOrder,
+    })
+    await ctx.db.insert('cycleIncomePlans', {
+      userId,
+      cycleId,
+      sourceId,
+      sourceName: source.name,
+      expectedDayStart: source.expectedDayStart,
+      expectedDayEnd: source.expectedDayEnd,
+      expectedAmount: source.expectedAmount,
+      expectedAmountMax:
+        'expectedAmountMax' in source ? source.expectedAmountMax : undefined,
+      savingsRate: source.savingsRate,
+      isAnchor: source.isAnchor,
+    })
   }
 
   await ctx.db.insert('debts', {
@@ -506,7 +681,7 @@ async function seedData(ctx: MutationCtx, userId: string) {
   await ctx.db.insert('settings', {
     userId,
     usdRate: 1735,
-    autoSaveRate: 0.2,
+    defaultSavingsRate: 0.2,
     autoSaveSourceAccountId: nbsAccountId,
     defaultExpenseAccountId: airtelAccountId,
     defaultTransferFromAccountId: nbsAccountId,
@@ -524,10 +699,12 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect()
   const currentCycle = await getLatestCycle(ctx, userId)
-  const incomeSources = await ctx.db
-    .query('incomeSources')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
+  const incomeSources = (
+    await ctx.db
+      .query('incomeSources')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect()
+  ).filter((source) => source.archivedAt === undefined)
   const debts = await ctx.db
     .query('debts')
     .withIndex('by_user', (q) => q.eq('userId', userId))
@@ -539,6 +716,7 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
 
   let transactions: Array<Doc<'transactions'>> = []
   let budgets: Array<Doc<'budgets'>> = []
+  let cycleIncomePlans: Array<Doc<'cycleIncomePlans'>> = []
 
   if (currentCycle) {
     transactions = await ctx.db
@@ -553,6 +731,7 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
         q.eq('userId', userId).eq('cycleId', currentCycle._id),
       )
       .collect()
+    cycleIncomePlans = await getCycleIncomePlans(ctx, userId, currentCycle._id)
   }
 
   transactions.sort((a, b) => b.occurredAt - a.occurredAt)
@@ -576,6 +755,8 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     amount: number
     sourceName: string
     sourceId?: Id<'incomeSources'>
+    savingsRate: number
+    occurredAt: number
   } | null = null
 
   if (settings) {
@@ -586,23 +767,38 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     const handledTransactionIds = new Set(
       autoSaveEvents.map((event) => event.transactionId),
     )
-    const pendingIncome = transactions.find(
+    const unhandledIncome = transactions.filter(
       (transaction) =>
         transaction.type === 'income' &&
         !handledTransactionIds.has(transaction._id),
     )
 
-    if (pendingIncome) {
+    for (const pendingIncome of unhandledIncome) {
       const linkedSource = pendingIncome.sourceId
         ? incomeSources.find((source) => source._id === pendingIncome.sourceId)
         : undefined
+      const cyclePlan = pendingIncome.sourceId
+        ? cycleIncomePlans.find(
+            (plan) => plan.sourceId === pendingIncome.sourceId,
+          )
+        : undefined
+      const savingsRate =
+        cyclePlan?.savingsRate ??
+        linkedSource?.savingsRate ??
+        settings.defaultSavingsRate
 
+      const amount = Math.round(pendingIncome.amount * savingsRate)
+      if (amount <= 0) continue
       pendingAutoSave = {
         transactionId: pendingIncome._id,
-        amount: Math.round(pendingIncome.amount * settings.autoSaveRate),
-        sourceName: linkedSource?.name ?? pendingIncome.payee,
+        amount,
+        sourceName:
+          cyclePlan?.sourceName ?? linkedSource?.name ?? pendingIncome.payee,
         sourceId: pendingIncome.sourceId,
+        savingsRate,
+        occurredAt: pendingIncome.occurredAt,
       }
+      break
     }
   }
 
@@ -612,6 +808,7 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     currentCycle,
     transactions,
     budgets,
+    cycleIncomePlans,
     incomeSources,
     debts,
     categories,
@@ -647,6 +844,7 @@ export const createCategory = mutation({
     name: v.string(),
     icon: v.string(),
     color: v.string(),
+    budgetGroup: v.union(v.literal('needs'), v.literal('wants')),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
@@ -667,6 +865,7 @@ export const createCategory = mutation({
       name,
       icon: args.icon,
       color: args.color,
+      budgetGroup: args.budgetGroup,
       sortOrder,
       isSystem: false,
     })
@@ -680,6 +879,7 @@ export const updateCategory = mutation({
     name: v.optional(v.string()),
     icon: v.optional(v.string()),
     color: v.optional(v.string()),
+    budgetGroup: v.optional(v.union(v.literal('needs'), v.literal('wants'))),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
@@ -700,10 +900,12 @@ export const updateCategory = mutation({
       name?: string
       icon?: string
       color?: string
+      budgetGroup?: 'needs' | 'wants'
     } = {}
     if (name !== undefined) patch.name = name
     if (args.icon !== undefined) patch.icon = args.icon
     if (args.color !== undefined) patch.color = args.color
+    if (args.budgetGroup !== undefined) patch.budgetGroup = args.budgetGroup
     await ctx.db.patch(category._id, patch)
     return await ctx.db.get(category._id)
   },
@@ -766,10 +968,12 @@ export const onboardingData = query({
       .query('accounts')
       .withIndex('by_user', (q) => q.eq('userId', user._id))
       .collect()
-    const incomeSources = await ctx.db
-      .query('incomeSources')
-      .withIndex('by_user', (q) => q.eq('userId', user._id))
-      .collect()
+    const incomeSources = (
+      await ctx.db
+        .query('incomeSources')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect()
+    ).filter((source) => source.archivedAt === undefined)
     const currentCycle = await getLatestCycle(ctx, user._id)
     const budgets = currentCycle
       ? await ctx.db
@@ -788,7 +992,10 @@ export const onboardingData = query({
       accounts,
       incomeSources,
       budgets,
-      cycleBudget: currentCycle?.budget ?? null,
+      spendingLimit: currentCycle?.spendingLimit ?? null,
+      cycleIncomePlans: currentCycle
+        ? await getCycleIncomePlans(ctx, user._id, currentCycle._id)
+        : [],
     }
   },
 })
@@ -814,20 +1021,149 @@ type OnboardingAccountInput = {
 
 type OnboardingIncomeSourceInput = {
   name: string
-  expected: string
-  amountLabel: string
-  splitPct: number
+  expectedDayStart: number
+  expectedDayEnd: number
+  expectedAmount: number
+  expectedAmountMax?: number
+  savingsRate: number
+  isAnchor: boolean
 }
 
 type CompleteOnboardingArgs = {
   usdRate: number
-  autoSaveRate: number
+  defaultSavingsRate: number
   paydayDay: number
   savingsOpeningBalance: number
-  cycleBudget: number
+  spendingLimit: number
   accounts: Array<OnboardingAccountInput>
   incomeSources: Array<OnboardingIncomeSourceInput>
-  budgets: Array<{ categoryId: string; budget: number }>
+  budgets: Array<{ categoryId: string; plannedAmount: number }>
+}
+
+type CategoryPlanInput = {
+  categoryId: string
+  plannedAmount: number
+}
+
+type CycleIncomePlanInput = {
+  sourceId: Id<'incomeSources'>
+  expectedAmount: number
+  expectedAmountMax?: number
+  savingsRate: number
+}
+
+function assertNonnegativeFinite(value: number, label: string) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be zero or more`)
+  }
+}
+
+async function validateCategoryPlans(
+  ctx: ReadCtx,
+  userId: string,
+  plans: Array<CategoryPlanInput>,
+) {
+  const categories = await getCategories(ctx, userId)
+  const categoriesByKey = new Map(
+    categories.map((category) => [category.key, category]),
+  )
+  const seen = new Set<string>()
+  for (const plan of plans) {
+    assertNonnegativeFinite(plan.plannedAmount, 'Planned amount')
+    if (seen.has(plan.categoryId)) {
+      throw new Error(`Duplicate category plan: ${plan.categoryId}`)
+    }
+    seen.add(plan.categoryId)
+    if (!categoriesByKey.has(plan.categoryId)) {
+      throw new Error(`Category not found: ${plan.categoryId}`)
+    }
+  }
+}
+
+function assertCategoryPlansFitLimit(
+  plans: Array<CategoryPlanInput>,
+  spendingLimit: number,
+) {
+  const total = plans.reduce((sum, plan) => sum + plan.plannedAmount, 0)
+  if (total > spendingLimit) {
+    throw new Error('Category plans cannot exceed the spending limit')
+  }
+}
+
+async function validateCycleIncomePlans(
+  ctx: ReadCtx,
+  userId: string,
+  plans: Array<CycleIncomePlanInput>,
+) {
+  const seen = new Set<Id<'incomeSources'>>()
+  for (const plan of plans) {
+    assertNonnegativeFinite(plan.expectedAmount, 'Expected income amount')
+    if (
+      plan.expectedAmountMax !== undefined &&
+      (!Number.isFinite(plan.expectedAmountMax) ||
+        plan.expectedAmountMax < plan.expectedAmount)
+    ) {
+      throw new Error(
+        'Maximum expected income must be at least the expected amount',
+      )
+    }
+    if (
+      !Number.isFinite(plan.savingsRate) ||
+      plan.savingsRate < 0 ||
+      plan.savingsRate > 1
+    ) {
+      throw new Error('Savings rate must be between 0% and 100%')
+    }
+    if (seen.has(plan.sourceId)) {
+      throw new Error(`Duplicate income plan: ${plan.sourceId}`)
+    }
+    seen.add(plan.sourceId)
+    const source = await ctx.db.get(plan.sourceId)
+    if (!source || source.userId !== userId) {
+      throw new Error('Income source not found')
+    }
+  }
+}
+
+function validateIncomeSources(
+  incomeSources: Array<OnboardingIncomeSourceInput>,
+) {
+  const seenNames = new Set<string>()
+  for (const source of incomeSources) {
+    const sourceName = source.name.trim()
+    if (!sourceName) throw new Error('Income source names cannot be empty')
+    const sourceKey = sourceName.toLowerCase()
+    if (seenNames.has(sourceKey)) {
+      throw new Error(`Duplicate income source: ${sourceName}`)
+    }
+    seenNames.add(sourceKey)
+    if (
+      !Number.isInteger(source.expectedDayStart) ||
+      source.expectedDayStart < 1 ||
+      source.expectedDayStart > 31 ||
+      !Number.isInteger(source.expectedDayEnd) ||
+      source.expectedDayEnd < source.expectedDayStart ||
+      source.expectedDayEnd > 31
+    ) {
+      throw new Error('Income landing days must be between 1 and 31')
+    }
+    if (
+      !Number.isFinite(source.expectedAmount) ||
+      source.expectedAmount < 0 ||
+      (source.expectedAmountMax !== undefined &&
+        (!Number.isFinite(source.expectedAmountMax) ||
+          source.expectedAmountMax < source.expectedAmount))
+    ) {
+      throw new Error('Expected income amounts must be valid and nonnegative')
+    }
+    if (
+      !Number.isFinite(source.savingsRate) ||
+      source.savingsRate < 0 ||
+      source.savingsRate > 1
+    ) {
+      throw new Error('Income savings rates must be between 0% and 100%')
+    }
+  }
 }
 
 function validateOnboardingArgs(args: CompleteOnboardingArgs) {
@@ -856,11 +1192,11 @@ function validateOnboardingArgs(args: CompleteOnboardingArgs) {
     throw new Error('USD rate must be a positive number')
   }
   if (
-    !Number.isFinite(args.autoSaveRate) ||
-    args.autoSaveRate < 0 ||
-    args.autoSaveRate > 0.95
+    !Number.isFinite(args.defaultSavingsRate) ||
+    args.defaultSavingsRate < 0 ||
+    args.defaultSavingsRate > 1
   ) {
-    throw new Error('Auto-save rate must be between 0% and 95%')
+    throw new Error('Default savings rate must be between 0% and 100%')
   }
   if (
     !Number.isFinite(args.savingsOpeningBalance) ||
@@ -868,25 +1204,16 @@ function validateOnboardingArgs(args: CompleteOnboardingArgs) {
   ) {
     throw new Error('Savings balance must be zero or more')
   }
-  if (!Number.isFinite(args.cycleBudget) || args.cycleBudget < 0) {
-    throw new Error('Cycle budget must be zero or more')
+  if (!Number.isFinite(args.spendingLimit) || args.spendingLimit < 0) {
+    throw new Error('Spending limit must be zero or more')
   }
-  for (const source of args.incomeSources) {
-    if (!source.name.trim())
-      throw new Error('Income source names cannot be empty')
-    if (
-      !Number.isFinite(source.splitPct) ||
-      source.splitPct < 0 ||
-      source.splitPct > 100
-    ) {
-      throw new Error('Income split must be between 0% and 100%')
-    }
-  }
+  validateIncomeSources(args.incomeSources)
   for (const budget of args.budgets) {
-    if (!Number.isFinite(budget.budget) || budget.budget < 0) {
-      throw new Error('Budget amounts must be zero or more')
+    if (!Number.isFinite(budget.plannedAmount) || budget.plannedAmount < 0) {
+      throw new Error('Planned amounts must be zero or more')
     }
   }
+  assertCategoryPlansFitLimit(args.budgets, args.spendingLimit)
 }
 
 async function reconcileAccounts(
@@ -979,19 +1306,26 @@ async function reconcileIncomeSources(
     if (match) {
       await ctx.db.patch(match._id, {
         name: input.name.trim(),
-        expected: input.expected.trim(),
-        amountLabel: input.amountLabel.trim(),
-        splitPct: input.splitPct,
+        expectedDayStart: input.expectedDayStart,
+        expectedDayEnd: input.expectedDayEnd,
+        expectedAmount: input.expectedAmount,
+        expectedAmountMax: input.expectedAmountMax,
+        savingsRate: input.savingsRate,
+        isAnchor: input.isAnchor,
         sortOrder,
+        archivedAt: undefined,
       })
       keptSourceIds.add(match._id)
     } else {
       const sourceId = await ctx.db.insert('incomeSources', {
         userId,
         name: input.name.trim(),
-        expected: input.expected.trim(),
-        amountLabel: input.amountLabel.trim(),
-        splitPct: input.splitPct,
+        expectedDayStart: input.expectedDayStart,
+        expectedDayEnd: input.expectedDayEnd,
+        expectedAmount: input.expectedAmount,
+        expectedAmountMax: input.expectedAmountMax,
+        savingsRate: input.savingsRate,
+        isAnchor: input.isAnchor,
         sortOrder,
       })
       keptSourceIds.add(sourceId)
@@ -1006,6 +1340,10 @@ async function reconcileIncomeSources(
       .query('transactions')
       .withIndex('by_user', (q) => q.eq('userId', userId))
       .collect()
+    const cycleIncomePlans = await ctx.db
+      .query('cycleIncomePlans')
+      .withIndex('by_user_and_source', (q) => q.eq('userId', userId))
+      .collect()
     const referencedSourceIds = new Set(
       userTransactions
         .map((transaction) => transaction.sourceId)
@@ -1013,10 +1351,16 @@ async function reconcileIncomeSources(
           (sourceId): sourceId is Id<'incomeSources'> => sourceId !== undefined,
         ),
     )
+    for (const plan of cycleIncomePlans) {
+      referencedSourceIds.add(plan.sourceId)
+    }
     let nextSortOrder = incomeSources.length
     for (const source of removedSources) {
       if (referencedSourceIds.has(source._id)) {
-        await ctx.db.patch(source._id, { sortOrder: nextSortOrder })
+        await ctx.db.patch(source._id, {
+          sortOrder: nextSortOrder,
+          archivedAt: Date.now(),
+        })
         nextSortOrder++
       } else {
         await ctx.db.delete(source._id)
@@ -1028,23 +1372,26 @@ async function reconcileIncomeSources(
 export const completeOnboarding = mutation({
   args: {
     usdRate: v.number(),
-    autoSaveRate: v.number(),
+    defaultSavingsRate: v.number(),
     paydayDay: v.number(),
     savingsOpeningBalance: v.number(),
-    cycleBudget: v.number(),
+    spendingLimit: v.number(),
     accounts: v.array(onboardingAccount),
     incomeSources: v.array(
       v.object({
         name: v.string(),
-        expected: v.string(),
-        amountLabel: v.string(),
-        splitPct: v.number(),
+        expectedDayStart: v.number(),
+        expectedDayEnd: v.number(),
+        expectedAmount: v.number(),
+        expectedAmountMax: v.optional(v.number()),
+        savingsRate: v.number(),
+        isAnchor: v.boolean(),
       }),
     ),
     budgets: v.array(
       v.object({
         categoryId: v.string(),
-        budget: v.number(),
+        plannedAmount: v.number(),
       }),
     ),
   },
@@ -1052,6 +1399,8 @@ export const completeOnboarding = mutation({
     const user = await requireAuthUser(ctx)
 
     validateOnboardingArgs(args)
+    await seedDefaultCategoriesForUser(ctx, user._id)
+    await validateCategoryPlans(ctx, user._id, args.budgets)
 
     const { accountIds } = await reconcileAccounts(ctx, user._id, args.accounts)
 
@@ -1072,7 +1421,7 @@ export const completeOnboarding = mutation({
     const settings = await getSettings(ctx, user._id)
     const settingsValue = {
       usdRate: args.usdRate,
-      autoSaveRate: args.autoSaveRate,
+      defaultSavingsRate: args.defaultSavingsRate,
       autoSaveSourceAccountId,
       defaultExpenseAccountId,
       defaultTransferFromAccountId,
@@ -1111,8 +1460,228 @@ export const completeOnboarding = mutation({
       // Budgets attach to the current covering cycle until rollover when it already has transactions.
     }
 
+    await reconcileIncomeSources(ctx, user._id, args.incomeSources)
     const cycle = await ensureCurrentCycle(ctx, user._id)
-    await ctx.db.patch(cycle._id, { budget: args.cycleBudget })
+    await ctx.db.patch(cycle._id, { spendingLimit: args.spendingLimit })
+
+    const existingBudgets = await ctx.db
+      .query('budgets')
+      .withIndex('by_user_and_cycle', (q) =>
+        q.eq('userId', user._id).eq('cycleId', cycle._id),
+      )
+      .collect()
+    const submittedBudgetIds = new Set(
+      args.budgets.map((budget) => budget.categoryId),
+    )
+    const builtInBudgetIds = new Set<string>(
+      DEFAULT_CATEGORIES.filter((category) => !category.isSystem).map(
+        (category) => category.key,
+      ),
+    )
+    const preservedCustomTotal = existingBudgets
+      .filter(
+        (budget) =>
+          !submittedBudgetIds.has(budget.categoryId) &&
+          !builtInBudgetIds.has(budget.categoryId),
+      )
+      .reduce((sum, budget) => sum + budget.plannedAmount, 0)
+    const submittedTotal = args.budgets.reduce(
+      (sum, budget) => sum + budget.plannedAmount,
+      0,
+    )
+    if (preservedCustomTotal + submittedTotal > args.spendingLimit) {
+      throw new Error('Category plans cannot exceed the spending limit')
+    }
+    for (const budget of existingBudgets) {
+      if (
+        submittedBudgetIds.has(budget.categoryId) ||
+        builtInBudgetIds.has(budget.categoryId)
+      ) {
+        await ctx.db.delete(budget._id)
+      }
+    }
+    for (const budget of args.budgets) {
+      await ctx.db.insert('budgets', {
+        userId: user._id,
+        cycleId: cycle._id,
+        categoryId: budget.categoryId,
+        plannedAmount: budget.plannedAmount,
+      })
+    }
+
+    const existingCycleIncomePlans = await getCycleIncomePlans(
+      ctx,
+      user._id,
+      cycle._id,
+    )
+    for (const plan of existingCycleIncomePlans) {
+      await ctx.db.delete(plan._id)
+    }
+    const incomeSources = (
+      await ctx.db
+        .query('incomeSources')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect()
+    ).filter((source) => source.archivedAt === undefined)
+    for (const source of incomeSources) {
+      await ctx.db.insert('cycleIncomePlans', {
+        userId: user._id,
+        cycleId: cycle._id,
+        sourceId: source._id,
+        sourceName: source.name,
+        expectedDayStart: source.expectedDayStart,
+        expectedDayEnd: source.expectedDayEnd,
+        expectedAmount: source.expectedAmount,
+        expectedAmountMax: source.expectedAmountMax,
+        savingsRate: source.savingsRate,
+        isAnchor: source.isAnchor,
+      })
+    }
+    return { cycleId: cycle._id }
+  },
+})
+
+export const updateIncomeSources = mutation({
+  args: {
+    incomeSources: v.array(
+      v.object({
+        id: v.optional(v.id('incomeSources')),
+        name: v.string(),
+        expectedDayStart: v.number(),
+        expectedDayEnd: v.number(),
+        expectedAmount: v.number(),
+        expectedAmountMax: v.optional(v.number()),
+        savingsRate: v.number(),
+        isAnchor: v.boolean(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    validateIncomeSources(args.incomeSources)
+
+    const existingSources = await ctx.db
+      .query('incomeSources')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    const existingById = new Map(
+      existingSources.map((source) => [source._id, source]),
+    )
+    const keptIds = new Set<Id<'incomeSources'>>()
+
+    for (const [sortOrder, input] of args.incomeSources.entries()) {
+      const existing = input.id ? existingById.get(input.id) : undefined
+      if (input.id && (!existing || existing.userId !== user._id)) {
+        throw new Error('Income source not found')
+      }
+      const values = {
+        name: input.name.trim(),
+        expectedDayStart: input.expectedDayStart,
+        expectedDayEnd: input.expectedDayEnd,
+        expectedAmount: input.expectedAmount,
+        expectedAmountMax: input.expectedAmountMax,
+        savingsRate: input.savingsRate,
+        isAnchor: input.isAnchor,
+        sortOrder,
+        archivedAt: undefined,
+      }
+      if (existing) {
+        await ctx.db.patch(existing._id, values)
+        keptIds.add(existing._id)
+      } else {
+        const id = await ctx.db.insert('incomeSources', {
+          userId: user._id,
+          ...values,
+        })
+        keptIds.add(id)
+      }
+    }
+
+    const referencedIds = new Set<Id<'incomeSources'>>()
+    const [transactions, allPlans] = await Promise.all([
+      ctx.db
+        .query('transactions')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect(),
+      ctx.db
+        .query('cycleIncomePlans')
+        .withIndex('by_user_and_source', (q) => q.eq('userId', user._id))
+        .collect(),
+    ])
+    for (const transaction of transactions) {
+      if (transaction.sourceId) referencedIds.add(transaction.sourceId)
+    }
+    for (const plan of allPlans) referencedIds.add(plan.sourceId)
+    for (const source of existingSources) {
+      if (keptIds.has(source._id)) continue
+      if (referencedIds.has(source._id)) {
+        await ctx.db.patch(source._id, { archivedAt: Date.now() })
+      } else {
+        await ctx.db.delete(source._id)
+      }
+    }
+
+    const cycle = await ensureCurrentCycle(ctx, user._id)
+    const currentPlans = await getCycleIncomePlans(ctx, user._id, cycle._id)
+    for (const plan of currentPlans) await ctx.db.delete(plan._id)
+    const activeSources = (
+      await ctx.db
+        .query('incomeSources')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect()
+    )
+      .filter((source) => source.archivedAt === undefined)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    for (const source of activeSources) {
+      await ctx.db.insert('cycleIncomePlans', {
+        userId: user._id,
+        cycleId: cycle._id,
+        sourceId: source._id,
+        sourceName: source.name,
+        expectedDayStart: source.expectedDayStart,
+        expectedDayEnd: source.expectedDayEnd,
+        expectedAmount: source.expectedAmount,
+        expectedAmountMax: source.expectedAmountMax,
+        savingsRate: source.savingsRate,
+        isAnchor: source.isAnchor,
+      })
+    }
+  },
+})
+
+export const saveCyclePlan = mutation({
+  args: {
+    cycleId: v.id('cycles'),
+    spendingLimit: v.number(),
+    categoryPlans: v.array(
+      v.object({
+        categoryId: v.string(),
+        plannedAmount: v.number(),
+      }),
+    ),
+    incomePlans: v.optional(
+      v.array(
+        v.object({
+          sourceId: v.id('incomeSources'),
+          expectedAmount: v.number(),
+          expectedAmountMax: v.optional(v.number()),
+          savingsRate: v.number(),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const cycle = await requireOwnedCycle(ctx, user._id, args.cycleId)
+    if (cycle.endsAt < Date.now()) {
+      throw new Error('Closed cycle plans cannot be edited')
+    }
+    assertNonnegativeFinite(args.spendingLimit, 'Spending limit')
+    await validateCategoryPlans(ctx, user._id, args.categoryPlans)
+    assertCategoryPlansFitLimit(args.categoryPlans, args.spendingLimit)
+    if (args.incomePlans !== undefined) {
+      await validateCycleIncomePlans(ctx, user._id, args.incomePlans)
+    }
 
     const existingBudgets = await ctx.db
       .query('budgets')
@@ -1123,19 +1692,196 @@ export const completeOnboarding = mutation({
     for (const budget of existingBudgets) {
       await ctx.db.delete(budget._id)
     }
-    for (const budget of args.budgets) {
+    for (const plan of args.categoryPlans) {
       await ctx.db.insert('budgets', {
         userId: user._id,
         cycleId: cycle._id,
-        categoryId: budget.categoryId,
-        budget: budget.budget,
+        categoryId: plan.categoryId,
+        plannedAmount: plan.plannedAmount,
       })
     }
+    await ctx.db.patch(cycle._id, { spendingLimit: args.spendingLimit })
 
-    await reconcileIncomeSources(ctx, user._id, args.incomeSources)
-    await seedDefaultCategoriesForUser(ctx, user._id)
+    if (args.incomePlans !== undefined) {
+      const existingIncomePlans = await getCycleIncomePlans(
+        ctx,
+        user._id,
+        cycle._id,
+      )
+      for (const plan of existingIncomePlans) {
+        await ctx.db.delete(plan._id)
+      }
+      for (const plan of args.incomePlans) {
+        const source = await ctx.db.get(plan.sourceId)
+        if (!source || source.userId !== user._id) {
+          throw new Error('Income source not found')
+        }
+        await ctx.db.insert('cycleIncomePlans', {
+          userId: user._id,
+          cycleId: cycle._id,
+          sourceId: plan.sourceId,
+          sourceName: source.name,
+          expectedDayStart: source.expectedDayStart,
+          expectedDayEnd: source.expectedDayEnd,
+          expectedAmount: plan.expectedAmount,
+          expectedAmountMax: plan.expectedAmountMax,
+          savingsRate: plan.savingsRate,
+          isAnchor: source.isAnchor,
+        })
+      }
+    } else {
+      await syncCycleIncomePlans(ctx, user._id, cycle._id)
+    }
 
-    return { cycleId: cycle._id }
+    return {
+      cycleId: cycle._id,
+      spendingLimit: args.spendingLimit,
+      categoryPlanCount: args.categoryPlans.length,
+      incomePlanCount:
+        args.incomePlans?.length ??
+        (await getCycleIncomePlans(ctx, user._id, cycle._id)).length,
+    }
+  },
+})
+
+export const budgetOverview = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuthUser(ctx)
+    const [cycles, categories] = await Promise.all([
+      ctx.db
+        .query('cycles')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect(),
+      getCategories(ctx, user._id),
+    ])
+
+    cycles.sort((a, b) => b.startsAt - a.startsAt)
+
+    const cycleViews = await Promise.all(
+      cycles.map(async (cycle) => {
+        const [budgets, plans, transactions] = await Promise.all([
+          ctx.db
+            .query('budgets')
+            .withIndex('by_user_and_cycle', (q) =>
+              q.eq('userId', user._id).eq('cycleId', cycle._id),
+            )
+            .collect(),
+          getCycleIncomePlans(ctx, user._id, cycle._id),
+          ctx.db
+            .query('transactions')
+            .withIndex('by_user_and_cycle', (q) =>
+              q.eq('userId', user._id).eq('cycleId', cycle._id),
+            )
+            .collect(),
+        ])
+
+        const plannedByCategory = new Map(
+          budgets.map((budget) => [budget.categoryId, budget.plannedAmount]),
+        )
+        const actualByCategory = new Map<string, number>()
+        for (const transaction of transactions) {
+          if (
+            transaction.type !== 'expense' ||
+            transaction.excludeFromBudget ||
+            !transaction.categoryId
+          ) {
+            continue
+          }
+          actualByCategory.set(
+            transaction.categoryId,
+            (actualByCategory.get(transaction.categoryId) ?? 0) +
+              transaction.amount,
+          )
+        }
+
+        const categoryRows = categories
+          .filter((category) => !category.isSystem)
+          .map((category) => {
+            const plannedAmount = plannedByCategory.get(category.key) ?? 0
+            const actualAmount = actualByCategory.get(category.key) ?? 0
+            return {
+              categoryId: category.key,
+              categoryName: category.name,
+              budgetGroup: category.budgetGroup,
+              plannedAmount,
+              actualAmount,
+              variance: plannedAmount - actualAmount,
+            }
+          })
+
+        const actualIncomeBySource = new Map<Id<'incomeSources'>, number>()
+        for (const transaction of transactions) {
+          if (transaction.type !== 'income' || !transaction.sourceId) continue
+          actualIncomeBySource.set(
+            transaction.sourceId,
+            (actualIncomeBySource.get(transaction.sourceId) ?? 0) +
+              transaction.amount,
+          )
+        }
+        const incomePlanRows = plans.map((plan) => {
+          const actualAmount = actualIncomeBySource.get(plan.sourceId) ?? 0
+          return {
+            sourceId: plan.sourceId,
+            sourceName: plan.sourceName,
+            expectedDayStart: plan.expectedDayStart,
+            expectedDayEnd: plan.expectedDayEnd,
+            expectedAmount: plan.expectedAmount,
+            expectedAmountMax: plan.expectedAmountMax,
+            savingsRate: plan.savingsRate,
+            isAnchor: plan.isAnchor,
+            actualAmount,
+            variance: actualAmount - plan.expectedAmount,
+          }
+        })
+
+        const totalPlanned = budgets.reduce(
+          (sum, budget) => sum + budget.plannedAmount,
+          0,
+        )
+        const actualIncome = transactions
+          .filter((transaction) => transaction.type === 'income')
+          .reduce((sum, transaction) => sum + transaction.amount, 0)
+        const actualSpending = transactions
+          .filter(
+            (transaction) =>
+              transaction.type === 'expense' && !transaction.excludeFromBudget,
+          )
+          .reduce((sum, transaction) => sum + transaction.amount, 0)
+        const actualSavings = transactions
+          .filter((transaction) => transaction.walletId === 'savings')
+          .reduce((sum, transaction) => sum + transaction.amount, 0)
+        const plannedIncome = incomePlanRows.reduce(
+          (sum, plan) => sum + plan.expectedAmount,
+          0,
+        )
+        const savingsTarget = incomePlanRows.reduce(
+          (sum, plan) => sum + plan.expectedAmount * plan.savingsRate,
+          0,
+        )
+
+        return {
+          cycle,
+          spendingLimit: cycle.spendingLimit,
+          totalPlanned,
+          allocatedAmount: totalPlanned,
+          unallocatedAmount: cycle.spendingLimit - totalPlanned,
+          plannedIncome,
+          actualIncome,
+          actualSpending,
+          actualSavings,
+          savingsTarget,
+          savingsVariance: actualSavings - savingsTarget,
+          spendingVariance: cycle.spendingLimit - actualSpending,
+          remainingAmount: cycle.spendingLimit - actualSpending,
+          cashSurplusOrDeficit: actualIncome - actualSpending - actualSavings,
+          categoryRows,
+          incomePlans: incomePlanRows,
+        }
+      }),
+    )
+
+    return { cycles: cycleViews }
   },
 })
 
@@ -1151,11 +1897,13 @@ export const addTransaction = mutation({
     note: v.optional(v.string()),
     sourceId: v.optional(v.id('incomeSources')),
     occurredAt: v.optional(v.number()),
+    excludeFromBudget: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
-    const cycle = await ensureCurrentCycle(ctx, user._id)
+    const occurredAt = args.occurredAt ?? Date.now()
     await validateTransactionInput(ctx, user._id, args)
+    const cycle = await ensureCycleForDate(ctx, user._id, occurredAt)
 
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
@@ -1170,7 +1918,8 @@ export const addTransaction = mutation({
       items: args.items,
       note: args.note,
       sourceId: args.sourceId,
-      occurredAt: args.occurredAt ?? Date.now(),
+      excludeFromBudget: args.excludeFromBudget ?? false,
+      occurredAt,
     })
 
     await applyTransactionBalanceTransition(ctx, user._id, null, args)
@@ -1192,6 +1941,7 @@ export const updateTransaction = mutation({
     note: v.optional(v.string()),
     sourceId: v.optional(v.id('incomeSources')),
     occurredAt: v.number(),
+    excludeFromBudget: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
@@ -1209,8 +1959,32 @@ export const updateTransaction = mutation({
       throw new Error('Generated transactions cannot be edited')
     }
 
+    if (transaction.type === 'income') {
+      const autoSaveEvent = await ctx.db
+        .query('autoSaveEvents')
+        .withIndex('by_transaction', (q) =>
+          q.eq('transactionId', transaction._id),
+        )
+        .first()
+      if (autoSaveEvent) {
+        throw new Error(
+          'Income with a handled savings proposal cannot be edited',
+        )
+      }
+    }
+
     await validateTransactionInput(ctx, user._id, args)
-    await applyTransactionBalanceTransition(ctx, user._id, transaction, args)
+    const cycle = await ensureCycleForDate(ctx, user._id, args.occurredAt)
+    const nextInput = {
+      ...args,
+      excludeFromBudget: args.excludeFromBudget ?? false,
+    }
+    await applyTransactionBalanceTransition(
+      ctx,
+      user._id,
+      transaction,
+      nextInput,
+    )
     await ctx.db.patch(transaction._id, {
       type: args.type,
       amount: args.amount,
@@ -1221,6 +1995,8 @@ export const updateTransaction = mutation({
       items: args.items,
       note: args.note,
       sourceId: args.sourceId,
+      excludeFromBudget: args.excludeFromBudget ?? false,
+      cycleId: cycle._id,
       occurredAt: args.occurredAt,
     })
 
@@ -1264,16 +2040,30 @@ export const confirmAutoSave = mutation({
       user._id,
       settings.autoSaveSourceAccountId,
     )
+    const [source, cyclePlans] = await Promise.all([
+      incomeTransaction.sourceId
+        ? ctx.db.get(incomeTransaction.sourceId)
+        : Promise.resolve(null),
+      getCycleIncomePlans(ctx, user._id, incomeTransaction.cycleId),
+    ])
+    const cyclePlan = incomeTransaction.sourceId
+      ? cyclePlans.find((plan) => plan.sourceId === incomeTransaction.sourceId)
+      : undefined
+    const savingsRate =
+      cyclePlan?.savingsRate ??
+      source?.savingsRate ??
+      settings.defaultSavingsRate
 
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
-      cycleId: cycle._id,
+      cycleId: incomeTransaction.cycleId,
       type: 'transfer',
       amount: args.amount,
-      payee: `Auto-save — ${Math.round(settings.autoSaveRate * 100)}% of income`,
+      payee: `Auto-save — ${Math.round(savingsRate * 100)}% of income`,
       accountId: settings.autoSaveSourceAccountId,
       walletId: 'savings',
       autoSave: true,
+      excludeFromBudget: true,
       occurredAt: Date.now(),
     })
     await ctx.db.patch(sourceAccount._id, {
@@ -1349,6 +2139,7 @@ export const absorbAdjustment = mutation({
       walletId: 'spending',
       note: args.note,
       adjustment: true,
+      excludeFromBudget: true,
       occurredAt: Date.now(),
     })
 

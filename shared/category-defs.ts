@@ -41,12 +41,22 @@ export const CATEGORY_COLOR_IDS = [
   'tide',
 ] as const
 
+export const CATEGORY_BUDGET_GROUPS = ['needs', 'wants'] as const
+
+export type BudgetGroup = (typeof CATEGORY_BUDGET_GROUPS)[number]
+
+export const CATEGORY_BUDGET_GROUP_LABELS: Record<BudgetGroup, string> = {
+  needs: 'Needs',
+  wants: 'Wants',
+}
+
 export const DEFAULT_CATEGORIES = [
   {
     key: 'groceries',
     name: 'Groceries',
     icon: 'basket',
     color: 'palm',
+    budgetGroup: 'needs',
     isSystem: false,
   },
   {
@@ -54,6 +64,7 @@ export const DEFAULT_CATEGORIES = [
     name: 'Minibus & transport',
     icon: 'bus',
     color: 'lagoon-deep',
+    budgetGroup: 'needs',
     isSystem: false,
   },
   {
@@ -61,6 +72,7 @@ export const DEFAULT_CATEGORIES = [
     name: 'Eating out',
     icon: 'utensils',
     color: 'coral',
+    budgetGroup: 'wants',
     isSystem: false,
   },
   {
@@ -68,6 +80,7 @@ export const DEFAULT_CATEGORIES = [
     name: 'Airtime & data',
     icon: 'smartphone',
     color: 'lagoon',
+    budgetGroup: 'needs',
     isSystem: false,
   },
   {
@@ -75,6 +88,7 @@ export const DEFAULT_CATEGORIES = [
     name: 'Utilities',
     icon: 'plug',
     color: 'lagoon-deep',
+    budgetGroup: 'needs',
     isSystem: false,
   },
   {
@@ -82,6 +96,7 @@ export const DEFAULT_CATEGORIES = [
     name: 'Health',
     icon: 'heart-pulse',
     color: 'palm',
+    budgetGroup: 'needs',
     isSystem: false,
   },
   {
@@ -89,6 +104,7 @@ export const DEFAULT_CATEGORIES = [
     name: 'Adjustment',
     icon: 'scale',
     color: 'coral',
+    budgetGroup: 'needs',
     isSystem: true,
   },
 ] as const

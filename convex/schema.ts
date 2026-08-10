@@ -8,6 +8,7 @@ export default defineSchema({
     name: v.string(),
     icon: v.string(),
     color: v.string(),
+    budgetGroup: v.union(v.literal('needs'), v.literal('wants')),
     sortOrder: v.number(),
     isSystem: v.boolean(),
     archivedAt: v.optional(v.number()),
@@ -30,7 +31,7 @@ export default defineSchema({
     label: v.string(),
     startsAt: v.number(),
     endsAt: v.number(),
-    budget: v.number(),
+    spendingLimit: v.number(),
   }).index('by_user', ['userId']),
   transactions: defineTable({
     userId: v.string(),
@@ -50,6 +51,7 @@ export default defineSchema({
     note: v.optional(v.string()),
     adjustment: v.optional(v.boolean()),
     autoSave: v.optional(v.boolean()),
+    excludeFromBudget: v.boolean(),
     sourceId: v.optional(v.id('incomeSources')),
     occurredAt: v.number(),
   })
@@ -61,18 +63,37 @@ export default defineSchema({
     userId: v.string(),
     cycleId: v.id('cycles'),
     categoryId: v.string(),
-    budget: v.number(),
+    plannedAmount: v.number(),
   })
     .index('by_user_and_cycle', ['userId', 'cycleId'])
     .index('by_user_and_category', ['userId', 'categoryId']),
   incomeSources: defineTable({
     userId: v.string(),
     name: v.string(),
-    expected: v.string(),
-    amountLabel: v.string(),
-    splitPct: v.number(),
+    expectedDayStart: v.number(),
+    expectedDayEnd: v.number(),
+    expectedAmount: v.number(),
+    expectedAmountMax: v.optional(v.number()),
+    savingsRate: v.number(),
+    isAnchor: v.boolean(),
     sortOrder: v.number(),
+    archivedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
+  cycleIncomePlans: defineTable({
+    userId: v.string(),
+    cycleId: v.id('cycles'),
+    sourceId: v.id('incomeSources'),
+    sourceName: v.string(),
+    expectedDayStart: v.number(),
+    expectedDayEnd: v.number(),
+    expectedAmount: v.number(),
+    expectedAmountMax: v.optional(v.number()),
+    savingsRate: v.number(),
+    isAnchor: v.boolean(),
+  })
+    .index('by_user_and_cycle', ['userId', 'cycleId'])
+    .index('by_user_and_cycle_and_source', ['userId', 'cycleId', 'sourceId'])
+    .index('by_user_and_source', ['userId', 'sourceId']),
   debts: defineTable({
     userId: v.string(),
     name: v.string(),
@@ -81,7 +102,7 @@ export default defineSchema({
   settings: defineTable({
     userId: v.string(),
     usdRate: v.number(),
-    autoSaveRate: v.number(),
+    defaultSavingsRate: v.number(),
     autoSaveSourceAccountId: v.optional(v.id('accounts')),
     defaultExpenseAccountId: v.optional(v.id('accounts')),
     defaultTransferFromAccountId: v.optional(v.id('accounts')),
