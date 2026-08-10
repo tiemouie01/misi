@@ -27,6 +27,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         prompt: 'select_account',
       },
     },
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ['google'],
+      },
+    },
     plugins: [convex({ authConfig })],
   })
 }
