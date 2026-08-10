@@ -9,6 +9,7 @@
     "dev": "vite dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "vite build",
+    "vercel-build": "convex deploy --cmd-url-env-var-name VITE_CONVEX_URL --cmd 'pnpm run build'",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint",

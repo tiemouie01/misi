@@ -1,0 +1,4 @@
+{
+  "framework": "tanstack-start",
+  "buildCommand": "pnpm run vercel-build"
+}
