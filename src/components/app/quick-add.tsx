@@ -387,7 +387,7 @@ export function QuickAddSheet({
         {isAutoSave ? (
           <p className="island-kicker mr-11">Auto-save → Savings</p>
         ) : (
-          <div className="mr-11 grid min-w-0 grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
+          <div className="mr-11 grid h-10 min-w-0 grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
             {(['expense', 'income', 'transfer'] as const).map((type) => (
               <Button
                 key={type}
@@ -395,7 +395,7 @@ export function QuickAddSheet({
                 variant="ghost"
                 size="sm"
                 aria-pressed={mode === type}
-                className="min-w-0 w-full px-1.5 aria-pressed:bg-(--surface-strong) aria-pressed:text-sea-ink aria-pressed:shadow-sm"
+                className="h-full min-w-0 w-full rounded-full px-1.5 text-sea-ink-soft shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
                 onClick={() => switchMode(type)}
               >
                 <span className="truncate">
