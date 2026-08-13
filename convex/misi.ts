@@ -94,6 +94,7 @@ async function seedDefaultCategoriesForUser(ctx: MutationCtx, userId: string) {
   for (const [sortOrder, category] of DEFAULT_CATEGORIES.entries()) {
     await ctx.db.insert('categories', {
       userId,
+      uuid: crypto.randomUUID(),
       ...category,
       sortOrder,
     })
@@ -229,12 +230,16 @@ async function syncCycleIncomePlans(
     (source) => source.archivedAt === undefined,
   )
   const existingSourceIds = new Set(existingPlans.map((plan) => plan.sourceId))
+  const cycle = await ctx.db.get(cycleId)
   for (const source of incomeSources) {
     if (existingSourceIds.has(source._id)) continue
     await ctx.db.insert('cycleIncomePlans', {
       userId,
+      uuid: crypto.randomUUID(),
       cycleId,
+      cycleUuid: cycle?.uuid,
       sourceId: source._id,
+      sourceUuid: source.uuid,
       sourceName: source.name,
       expectedDayStart: source.expectedDayStart,
       expectedDayEnd: source.expectedDayEnd,
@@ -262,10 +267,13 @@ async function copyCyclePlans(
     getCycleIncomePlans(ctx, userId, fromCycleId),
   ])
 
+  const toCycle = await ctx.db.get(toCycleId)
   for (const budget of previousBudgets) {
     await ctx.db.insert('budgets', {
       userId,
+      uuid: crypto.randomUUID(),
       cycleId: toCycleId,
+      cycleUuid: toCycle?.uuid,
       categoryId: budget.categoryId,
       plannedAmount: budget.plannedAmount,
     })
@@ -282,8 +290,11 @@ async function copyCyclePlans(
     }
     await ctx.db.insert('cycleIncomePlans', {
       userId,
+      uuid: crypto.randomUUID(),
       cycleId: toCycleId,
+      cycleUuid: toCycle?.uuid,
       sourceId: plan.sourceId,
+      sourceUuid: source.uuid,
       sourceName: source.name,
       expectedDayStart: source.expectedDayStart,
       expectedDayEnd: source.expectedDayEnd,
@@ -334,6 +345,7 @@ async function ensureCycleForDate(
       .at(0) ?? null
   const cycleId = await ctx.db.insert('cycles', {
     userId,
+    uuid: crypto.randomUUID(),
     ...period,
     spendingLimit: previousCycle?.spendingLimit ?? 0,
   })
@@ -551,8 +563,10 @@ async function seedData(ctx: MutationCtx, userId: string) {
     return false
   }
 
+  const nbsAccountUuid = crypto.randomUUID()
   const nbsAccountId = await ctx.db.insert('accounts', {
     userId,
+    uuid: nbsAccountUuid,
     name: 'NBS Bank',
     kind: 'bank',
     currency: 'MWK',
@@ -561,22 +575,27 @@ async function seedData(ctx: MutationCtx, userId: string) {
   })
   await ctx.db.insert('accounts', {
     userId,
+    uuid: crypto.randomUUID(),
     name: 'FDH Bank',
     kind: 'bank',
     currency: 'MWK',
     balance: 210450,
     sortOrder: 1,
   })
+  const airtelAccountUuid = crypto.randomUUID()
   const airtelAccountId = await ctx.db.insert('accounts', {
     userId,
+    uuid: airtelAccountUuid,
     name: 'Airtel Money',
     kind: 'mobile',
     currency: 'MWK',
     balance: 96300,
     sortOrder: 2,
   })
+  const cashAccountUuid = crypto.randomUUID()
   const cashAccountId = await ctx.db.insert('accounts', {
     userId,
+    uuid: cashAccountUuid,
     name: 'Cash',
     kind: 'cash',
     currency: 'MWK',
@@ -585,6 +604,7 @@ async function seedData(ctx: MutationCtx, userId: string) {
   })
   await ctx.db.insert('accounts', {
     userId,
+    uuid: crypto.randomUUID(),
     name: 'Unit Trust',
     kind: 'investment',
     currency: 'MWK',
@@ -593,6 +613,7 @@ async function seedData(ctx: MutationCtx, userId: string) {
   })
   await ctx.db.insert('accounts', {
     userId,
+    uuid: crypto.randomUUID(),
     name: 'USD Account',
     kind: 'investment',
     currency: 'USD',
@@ -601,8 +622,10 @@ async function seedData(ctx: MutationCtx, userId: string) {
   })
 
   const period = getCyclePeriod(Date.now())
+  const cycleUuid = crypto.randomUUID()
   const cycleId = await ctx.db.insert('cycles', {
     userId,
+    uuid: cycleUuid,
     ...period,
     spendingLimit: 650000,
   })
@@ -618,7 +641,9 @@ async function seedData(ctx: MutationCtx, userId: string) {
   for (const [categoryId, plannedAmount] of budgets) {
     await ctx.db.insert('budgets', {
       userId,
+      uuid: crypto.randomUUID(),
       cycleId,
+      cycleUuid,
       categoryId,
       plannedAmount,
     })
@@ -653,15 +678,20 @@ async function seedData(ctx: MutationCtx, userId: string) {
   ] as const
 
   for (const [sortOrder, source] of incomeSources.entries()) {
+    const sourceUuid = crypto.randomUUID()
     const sourceId = await ctx.db.insert('incomeSources', {
       userId,
+      uuid: sourceUuid,
       ...source,
       sortOrder,
     })
     await ctx.db.insert('cycleIncomePlans', {
       userId,
+      uuid: crypto.randomUUID(),
       cycleId,
+      cycleUuid,
       sourceId,
+      sourceUuid,
       sourceName: source.name,
       expectedDayStart: source.expectedDayStart,
       expectedDayEnd: source.expectedDayEnd,
@@ -675,17 +705,23 @@ async function seedData(ctx: MutationCtx, userId: string) {
 
   await ctx.db.insert('debts', {
     userId,
+    uuid: crypto.randomUUID(),
     name: 'Chisomo',
     balance: 50000,
   })
   await ctx.db.insert('settings', {
     userId,
+    uuid: crypto.randomUUID(),
     usdRate: 1735,
     defaultSavingsRate: 0.2,
     autoSaveSourceAccountId: nbsAccountId,
+    autoSaveSourceAccountUuid: nbsAccountUuid,
     defaultExpenseAccountId: airtelAccountId,
+    defaultExpenseAccountUuid: airtelAccountUuid,
     defaultTransferFromAccountId: nbsAccountId,
+    defaultTransferFromAccountUuid: nbsAccountUuid,
     defaultTransferToAccountId: cashAccountId,
+    defaultTransferToAccountUuid: cashAccountUuid,
     savingsOpeningBalance: 315000,
   })
 
@@ -861,6 +897,7 @@ export const createCategory = mutation({
       ) + 1
     const id = await ctx.db.insert('categories', {
       userId: user._id,
+      uuid: crypto.randomUUID(),
       key: crypto.randomUUID(),
       name,
       icon: args.icon,
@@ -1247,6 +1284,7 @@ async function reconcileAccounts(
     } else {
       const accountId = await ctx.db.insert('accounts', {
         userId,
+        uuid: crypto.randomUUID(),
         name: input.name.trim(),
         kind: input.kind,
         currency: input.currency,
@@ -1319,6 +1357,7 @@ async function reconcileIncomeSources(
     } else {
       const sourceId = await ctx.db.insert('incomeSources', {
         userId,
+        uuid: crypto.randomUUID(),
         name: input.name.trim(),
         expectedDayStart: input.expectedDayStart,
         expectedDayEnd: input.expectedDayEnd,
@@ -1433,7 +1472,34 @@ export const completeOnboarding = mutation({
     if (settings) {
       await ctx.db.patch(settings._id, settingsValue)
     } else {
-      await ctx.db.insert('settings', { userId: user._id, ...settingsValue })
+      const [
+        autoSaveSourceAccount,
+        defaultExpenseAccount,
+        defaultTransferFromAccount,
+        defaultTransferToAccount,
+      ] = await Promise.all([
+        autoSaveSourceAccountId
+          ? ctx.db.get(autoSaveSourceAccountId)
+          : Promise.resolve(null),
+        defaultExpenseAccountId
+          ? ctx.db.get(defaultExpenseAccountId)
+          : Promise.resolve(null),
+        defaultTransferFromAccountId
+          ? ctx.db.get(defaultTransferFromAccountId)
+          : Promise.resolve(null),
+        defaultTransferToAccountId
+          ? ctx.db.get(defaultTransferToAccountId)
+          : Promise.resolve(null),
+      ])
+      await ctx.db.insert('settings', {
+        userId: user._id,
+        uuid: crypto.randomUUID(),
+        ...settingsValue,
+        autoSaveSourceAccountUuid: autoSaveSourceAccount?.uuid,
+        defaultExpenseAccountUuid: defaultExpenseAccount?.uuid,
+        defaultTransferFromAccountUuid: defaultTransferFromAccount?.uuid,
+        defaultTransferToAccountUuid: defaultTransferToAccount?.uuid,
+      })
     }
 
     const now = Date.now()
@@ -1503,7 +1569,9 @@ export const completeOnboarding = mutation({
     for (const budget of args.budgets) {
       await ctx.db.insert('budgets', {
         userId: user._id,
+        uuid: crypto.randomUUID(),
         cycleId: cycle._id,
+        cycleUuid: cycle.uuid,
         categoryId: budget.categoryId,
         plannedAmount: budget.plannedAmount,
       })
@@ -1526,8 +1594,11 @@ export const completeOnboarding = mutation({
     for (const source of incomeSources) {
       await ctx.db.insert('cycleIncomePlans', {
         userId: user._id,
+        uuid: crypto.randomUUID(),
         cycleId: cycle._id,
+        cycleUuid: cycle.uuid,
         sourceId: source._id,
+        sourceUuid: source.uuid,
         sourceName: source.name,
         expectedDayStart: source.expectedDayStart,
         expectedDayEnd: source.expectedDayEnd,
@@ -1591,6 +1662,7 @@ export const updateIncomeSources = mutation({
       } else {
         const id = await ctx.db.insert('incomeSources', {
           userId: user._id,
+          uuid: crypto.randomUUID(),
           ...values,
         })
         keptIds.add(id)
@@ -1635,8 +1707,11 @@ export const updateIncomeSources = mutation({
     for (const source of activeSources) {
       await ctx.db.insert('cycleIncomePlans', {
         userId: user._id,
+        uuid: crypto.randomUUID(),
         cycleId: cycle._id,
+        cycleUuid: cycle.uuid,
         sourceId: source._id,
+        sourceUuid: source.uuid,
         sourceName: source.name,
         expectedDayStart: source.expectedDayStart,
         expectedDayEnd: source.expectedDayEnd,
@@ -1695,7 +1770,9 @@ export const saveCyclePlan = mutation({
     for (const plan of args.categoryPlans) {
       await ctx.db.insert('budgets', {
         userId: user._id,
+        uuid: crypto.randomUUID(),
         cycleId: cycle._id,
+        cycleUuid: cycle.uuid,
         categoryId: plan.categoryId,
         plannedAmount: plan.plannedAmount,
       })
@@ -1718,8 +1795,11 @@ export const saveCyclePlan = mutation({
         }
         await ctx.db.insert('cycleIncomePlans', {
           userId: user._id,
+          uuid: crypto.randomUUID(),
           cycleId: cycle._id,
+          cycleUuid: cycle.uuid,
           sourceId: plan.sourceId,
+          sourceUuid: source.uuid,
           sourceName: source.name,
           expectedDayStart: source.expectedDayStart,
           expectedDayEnd: source.expectedDayEnd,
@@ -1904,20 +1984,30 @@ export const addTransaction = mutation({
     const occurredAt = args.occurredAt ?? Date.now()
     await validateTransactionInput(ctx, user._id, args)
     const cycle = await ensureCycleForDate(ctx, user._id, occurredAt)
+    const [account, toAccount, source] = await Promise.all([
+      ctx.db.get(args.accountId),
+      args.toAccountId ? ctx.db.get(args.toAccountId) : Promise.resolve(null),
+      args.sourceId ? ctx.db.get(args.sourceId) : Promise.resolve(null),
+    ])
 
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
+      uuid: crypto.randomUUID(),
       cycleId: cycle._id,
+      cycleUuid: cycle.uuid,
       type: args.type,
       amount: args.amount,
       payee: args.payee,
       categoryId: args.categoryId,
       accountId: args.accountId,
+      accountUuid: account?.uuid,
       toAccountId: args.toAccountId,
+      toAccountUuid: toAccount?.uuid,
       walletId: 'spending',
       items: args.items,
       note: args.note,
       sourceId: args.sourceId,
+      sourceUuid: source?.uuid,
       excludeFromBudget: args.excludeFromBudget ?? false,
       occurredAt,
     })
@@ -1985,18 +2075,27 @@ export const updateTransaction = mutation({
       transaction,
       nextInput,
     )
+    const [account, toAccount, source] = await Promise.all([
+      ctx.db.get(args.accountId),
+      args.toAccountId ? ctx.db.get(args.toAccountId) : Promise.resolve(null),
+      args.sourceId ? ctx.db.get(args.sourceId) : Promise.resolve(null),
+    ])
     await ctx.db.patch(transaction._id, {
       type: args.type,
       amount: args.amount,
       payee: args.payee,
       categoryId: args.categoryId,
       accountId: args.accountId,
+      accountUuid: account?.uuid,
       toAccountId: args.toAccountId,
+      toAccountUuid: toAccount?.uuid,
       items: args.items,
       note: args.note,
       sourceId: args.sourceId,
+      sourceUuid: source?.uuid,
       excludeFromBudget: args.excludeFromBudget ?? false,
       cycleId: cycle._id,
+      cycleUuid: cycle.uuid,
       occurredAt: args.occurredAt,
     })
 
@@ -2054,13 +2153,17 @@ export const confirmAutoSave = mutation({
       source?.savingsRate ??
       settings.defaultSavingsRate
 
+    const incomeCycle = await ctx.db.get(incomeTransaction.cycleId)
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
+      uuid: crypto.randomUUID(),
       cycleId: incomeTransaction.cycleId,
+      cycleUuid: incomeCycle?.uuid,
       type: 'transfer',
       amount: args.amount,
       payee: `Auto-save — ${Math.round(savingsRate * 100)}% of income`,
       accountId: settings.autoSaveSourceAccountId,
+      accountUuid: sourceAccount.uuid,
       walletId: 'savings',
       autoSave: true,
       excludeFromBudget: true,
@@ -2071,7 +2174,9 @@ export const confirmAutoSave = mutation({
     })
     await ctx.db.insert('autoSaveEvents', {
       userId: user._id,
+      uuid: crypto.randomUUID(),
       transactionId: args.transactionId,
+      transactionUuid: incomeTransaction.uuid,
       status: 'confirmed',
       amount: args.amount,
     })
@@ -2104,7 +2209,9 @@ export const dismissAutoSave = mutation({
 
     return await ctx.db.insert('autoSaveEvents', {
       userId: user._id,
+      uuid: crypto.randomUUID(),
       transactionId: args.transactionId,
+      transactionUuid: incomeTransaction.uuid,
       status: 'dismissed',
       amount: args.amount,
     })
@@ -2130,12 +2237,15 @@ export const absorbAdjustment = mutation({
     const type = delta < 0 ? 'expense' : 'income'
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
+      uuid: crypto.randomUUID(),
       cycleId: cycle._id,
+      cycleUuid: cycle.uuid,
       type,
       amount: Math.abs(delta),
       payee: 'Balance adjustment',
       categoryId: type === 'expense' ? 'adjustment' : undefined,
       accountId: account._id,
+      accountUuid: account.uuid,
       walletId: 'spending',
       note: args.note,
       adjustment: true,

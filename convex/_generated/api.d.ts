@@ -11,7 +11,11 @@
 import type * as auth from "../auth.js";
 import type * as categories from "../categories.js";
 import type * as http from "../http.js";
+import type * as migrations from "../migrations.js";
 import type * as misi from "../misi.js";
+import type * as mutationErrors from "../mutationErrors.js";
+import type * as powersync_checkpoints from "../powersync_checkpoints.js";
+import type * as sync from "../sync.js";
 
 import type {
   ApiFromModules,
@@ -23,7 +27,11 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   categories: typeof categories;
   http: typeof http;
+  migrations: typeof migrations;
   misi: typeof misi;
+  mutationErrors: typeof mutationErrors;
+  powersync_checkpoints: typeof powersync_checkpoints;
+  sync: typeof sync;
 }>;
 
 /**
