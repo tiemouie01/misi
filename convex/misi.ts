@@ -1,5 +1,11 @@
 import { v } from 'convex/values'
 
+import {
+  collectBudgetableSeeds,
+  seedCycleBudgetsFromPrevious,
+  spentByCategory,
+  totalBudgetSpending,
+} from '../shared/budget-rollover'
 import { mutation, query } from './_generated/server'
 import { requireAuthUser } from './auth'
 import {
@@ -264,7 +270,13 @@ async function copyCyclePlans(
   fromCycleId: Id<'cycles'>,
   toCycleId: Id<'cycles'>,
 ) {
-  const [previousBudgets, previousIncomePlans] = await Promise.all([
+  const [
+    previousBudgets,
+    previousIncomePlans,
+    previousTransactions,
+    categories,
+    previousCycle,
+  ] = await Promise.all([
     ctx.db
       .query('budgets')
       .withIndex('by_user_and_cycle', (q) =>
@@ -272,16 +284,39 @@ async function copyCyclePlans(
       )
       .collect(),
     getCycleIncomePlans(ctx, userId, fromCycleId),
+    ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_cycle', (q) =>
+        q.eq('userId', userId).eq('cycleId', fromCycleId),
+      )
+      .collect(),
+    getCategories(ctx, userId),
+    ctx.db.get(fromCycleId),
   ])
 
-  for (const budget of previousBudgets) {
+  const seededInput = collectBudgetableSeeds({
+    categories: categories.map((category) => ({
+      key: category.key,
+      isSystem: category.isSystem,
+      archived: category.archivedAt !== undefined,
+    })),
+    previousBudgets,
+    spentByCategory: spentByCategory(previousTransactions),
+  })
+  const seeded = seedCycleBudgetsFromPrevious({
+    ...seededInput,
+    previousSpendingLimit: previousCycle?.spendingLimit ?? 0,
+  })
+
+  for (const plan of seeded.categoryPlans) {
     await ctx.db.insert('budgets', {
       userId,
       cycleId: toCycleId,
-      categoryId: budget.categoryId,
-      plannedAmount: budget.plannedAmount,
+      categoryId: plan.categoryId,
+      plannedAmount: plan.plannedAmount,
     })
   }
+  await ctx.db.patch(toCycleId, { spendingLimit: seeded.spendingLimit })
 
   for (const plan of previousIncomePlans) {
     const source = await ctx.db.get(plan.sourceId)
@@ -1927,21 +1962,7 @@ export const budgetOverview = query({
         const plannedByCategory = new Map(
           budgets.map((budget) => [budget.categoryId, budget.plannedAmount]),
         )
-        const actualByCategory = new Map<string, number>()
-        for (const transaction of transactions) {
-          if (
-            transaction.type !== 'expense' ||
-            transaction.excludeFromBudget ||
-            !transaction.categoryId
-          ) {
-            continue
-          }
-          actualByCategory.set(
-            transaction.categoryId,
-            (actualByCategory.get(transaction.categoryId) ?? 0) +
-              transaction.amount,
-          )
-        }
+        const actualByCategory = spentByCategory(transactions)
 
         const categoryRows = categories
           .filter((category) => !category.isSystem)
@@ -1955,6 +1976,7 @@ export const budgetOverview = query({
               plannedAmount,
               actualAmount,
               variance: plannedAmount - actualAmount,
+              archived: category.archivedAt !== undefined,
             }
           })
 
@@ -1990,12 +2012,7 @@ export const budgetOverview = query({
         const actualIncome = transactions
           .filter((transaction) => transaction.type === 'income')
           .reduce((sum, transaction) => sum + transaction.amount, 0)
-        const actualSpending = transactions
-          .filter(
-            (transaction) =>
-              transaction.type === 'expense' && !transaction.excludeFromBudget,
-          )
-          .reduce((sum, transaction) => sum + transaction.amount, 0)
+        const actualSpending = totalBudgetSpending(transactions)
         const actualSavings = transactions.reduce((sum, transaction) => {
           if (transaction.type !== 'allocation') return sum
           if (transaction.direction === 'toSavings') {
@@ -2036,7 +2053,30 @@ export const budgetOverview = query({
       }),
     )
 
-    return { cycles: cycleViews }
+    return {
+      cycles: cycleViews.map((view, index) => {
+        const previous = cycleViews.at(index + 1)
+        const previousByCategory = new Map(
+          (previous?.categoryRows ?? [])
+            .filter((row) => !row.archived)
+            .map((row) => [row.categoryId, row.actualAmount]),
+        )
+        return {
+          ...view,
+          previousActualSpending: previous
+            ? previous.categoryRows
+                .filter((row) => !row.archived)
+                .reduce((sum, row) => sum + row.actualAmount, 0)
+            : undefined,
+          categoryRows: view.categoryRows.map((row) => ({
+            ...row,
+            previousActualAmount: previous
+              ? (previousByCategory.get(row.categoryId) ?? 0)
+              : undefined,
+          })),
+        }
+      }),
+    }
   },
 })
 
@@ -2140,12 +2180,7 @@ export const updateTransaction = mutation({
     }
     await validateTransactionInput(ctx, user._id, nextInput)
     if (args.fromSavings) {
-      await assertSavingsHasAmount(
-        ctx,
-        user._id,
-        args.amount,
-        transaction._id,
-      )
+      await assertSavingsHasAmount(ctx, user._id, args.amount, transaction._id)
     }
     const cycle = await ensureCycleForDate(ctx, user._id, args.occurredAt)
     await applyTransactionBalanceTransition(
@@ -2342,11 +2377,7 @@ export const moveSavings = mutation({
     assertPositiveAmount(args.amount)
 
     const settings = await requireSettings(ctx, user._id)
-    const savingsBalance = await computeSavingsBalance(
-      ctx,
-      user._id,
-      settings,
-    )
+    const savingsBalance = await computeSavingsBalance(ctx, user._id, settings)
     const accounts = await ctx.db
       .query('accounts')
       .withIndex('by_user', (q) => q.eq('userId', user._id))

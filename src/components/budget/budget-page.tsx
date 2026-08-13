@@ -47,6 +47,11 @@ import {
 } from '#/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { cn } from '#/lib/utils'
+import {
+  hasPreviousSpend,
+  seedCycleBudgetsFromPrevious,
+  spendingLimitForPlans,
+} from '../../../shared/budget-rollover'
 
 import type { ChangeEvent, FormEvent } from 'react'
 import type {
@@ -151,15 +156,60 @@ function plannedSavingsTotal(
   )
 }
 
-function createDraft(cycle: BudgetCycle): BudgetDraft {
+function hasPreviousCycle(cycle: BudgetCycle) {
+  return cycle.previousActualSpending !== undefined
+}
+
+function canApplyPreviousSpend(cycle: BudgetCycle) {
+  return hasPreviousSpend({
+    previousActualSpending: cycle.previousActualSpending,
+    categorySpent: cycle.categories.map((category) =>
+      positiveAmount(category.previousSpent),
+    ),
+  })
+}
+
+function applyPreviousSpend(
+  cycle: BudgetCycle,
+  draft: BudgetDraft,
+): BudgetDraft {
+  const seeded = seedCycleBudgetsFromPrevious({
+    categories: cycle.categories.map((category) => ({
+      categoryId: category.id,
+      spent: positiveAmount(category.previousSpent),
+      planned: parseAmount(draft.categoryPlans[category.id] ?? ''),
+    })),
+    previousActualSpending: positiveAmount(cycle.previousActualSpending),
+    previousSpendingLimit: parseAmount(draft.spendingLimit),
+  })
+
   return {
-    spendingLimit: String(Math.max(0, Math.round(cycle.spendingLimit))),
+    ...draft,
+    spendingLimit: String(seeded.spendingLimit),
     categoryPlans: Object.fromEntries(
-      cycle.categories.map((category) => [
-        category.id,
-        String(Math.max(0, Math.round(category.planned))),
+      seeded.categoryPlans.map((plan) => [
+        plan.categoryId,
+        String(plan.plannedAmount),
       ]),
     ),
+  }
+}
+
+function createDraft(cycle: BudgetCycle): BudgetDraft {
+  const categoryPlans = Object.fromEntries(
+    cycle.categories.map((category) => [
+      category.id,
+      String(Math.max(0, Math.round(category.planned))),
+    ]),
+  )
+  return {
+    spendingLimit: String(
+      spendingLimitForPlans(
+        cycle.spendingLimit,
+        cycle.categories.map((category) => category.planned),
+      ),
+    ),
+    categoryPlans,
     incomePlans: Object.fromEntries(
       (cycle.incomeSources ?? []).map((source) => [
         source.id,
@@ -1093,7 +1143,8 @@ function BudgetEditDialog({
           </DialogTitle>
           <DialogDescription className="text-sea-ink-soft">
             Set the spending limit and income plans. Savings is derived from
-            each source&apos;s rate and stays attached to this payday cycle.
+            each source&apos;s rate. New cycles start from last cycle&apos;s
+            actual spend so you can adjust from real numbers.
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-6" onSubmit={handleSubmit}>
@@ -1126,6 +1177,15 @@ function BudgetEditDialog({
                   value={draft.spendingLimit}
                   onChange={handleAmountChange('spendingLimit')}
                 />
+                {hasPreviousCycle(cycle) ? (
+                  <span className="text-[0.68rem] text-sea-ink-soft">
+                    Last cycle spent{' '}
+                    {formatBudgetMoney(
+                      positiveAmount(cycle.previousActualSpending),
+                      currency,
+                    )}
+                  </span>
+                ) : null}
               </Label>
               <div className="rounded-xl border border-(--line) bg-(--chip-bg) px-3 py-2.5">
                 <p className="text-xs font-bold text-sea-ink-soft">
@@ -1145,16 +1205,30 @@ function BudgetEditDialog({
             className="space-y-3"
             aria-labelledby="budget-plan-categories"
           >
-            <div>
-              <h3
-                id="budget-plan-categories"
-                className="text-sm font-extrabold text-sea-ink"
-              >
-                Category plans
-              </h3>
-              <p className="mt-1 text-xs text-sea-ink-soft">
-                These amounts make up your spending limit.
-              </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3
+                  id="budget-plan-categories"
+                  className="text-sm font-extrabold text-sea-ink"
+                >
+                  Category plans
+                </h3>
+                <p className="mt-1 text-xs text-sea-ink-soft">
+                  These amounts make up your spending limit.
+                </p>
+              </div>
+              {canApplyPreviousSpend(cycle) ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    onDraftChange(applyPreviousSpend(cycle, draft))
+                  }
+                >
+                  Use last cycle&apos;s spend
+                </Button>
+              ) : null}
             </div>
             <div className="space-y-2.5">
               {cycle.categories.length > 0 ? (
@@ -1170,6 +1244,9 @@ function BudgetEditDialog({
                       </span>
                       <span className="mt-0.5 block text-xs text-sea-ink-soft">
                         {GROUP_META[category.group].label}
+                        {hasPreviousCycle(cycle)
+                          ? ` · last cycle ${formatBudgetMoney(positiveAmount(category.previousSpent), currency)}`
+                          : ''}
                       </span>
                     </span>
                     <span className="flex w-32 items-center gap-2">

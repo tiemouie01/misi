@@ -13,6 +13,7 @@ export interface BudgetCategoryPlan {
   group: BudgetGroup
   planned: number
   spent: number
+  previousSpent?: number
   icon?: LucideIcon
   color?: string
 }
@@ -43,6 +44,7 @@ export interface BudgetCycle {
   incomeSources?: readonly BudgetIncomeSourcePlan[]
   daysElapsed?: number
   totalDays?: number
+  previousActualSpending?: number
 }
 
 export interface BudgetHistoryRow {

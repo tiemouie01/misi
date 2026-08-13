@@ -120,22 +120,26 @@ function BudgetRoute() {
           actualSpending: view.actualSpending,
           isClosed: view.cycle.endsAt < now,
           spendingLimit: view.spendingLimit,
+          previousActualSpending: view.previousActualSpending,
           daysElapsed,
           totalDays,
-          categories: view.categoryRows.map((row) => {
-            const category = categoriesByKey.get(row.categoryId)
-            return {
-              id: row.categoryId,
-              name: row.categoryName,
-              group: row.budgetGroup,
-              planned: row.plannedAmount,
-              spent: row.actualAmount,
-              icon: category ? resolveCategoryIcon(category.icon) : undefined,
-              color: category
-                ? resolveCategoryColor(category.color)
-                : undefined,
-            }
-          }),
+          categories: view.categoryRows
+            .filter((row) => !row.archived)
+            .map((row) => {
+              const category = categoriesByKey.get(row.categoryId)
+              return {
+                id: row.categoryId,
+                name: row.categoryName,
+                group: row.budgetGroup,
+                planned: row.plannedAmount,
+                spent: row.actualAmount,
+                previousSpent: row.previousActualAmount,
+                icon: category ? resolveCategoryIcon(category.icon) : undefined,
+                color: category
+                  ? resolveCategoryColor(category.color)
+                  : undefined,
+              }
+            }),
           incomeSources: view.incomePlans.map((source) => ({
             id: source.sourceId,
             name: source.sourceName,
