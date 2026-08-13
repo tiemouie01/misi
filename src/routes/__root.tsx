@@ -12,6 +12,7 @@ import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 
 import appCss from '../styles.css?url'
+import { Toaster } from '#/components/ui/sonner'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import { authClient } from '#/lib/auth-client'
 import { getToken } from '#/lib/auth-server'
@@ -86,6 +87,7 @@ function RootComponent() {
     >
       <TooltipProvider>
         <Outlet />
+        <Toaster />
       </TooltipProvider>
     </ConvexBetterAuthProvider>
   )

@@ -3,12 +3,11 @@ import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { AppHeader } from '#/components/app/app-header'
 import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
-import { Button } from '#/components/ui/button'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 
 import type { Id } from '../../../convex/_generated/dataModel'
@@ -64,7 +63,7 @@ function BudgetRoute() {
   const saveCyclePlan = useMutation(api.misi.saveCyclePlan)
   const ensureSeedData = useMutation(api.misi.ensureSeedData)
   const [selectedCycleId, setSelectedCycleId] = useState<string>()
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [rolloverError, setRolloverError] = useState<string | null>(null)
   const requestedRollover = useRef(false)
   const cycleNeedsRollover =
     bootstrap?.currentCycle != null && bootstrap.currentCycle.endsAt < now
@@ -83,7 +82,9 @@ function BudgetRoute() {
       })
       .catch((error) => {
         requestedRollover.current = false
-        setSaveError(errorMessage(error, 'Unable to start the new cycle'))
+        const message = errorMessage(error, 'Unable to start the new cycle')
+        setRolloverError(message)
+        toast.error(message)
       })
   }, [cycleNeedsRollover, ensureSeedData, queryClient])
 
@@ -186,7 +187,6 @@ function BudgetRoute() {
   )
 
   async function savePlan(update: BudgetPlanUpdate) {
-    setSaveError(null)
     try {
       await saveCyclePlan({
         cycleId: update.cycleId as Id<'cycles'>,
@@ -205,9 +205,10 @@ function BudgetRoute() {
         }),
         queryClient.invalidateQueries({ queryKey: bootstrapQuery.queryKey }),
       ])
+      toast.success('Plan saved')
     } catch (error) {
       const message = errorMessage(error, 'Unable to save this cycle plan')
-      setSaveError(message)
+      toast.error(message)
       throw new Error(message)
     }
   }
@@ -215,30 +216,10 @@ function BudgetRoute() {
   return (
     <AppProviders>
       <div className="min-h-screen">
-        <AppHeader badge={cycles.at(0)?.label ?? 'Budget'} />
         <main className="page-wrap py-6 sm:py-8">
-          {saveError && (
-            <div
-              role="alert"
-              className="mb-5 flex items-start justify-between gap-3 rounded-2xl border border-coral/25 bg-coral/8 px-4 py-3"
-            >
-              <p className="text-sm font-semibold text-coral-deep">
-                {saveError}
-              </p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0 text-coral-deep"
-                onClick={() => setSaveError(null)}
-              >
-                Dismiss
-              </Button>
-            </div>
-          )}
           {cycleNeedsRollover ? (
             <div className="py-20 text-center text-sea-ink-soft">
-              {saveError ?? 'Starting your new cycle…'}
+              {rolloverError ?? 'Starting your new cycle…'}
             </div>
           ) : (
             <BudgetPage
@@ -248,7 +229,8 @@ function BudgetRoute() {
               onCycleChange={setSelectedCycleId}
               onManageIncomeSources={() =>
                 navigate({
-                  to: '/app/income-sources',
+                  to: '.',
+                  search: (prev) => ({ ...prev, task: 'income-sources' }),
                 })
               }
               onSavePlan={savePlan}

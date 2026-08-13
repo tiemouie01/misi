@@ -31,11 +31,13 @@ function clamp(value: number, min: number, max: number) {
 
 function PulseRow({
   to,
+  search,
   label,
   value,
   children,
 }: {
-  to: '/app/budget' | '/app/income-sources' | '/app/reconcile'
+  to: '/app' | '/app/budget'
+  search?: { task: 'income-sources' | 'reconcile' }
   label: string
   value: string
   children?: React.ReactNode
@@ -43,6 +45,7 @@ function PulseRow({
   return (
     <Link
       to={to}
+      search={search}
       className="group -mx-2 block rounded-xl px-2 py-2.5 no-underline transition-colors hover:bg-(--chip-bg)"
     >
       <div className="flex items-center justify-between gap-3">
@@ -143,7 +146,8 @@ export function CyclePulseCard({
           </p>
         </PulseRow>
         <PulseRow
-          to="/app/income-sources"
+          to="/app"
+          search={{ task: 'income-sources' }}
           label="Income"
           value={`${formatK(incomeLanded)} of ${formatK(incomeExpected)}`}
         >
@@ -172,7 +176,12 @@ export function CyclePulseCard({
             </span>
           </div>
         </PulseRow>
-        <PulseRow to="/app/reconcile" label="Reconcile" value="Check balances">
+        <PulseRow
+          to="/app"
+          search={{ task: 'reconcile' }}
+          label="Reconcile"
+          value="Check balances"
+        >
           <p className="mt-1.5 text-[0.75rem] text-sea-ink-soft">
             Does Misi agree with reality?
           </p>

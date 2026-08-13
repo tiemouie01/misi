@@ -4,9 +4,9 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { AppHeader } from '#/components/app/app-header'
 import { AppProviders } from '#/components/app/app-providers'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -80,7 +80,6 @@ function errorMessage(error: unknown, fallback: string) {
 
 function CategoriesPage() {
   const queryClient = useQueryClient()
-  const { data: bootstrap } = useSuspenseQuery(bootstrapQuery)
   const { data: listCategories } = useSuspenseQuery(listCategoriesQuery)
   const createCategory = useMutation(api.misi.createCategory)
   const updateCategory = useMutation(api.misi.updateCategory)
@@ -169,6 +168,7 @@ function CategoriesPage() {
       }
       await invalidateCategoryQueries()
       setEditor(null)
+      toast.success(editor.category ? 'Category updated' : 'Category added')
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to save category'))
     } finally {
@@ -186,6 +186,7 @@ function CategoriesPage() {
       })
       await invalidateCategoryQueries()
       setEditor(null)
+      toast.success('Category deleted')
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to delete category'))
     } finally {
@@ -202,8 +203,9 @@ function CategoriesPage() {
         id: category.id as Id<'categories'>,
       })
       await invalidateCategoryQueries()
+      toast.success('Category restored')
     } catch (caught) {
-      setError(errorMessage(caught, 'Unable to restore category'))
+      toast.error(errorMessage(caught, 'Unable to restore category'))
     } finally {
       setSaving(false)
     }
@@ -212,7 +214,6 @@ function CategoriesPage() {
   return (
     <AppProviders>
       <div className="min-h-screen">
-        <AppHeader badge={bootstrap?.currentCycle?.label ?? 'Categories'} />
         <main className="page-wrap py-6 sm:py-8">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -228,15 +229,6 @@ function CategoriesPage() {
               Add category
             </Button>
           </div>
-
-          {error && !editor && (
-            <p
-              role="alert"
-              className="mt-5 rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
-            >
-              {error}
-            </p>
-          )}
 
           <Card variant="island" className="mt-6 gap-0 rounded-3xl p-3 sm:p-4">
             {active.map((category, index) => (

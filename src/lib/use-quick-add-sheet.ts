@@ -1,5 +1,6 @@
 import { useMutation } from 'convex/react'
 import { useCallback, useState } from 'react'
+import { toast } from 'sonner'
 
 import { api } from '../../convex/_generated/api'
 
@@ -143,6 +144,7 @@ export function useQuickAddSheet({
             occurredAt: payload.occurredAt,
           })
         }
+        toast.success('Transaction updated')
       } else if (payload.type !== 'allocation') {
         await addTransaction({
           type: payload.type,
@@ -158,6 +160,7 @@ export function useQuickAddSheet({
           fromSavings: payload.fromSavings,
           occurredAt: payload.occurredAt,
         })
+        toast.success('Transaction logged')
       } else {
         throw new Error(
           'Envelope moves are created from Spendable, not Quick add',

@@ -4,9 +4,9 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { Waves } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { AppHeader } from '#/components/app/app-header'
 import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
 import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
@@ -20,7 +20,6 @@ import {
   TransactionsCard,
   TransactionDeleteDialog,
 } from '#/components/app/transactions-card'
-import { Button } from '#/components/ui/button'
 import {
   accountMwkValue,
   canDeleteTransaction,
@@ -170,7 +169,6 @@ function AppDashboard({
   const setAccountSpendableMutation = useMutation(api.misi.setAccountSpendable)
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -434,7 +432,10 @@ function AppDashboard({
     setDeleting(true)
     try {
       const deleted = await deleteTransaction(pendingDelete.id)
-      if (deleted) setPendingDelete(null)
+      if (deleted) {
+        setPendingDelete(null)
+        toast.success('Transaction deleted')
+      }
     } finally {
       setDeleting(false)
     }
@@ -442,26 +443,23 @@ function AppDashboard({
 
   async function confirmAutoSave() {
     if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
-    setActionError(null)
     try {
       await confirmAutoSaveMutation({
         transactionId: autoSaveUi.transactionId as Id<'transactions'>,
         amount: autoSaveUi.amount,
       })
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'saved' })
+      toast.success('Saved to savings')
     } catch (error) {
-      const message = mutationErrorMessage(
-        error,
-        'Unable to confirm auto-save. Try again.',
+      toast.error(
+        mutationErrorMessage(error, 'Unable to confirm auto-save. Try again.'),
       )
-      setActionError(message)
       console.error('Unable to confirm auto-save', error)
     }
   }
 
   async function dismissAutoSave() {
     if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
-    setActionError(null)
     try {
       await dismissAutoSaveMutation({
         transactionId: autoSaveUi.transactionId as Id<'transactions'>,
@@ -469,11 +467,9 @@ function AppDashboard({
       })
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'dismissed' })
     } catch (error) {
-      const message = mutationErrorMessage(
-        error,
-        'Unable to dismiss auto-save. Try again.',
+      toast.error(
+        mutationErrorMessage(error, 'Unable to dismiss auto-save. Try again.'),
       )
-      setActionError(message)
       console.error('Unable to dismiss auto-save', error)
     }
   }
@@ -482,59 +478,32 @@ function AppDashboard({
     amount: number
     direction: 'toSavings' | 'toSpending'
   }) {
-    setActionError(null)
     try {
       await moveSavingsMutation(input)
+      toast.success('Money moved')
     } catch (error) {
-      const message = mutationErrorMessage(
-        error,
-        'Unable to move money. Try again.',
+      toast.error(
+        mutationErrorMessage(error, 'Unable to move money. Try again.'),
       )
-      setActionError(message)
       console.error('Unable to move money', error)
       throw error
     }
   }
 
   function setAccountSpendable(accountId: string, includeInSpendable: boolean) {
-    setActionError(null)
     void setAccountSpendableMutation({
       accountId: accountId as Id<'accounts'>,
       includeInSpendable,
     }).catch((error) => {
-      const message = mutationErrorMessage(
-        error,
-        'Unable to update account. Try again.',
+      toast.error(
+        mutationErrorMessage(error, 'Unable to update account. Try again.'),
       )
-      setActionError(message)
       console.error('Unable to update account spendable flag', error)
     })
   }
 
   return (
     <div className="min-h-screen">
-      <AppHeader badge={cycleInfo.headerBadge} />
-      {actionError && (
-        <div className="page-wrap pt-4">
-          <div
-            role="alert"
-            className="flex items-start justify-between gap-3 rounded-2xl border border-coral/25 bg-coral/8 px-4 py-3"
-          >
-            <p className="text-sm font-semibold text-coral-deep">
-              {actionError}
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="shrink-0 text-coral-deep"
-              onClick={() => setActionError(null)}
-            >
-              Dismiss
-            </Button>
-          </div>
-        </div>
-      )}
       <main className="page-wrap pb-28 py-6 sm:py-8">
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_380px]">
           <div className="space-y-5">
