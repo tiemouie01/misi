@@ -1,36 +1,25 @@
-import { convexQuery } from '@convex-dev/react-query'
-import { useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
+import { createFileRoute, Navigate } from '@tanstack/react-router'
+import { usePowerSync } from '@powersync/react'
 import { useMemo, useState } from 'react'
 
-import { api } from '../../../convex/_generated/api'
 import { AppHeader } from '#/components/app/app-header'
-import { AppProviders } from '#/components/app/app-providers'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { ReconcileCard } from '#/components/app/reconcile-card'
 import { Button } from '#/components/ui/button'
 import { isSpendableAccount } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { useLocalBootstrap } from '#/lib/local/reads'
+import { absorbAdjustment } from '#/lib/local/writes'
 import {
   mutationErrorMessage,
   useQuickAddSheet,
 } from '#/lib/use-quick-add-sheet'
 
-import type { Id } from '../../../convex/_generated/dataModel'
 import type { Account, ReconcileBalance } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
 
-const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
-
 export const Route = createFileRoute('/app/reconcile')({
-  loader: async ({ context }) => {
-    const data = await context.queryClient.ensureQueryData(bootstrapQuery)
-    if (data === null || !data.settings?.onboardedAt) {
-      throw redirect({ to: '/onboarding' })
-    }
-    return { now: Date.now() }
-  },
+  loader: () => ({ now: Date.now() }),
   component: ReconcileRoute,
 })
 
@@ -44,8 +33,8 @@ function shortDate(timestamp: number) {
 
 function ReconcileRoute() {
   const { now } = Route.useLoaderData()
-  const { data } = useSuspenseQuery(bootstrapQuery)
-  const absorbAdjustmentMutation = useMutation(api.misi.absorbAdjustment)
+  const db = usePowerSync()
+  const { isLoading, data } = useLocalBootstrap()
   const [actionError, setActionError] = useState<string | null>(null)
   const [actualOverrides, setActualOverrides] = useState<
     Record<string, { expected: number; actual: number } | undefined>
@@ -141,13 +130,13 @@ function ReconcileRoute() {
     ? `opened ${shortDate(data.currentCycle.startsAt)}`
     : ''
 
-  async function absorbAdjustment(accountId: string) {
+  async function handleAbsorbAdjustment(accountId: string) {
     const balance = reconcile.find((item) => item.accountId === accountId)
     if (!balance) return
     setActionError(null)
     try {
-      await absorbAdjustmentMutation({
-        accountId: accountId as Id<'accounts'>,
+      await absorbAdjustment(db, {
+        accountUuid: accountId,
         actual: balance.actual,
         note: reconcileNote,
       })
@@ -162,9 +151,14 @@ function ReconcileRoute() {
     }
   }
 
+  if (isLoading) return null
+
+  if (data === null || !data.settings?.onboardedAt) {
+    return <Navigate to="/onboarding" />
+  }
+
   return (
-    <AppProviders>
-      <div className="min-h-screen">
+    <div className="min-h-screen">
         <AppHeader badge="Reconcile" />
         <main className="page-wrap py-6 sm:py-8">
           {actionError && (
@@ -206,7 +200,7 @@ function ReconcileRoute() {
                   },
                 }))
               }
-              onAbsorb={(accountId) => void absorbAdjustment(accountId)}
+              onAbsorb={(accountId) => void handleAbsorbAdjustment(accountId)}
               onLogMissing={openSheet}
               animationDelay="60ms"
             />
@@ -228,7 +222,6 @@ function ReconcileRoute() {
             onSave={(payload) => void saveTransaction(payload)}
           />
         )}
-      </div>
-    </AppProviders>
+    </div>
   )
 }

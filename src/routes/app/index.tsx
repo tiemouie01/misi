@@ -1,17 +1,11 @@
-import { convexQuery } from '@convex-dev/react-query'
-import { useSuspenseQuery } from '@tanstack/react-query'
-import {
-  createFileRoute,
-  Link,
-  redirect,
-} from '@tanstack/react-router'
+import { createFileRoute, Link, Navigate } from '@tanstack/react-router'
+import { usePowerSync } from '@powersync/react'
 import { useMutation } from 'convex/react'
 import { Waves } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../../../convex/_generated/api'
 import { AppHeader } from '#/components/app/app-header'
-import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
 import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
 import { NetWorthCard } from '#/components/app/net-worth-card'
@@ -24,24 +18,27 @@ import { TransactionsCard } from '#/components/app/transactions-card'
 import { Button } from '#/components/ui/button'
 import { accountMwkValue, formatK, isSpendableAccount } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { useLocalBootstrap } from '#/lib/local/reads'
+import {
+  confirmAutoSave as confirmAutoSaveLocal,
+  dismissAutoSave as dismissAutoSaveLocal,
+} from '#/lib/local/writes'
 import {
   mutationErrorMessage,
   useQuickAddSheet,
 } from '#/lib/use-quick-add-sheet'
 
-import type { FunctionReturnType } from 'convex/server'
-import type { Id } from '../../../convex/_generated/dataModel'
 import type { AutoSaveStatus } from '#/components/app/auto-save-card'
 import type { PulseIncomeSource } from '#/components/app/cycle-pulse-card'
 import type { Account, Txn, Wallet } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
+import type { LocalBootstrapData } from '#/lib/local/reads'
 
 const DAY_MS = 86_400_000
 
-type BootstrapData = NonNullable<FunctionReturnType<typeof api.misi.bootstrap>>
-type ReadyBootstrapData = BootstrapData & {
-  settings: NonNullable<BootstrapData['settings']>
-  currentCycle: NonNullable<BootstrapData['currentCycle']>
+type ReadyBootstrapData = LocalBootstrapData & {
+  settings: NonNullable<LocalBootstrapData['settings']>
+  currentCycle: NonNullable<LocalBootstrapData['currentCycle']>
 }
 
 interface AutoSaveUiState {
@@ -54,15 +51,7 @@ interface AutoSaveUiState {
 }
 
 export const Route = createFileRoute('/app/')({
-  loader: async ({ context }) => {
-    const data = await context.queryClient.ensureQueryData(
-      convexQuery(api.misi.bootstrap, {}),
-    )
-    if (data === null || !data.settings?.onboardedAt) {
-      throw redirect({ to: '/onboarding' })
-    }
-    return { now: Date.now() }
-  },
+  loader: () => ({ now: Date.now() }),
   component: AppHome,
 })
 
@@ -110,7 +99,12 @@ function LoadingState({ children }: { children: string }) {
 
 function AppHome() {
   const { now } = Route.useLoaderData()
-  const { data } = useSuspenseQuery(convexQuery(api.misi.bootstrap, {}))
+
+  return <AppHomeContent now={now} />
+}
+
+function AppHomeContent({ now }: { now: number }) {
+  const { isLoading, data } = useLocalBootstrap()
   const ensureSeedData = useMutation(api.misi.ensureSeedData)
   const requestedSeed = useRef(false)
   const [setupError, setSetupError] = useState<string | null>(null)
@@ -130,8 +124,16 @@ function AppHome() {
     })
   }, [cycleNeedsRollover, ensureSeedData])
 
-  if (data === null) {
+  if (isLoading) {
     return <LoadingState>Loading your accounts…</LoadingState>
+  }
+
+  if (
+    data === null ||
+    !data.settings?.onboardedAt ||
+    !data.currentCycle
+  ) {
+    return <Navigate to="/onboarding" />
   }
 
   if (cycleNeedsRollover) {
@@ -140,14 +142,15 @@ function AppHome() {
     )
   }
 
-  if (!data.settings || !data.currentCycle) {
-    return <LoadingState>Loading your accounts…</LoadingState>
-  }
-
   return (
-    <AppProviders>
-      <AppDashboard data={data as ReadyBootstrapData} now={now} />
-    </AppProviders>
+    <AppDashboard
+      data={{
+        ...data,
+        settings: data.settings,
+        currentCycle: data.currentCycle,
+      }}
+      now={now}
+    />
   )
 }
 
@@ -158,8 +161,7 @@ function AppDashboard({
   data: ReadyBootstrapData
   now: number
 }) {
-  const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
-  const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
+  const db = usePowerSync()
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -437,8 +439,8 @@ function AppDashboard({
     if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
     setActionError(null)
     try {
-      await confirmAutoSaveMutation({
-        transactionId: autoSaveUi.transactionId as Id<'transactions'>,
+      await confirmAutoSaveLocal(db, {
+        transactionUuid: autoSaveUi.transactionId,
         amount: autoSaveUi.amount,
       })
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'saved' })
@@ -456,8 +458,8 @@ function AppDashboard({
     if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
     setActionError(null)
     try {
-      await dismissAutoSaveMutation({
-        transactionId: autoSaveUi.transactionId as Id<'transactions'>,
+      await dismissAutoSaveLocal(db, {
+        transactionUuid: autoSaveUi.transactionId,
         amount: autoSaveUi.amount,
       })
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'dismissed' })

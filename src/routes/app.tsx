@@ -1,12 +1,10 @@
-import { convexQuery } from '@convex-dev/react-query'
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
-
-const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
+import { AppProviders } from '#/components/app/app-providers'
+import { useLocalBootstrap } from '#/lib/local/reads'
 
 function mutationErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) return error.message
@@ -14,6 +12,8 @@ function mutationErrorMessage(error: unknown, fallback: string) {
 }
 
 export const Route = createFileRoute('/app')({
+  // PowerSync (local SQLite) is browser-only, so the app shell never SSRs.
+  ssr: false,
   beforeLoad: ({ context }) => {
     if (!context.isAuthenticated) throw redirect({ to: '/login' })
   },
@@ -21,8 +21,15 @@ export const Route = createFileRoute('/app')({
 })
 
 function AppLayout() {
-  const queryClient = useQueryClient()
-  const { data } = useSuspenseQuery(bootstrapQuery)
+  return (
+    <AppProviders>
+      <AppLayoutContent />
+    </AppProviders>
+  )
+}
+
+function AppLayoutContent() {
+  const { isLoading, data } = useLocalBootstrap()
   const ensureDefaultCategories = useMutation(api.misi.ensureDefaultCategories)
   const requestedCategorySeed = useRef(false)
   const [setupError, setSetupError] = useState<string | null>(null)
@@ -40,9 +47,6 @@ function AppLayout() {
     void ensureDefaultCategories({})
       .then(() => {
         setSetupError(null)
-        return queryClient.invalidateQueries({
-          queryKey: bootstrapQuery.queryKey,
-        })
       })
       .catch((error) => {
         requestedCategorySeed.current = false
@@ -51,7 +55,9 @@ function AppLayout() {
         )
         console.error('Unable to set up categories', error)
       })
-  }, [categoryCount, data, ensureDefaultCategories, queryClient])
+  }, [categoryCount, data, ensureDefaultCategories])
+
+  if (isLoading) return null
 
   return (
     <>

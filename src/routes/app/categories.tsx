@@ -1,13 +1,9 @@
-import { convexQuery } from '@convex-dev/react-query'
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
+import { createFileRoute, Navigate } from '@tanstack/react-router'
+import { usePowerSync } from '@powersync/react'
 import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
-import { api } from '../../../convex/_generated/api'
 import { AppHeader } from '#/components/app/app-header'
-import { AppProviders } from '#/components/app/app-providers'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
@@ -31,12 +27,18 @@ import {
   resolveCategoryColor,
   resolveCategoryIcon,
 } from '#/lib/categories'
+import { useLocalBootstrap, useLocalCategories } from '#/lib/local/reads'
+import {
+  createCategory,
+  deleteCategory,
+  restoreCategory,
+  updateCategory,
+} from '#/lib/local/writes'
 import {
   CATEGORY_BUDGET_GROUP_LABELS,
   CATEGORY_BUDGET_GROUPS,
 } from '../../../shared/category-defs'
 
-import type { Id } from '../../../convex/_generated/dataModel'
 import type { Category } from '#/lib/categories'
 import type { BudgetGroup } from '../../../shared/category-defs'
 
@@ -56,19 +58,7 @@ type EditorState = {
   confirmDelete: boolean
 }
 
-const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
-const listCategoriesQuery = convexQuery(api.misi.listCategories, {})
-
 export const Route = createFileRoute('/app/categories')({
-  loader: async ({ context }) => {
-    const [data] = await Promise.all([
-      context.queryClient.ensureQueryData(bootstrapQuery),
-      context.queryClient.ensureQueryData(listCategoriesQuery),
-    ])
-    if (data === null || !data.settings?.onboardedAt) {
-      throw redirect({ to: '/onboarding' })
-    }
-  },
   component: CategoriesPage,
 })
 
@@ -78,19 +68,35 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 function CategoriesPage() {
-  const queryClient = useQueryClient()
-  const { data: bootstrap } = useSuspenseQuery(bootstrapQuery)
-  const { data: listCategories } = useSuspenseQuery(listCategoriesQuery)
-  const createCategory = useMutation(api.misi.createCategory)
-  const updateCategory = useMutation(api.misi.updateCategory)
-  const restoreCategory = useMutation(api.misi.restoreCategory)
-  const deleteCategory = useMutation(api.misi.deleteCategory)
+  return <CategoriesContent />
+}
+
+function CategoriesContent() {
+  const db = usePowerSync()
+  const { isLoading: bootstrapLoading, data: bootstrap } = useLocalBootstrap()
+  const { isLoading: categoriesLoading, data: listCategories } =
+    useLocalCategories()
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  if (bootstrapLoading || categoriesLoading) {
+    return (
+      <div className="min-h-screen">
+        <AppHeader badge="Categories" />
+        <main className="page-wrap py-6 sm:py-8">
+          <p className="text-sm text-sea-ink-soft">Loading categories…</p>
+        </main>
+      </div>
+    )
+  }
+
+  if (bootstrap === null || !bootstrap.settings?.onboardedAt) {
+    return <Navigate to="/onboarding" />
+  }
+
   const categories: ManagedCategory[] = listCategories.map((category) => ({
-    id: category._id,
+    id: category.id,
     key: category.key,
     name: category.name,
     icon: resolveCategoryIcon(category.icon),
@@ -129,28 +135,21 @@ function CategoriesPage() {
     })
   }
 
-  async function invalidateCategoryQueries() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: bootstrapQuery.queryKey }),
-      queryClient.invalidateQueries({ queryKey: listCategoriesQuery.queryKey }),
-    ])
-  }
-
   async function save() {
     if (!editor || saving) return
     setError(null)
     setSaving(true)
     try {
       if (editor.category) {
-        const id = editor.category.id as Id<'categories'>
+        const id = editor.category.id
         if (editor.category.isSystem) {
-          await updateCategory({
+          await updateCategory(db, {
             id,
             icon: editor.iconId,
             color: editor.colorId,
           })
         } else {
-          await updateCategory({
+          await updateCategory(db, {
             id,
             name: editor.name,
             icon: editor.iconId,
@@ -159,14 +158,13 @@ function CategoriesPage() {
           })
         }
       } else {
-        await createCategory({
+        await createCategory(db, {
           name: editor.name,
           icon: editor.iconId,
           color: editor.colorId,
           budgetGroup: editor.budgetGroup,
         })
       }
-      await invalidateCategoryQueries()
       setEditor(null)
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to save category'))
@@ -180,10 +178,9 @@ function CategoriesPage() {
     setError(null)
     setSaving(true)
     try {
-      await deleteCategory({
-        id: editor.category.id as Id<'categories'>,
+      await deleteCategory(db, {
+        id: editor.category.id,
       })
-      await invalidateCategoryQueries()
       setEditor(null)
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to delete category'))
@@ -197,10 +194,9 @@ function CategoriesPage() {
     setError(null)
     setSaving(true)
     try {
-      await restoreCategory({
-        id: category.id as Id<'categories'>,
+      await restoreCategory(db, {
+        id: category.id,
       })
-      await invalidateCategoryQueries()
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to restore category'))
     } finally {
@@ -209,80 +205,78 @@ function CategoriesPage() {
   }
 
   return (
-    <AppProviders>
-      <div className="min-h-screen">
-        <AppHeader badge={bootstrap?.currentCycle?.label ?? 'Categories'} />
-        <main className="page-wrap py-6 sm:py-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
-                Categories
-              </h1>
-              <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
-                Customise how your spending is grouped.
-              </p>
-            </div>
-            <Button type="button" onClick={openAdd}>
-              <Plus className="size-4" />
-              Add category
-            </Button>
-          </div>
-
-          {error && !editor && (
-            <p
-              role="alert"
-              className="mt-5 rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
-            >
-              {error}
+    <div className="min-h-screen">
+      <AppHeader badge={bootstrap.currentCycle?.label ?? 'Categories'} />
+      <main className="page-wrap py-6 sm:py-8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
+              Categories
+            </h1>
+            <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
+              Customise how your spending is grouped.
             </p>
-          )}
+          </div>
+          <Button type="button" onClick={openAdd}>
+            <Plus className="size-4" />
+            Add category
+          </Button>
+        </div>
 
-          <Card variant="island" className="mt-6 gap-0 rounded-3xl p-3 sm:p-4">
-            {active.map((category, index) => (
-              <CategoryRow
-                key={category.id}
-                category={category}
-                divided={index > 0}
-                onEdit={() => openEdit(category)}
-                onDelete={() => openEdit(category, true)}
-              />
-            ))}
-          </Card>
-
-          {archived.length > 0 && (
-            <section className="mt-8 border-t border-dashed border-(--line) pt-6">
-              <p className="field-label">Archived</p>
-              <Card
-                variant="island"
-                className="mt-3 gap-0 rounded-3xl p-3 sm:p-4"
-              >
-                {archived.map((category, index) => (
-                  <CategoryRow
-                    key={category.id}
-                    category={category}
-                    divided={index > 0}
-                    archived
-                    onRestore={() => void restore(category)}
-                  />
-                ))}
-              </Card>
-            </section>
-          )}
-        </main>
-
-        {editor && (
-          <CategoryDialog
-            editor={editor}
-            error={error}
-            saving={saving}
-            onChange={setEditor}
-            onClose={() => setEditor(null)}
-            onSave={() => void save()}
-            onDelete={() => void remove()}
-          />
+        {error && !editor && (
+          <p
+            role="alert"
+            className="mt-5 rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+          >
+            {error}
+          </p>
         )}
-      </div>
-    </AppProviders>
+
+        <Card variant="island" className="mt-6 gap-0 rounded-3xl p-3 sm:p-4">
+          {active.map((category, index) => (
+            <CategoryRow
+              key={category.id}
+              category={category}
+              divided={index > 0}
+              onEdit={() => openEdit(category)}
+              onDelete={() => openEdit(category, true)}
+            />
+          ))}
+        </Card>
+
+        {archived.length > 0 && (
+          <section className="mt-8 border-t border-dashed border-(--line) pt-6">
+            <p className="field-label">Archived</p>
+            <Card
+              variant="island"
+              className="mt-3 gap-0 rounded-3xl p-3 sm:p-4"
+            >
+              {archived.map((category, index) => (
+                <CategoryRow
+                  key={category.id}
+                  category={category}
+                  divided={index > 0}
+                  archived
+                  onRestore={() => void restore(category)}
+                />
+              ))}
+            </Card>
+          </section>
+        )}
+      </main>
+
+      {editor && (
+        <CategoryDialog
+          editor={editor}
+          error={error}
+          saving={saving}
+          onChange={setEditor}
+          onClose={() => setEditor(null)}
+          onSave={() => void save()}
+          onDelete={() => void remove()}
+        />
+      )}
+    </div>
   )
 }
 

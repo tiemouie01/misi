@@ -1,17 +1,16 @@
-import { convexQuery } from '@convex-dev/react-query'
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { usePowerSync } from '@powersync/react'
+import { createFileRoute, Navigate, useNavigate } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../../../convex/_generated/api'
 import { AppHeader } from '#/components/app/app-header'
-import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
 import { Button } from '#/components/ui/button'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { useLocalBootstrap, useLocalBudgetOverview } from '#/lib/local/reads'
+import { saveCyclePlan } from '#/lib/local/writes'
 
-import type { Id } from '../../../convex/_generated/dataModel'
 import type {
   BudgetCycle,
   BudgetHistoryRow,
@@ -19,20 +18,9 @@ import type {
 } from '#/components/budget'
 
 const DAY_MS = 86_400_000
-const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
-const budgetOverviewQuery = convexQuery(api.misi.budgetOverview, {})
 
 export const Route = createFileRoute('/app/budget')({
-  loader: async ({ context }) => {
-    const [bootstrap] = await Promise.all([
-      context.queryClient.ensureQueryData(bootstrapQuery),
-      context.queryClient.ensureQueryData(budgetOverviewQuery),
-    ])
-    if (bootstrap === null || !bootstrap.settings?.onboardedAt) {
-      throw redirect({ to: '/onboarding' })
-    }
-    return { now: Date.now() }
-  },
+  loader: () => ({ now: Date.now() }),
   component: BudgetRoute,
 })
 
@@ -57,35 +45,31 @@ function errorMessage(error: unknown, fallback: string) {
 
 function BudgetRoute() {
   const { now } = Route.useLoaderData()
+  return <BudgetRouteContent now={now} />
+}
+
+function BudgetRouteContent({ now }: { now: number }) {
   const navigate = useNavigate({ from: Route.fullPath })
-  const queryClient = useQueryClient()
-  const { data: bootstrap } = useSuspenseQuery(bootstrapQuery)
-  const { data: overview } = useSuspenseQuery(budgetOverviewQuery)
-  const saveCyclePlan = useMutation(api.misi.saveCyclePlan)
+  const db = usePowerSync()
+  const { isLoading: bootstrapLoading, data: bootstrap } = useLocalBootstrap()
+  const { isLoading: overviewLoading, data: overview } =
+    useLocalBudgetOverview()
   const ensureSeedData = useMutation(api.misi.ensureSeedData)
   const [selectedCycleId, setSelectedCycleId] = useState<string>()
   const [saveError, setSaveError] = useState<string | null>(null)
   const requestedRollover = useRef(false)
+  const isLoading = bootstrapLoading || overviewLoading
   const cycleNeedsRollover =
     bootstrap?.currentCycle != null && bootstrap.currentCycle.endsAt < now
 
   useEffect(() => {
     if (!cycleNeedsRollover || requestedRollover.current) return
     requestedRollover.current = true
-    void ensureSeedData({})
-      .then(async () => {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: bootstrapQuery.queryKey }),
-          queryClient.invalidateQueries({
-            queryKey: budgetOverviewQuery.queryKey,
-          }),
-        ])
-      })
-      .catch((error) => {
-        requestedRollover.current = false
-        setSaveError(errorMessage(error, 'Unable to start the new cycle'))
-      })
-  }, [cycleNeedsRollover, ensureSeedData, queryClient])
+    void ensureSeedData({}).catch((error) => {
+      requestedRollover.current = false
+      setSaveError(errorMessage(error, 'Unable to start the new cycle'))
+    })
+  }, [cycleNeedsRollover, ensureSeedData])
 
   const categoriesByKey = useMemo(
     () =>
@@ -184,23 +168,17 @@ function BudgetRoute() {
   async function savePlan(update: BudgetPlanUpdate) {
     setSaveError(null)
     try {
-      await saveCyclePlan({
-        cycleId: update.cycleId as Id<'cycles'>,
+      await saveCyclePlan(db, {
+        cycleUuid: update.cycleId,
         spendingLimit: update.spendingLimit,
         categoryPlans: [...update.categoryPlans],
         incomePlans: update.incomePlans?.map((plan) => ({
-          sourceId: plan.sourceId as Id<'incomeSources'>,
+          sourceId: plan.sourceId,
           expectedAmount: plan.expectedAmount,
           expectedAmountMax: plan.expectedAmountMax,
           savingsRate: plan.savingsRate,
         })),
       })
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: budgetOverviewQuery.queryKey,
-        }),
-        queryClient.invalidateQueries({ queryKey: bootstrapQuery.queryKey }),
-      ])
     } catch (error) {
       const message = errorMessage(error, 'Unable to save this cycle plan')
       setSaveError(message)
@@ -208,50 +186,53 @@ function BudgetRoute() {
     }
   }
 
+  if (!isLoading && (bootstrap === null || !bootstrap.settings?.onboardedAt)) {
+    return <Navigate to="/onboarding" />
+  }
+
   return (
-    <AppProviders>
-      <div className="min-h-screen">
-        <AppHeader badge={cycles.at(0)?.label ?? 'Budget'} />
-        <main className="page-wrap py-6 sm:py-8">
-          {saveError && (
-            <div
-              role="alert"
-              className="mb-5 flex items-start justify-between gap-3 rounded-2xl border border-coral/25 bg-coral/8 px-4 py-3"
+    <div className="min-h-screen">
+      <AppHeader badge={cycles.at(0)?.label ?? 'Budget'} />
+      <main className="page-wrap py-6 sm:py-8">
+        {saveError && (
+          <div
+            role="alert"
+            className="mb-5 flex items-start justify-between gap-3 rounded-2xl border border-coral/25 bg-coral/8 px-4 py-3"
+          >
+            <p className="text-sm font-semibold text-coral-deep">
+              {saveError}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-coral-deep"
+              onClick={() => setSaveError(null)}
             >
-              <p className="text-sm font-semibold text-coral-deep">
-                {saveError}
-              </p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0 text-coral-deep"
-                onClick={() => setSaveError(null)}
-              >
-                Dismiss
-              </Button>
-            </div>
-          )}
-          {cycleNeedsRollover ? (
-            <div className="py-20 text-center text-sea-ink-soft">
-              {saveError ?? 'Starting your new cycle…'}
-            </div>
-          ) : (
-            <BudgetPage
-              cycles={cycles}
-              history={history}
-              currentCycleId={selectedCycleId ?? cycles.at(0)?.id}
-              onCycleChange={setSelectedCycleId}
-              onManageIncomeSources={() =>
-                navigate({
-                  to: '/app/income-sources',
-                })
-              }
-              onSavePlan={savePlan}
-            />
-          )}
-        </main>
-      </div>
-    </AppProviders>
+              Dismiss
+            </Button>
+          </div>
+        )}
+        {isLoading || cycleNeedsRollover ? (
+          <div className="py-20 text-center text-sea-ink-soft">
+            {saveError ??
+              (isLoading ? 'Loading…' : 'Starting your new cycle…')}
+          </div>
+        ) : (
+          <BudgetPage
+            cycles={cycles}
+            history={history}
+            currentCycleId={selectedCycleId ?? cycles.at(0)?.id}
+            onCycleChange={setSelectedCycleId}
+            onManageIncomeSources={() =>
+              navigate({
+                to: '/app/income-sources',
+              })
+            }
+            onSavePlan={savePlan}
+          />
+        )}
+      </main>
+    </div>
   )
 }

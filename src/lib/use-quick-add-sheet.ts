@@ -1,9 +1,11 @@
-import { useMutation } from 'convex/react'
+import { usePowerSync } from '@powersync/react'
 import { useCallback, useState } from 'react'
 
-import { api } from '../../convex/_generated/api'
+import {
+  addTransaction,
+  updateTransaction,
+} from '#/lib/local/writes'
 
-import type { Id } from '../../convex/_generated/dataModel'
 import type {
   Account,
   QuickAddInitial,
@@ -30,8 +32,7 @@ export function useQuickAddSheet({
   defaultSavingsRate,
   defaultExpenseAccountId,
 }: QuickAddSheetOptions) {
-  const addTransaction = useMutation(api.misi.addTransaction)
-  const updateTransaction = useMutation(api.misi.updateTransaction)
+  const db = usePowerSync()
   const [sheet, setSheet] = useState<{
     open: boolean
     initial: QuickAddInitial
@@ -74,8 +75,8 @@ export function useQuickAddSheet({
   )
 
   const resolveIncomeSourceId = useCallback(
-    (payload: QuickAddPayload): Id<'incomeSources'> | undefined => {
-      if (payload.sourceId) return payload.sourceId as Id<'incomeSources'>
+    (payload: QuickAddPayload): string | undefined => {
+      if (payload.sourceId) return payload.sourceId
       if (payload.type !== 'income') return undefined
 
       const payee = payload.payee.trim().toLowerCase()
@@ -86,7 +87,7 @@ export function useQuickAddSheet({
         return payee === name || payee.includes(name) || name.includes(payee)
       })
 
-      return match?.id as Id<'incomeSources'> | undefined
+      return match?.id
     },
     [incomeSources],
   )
@@ -122,8 +123,8 @@ export function useQuickAddSheet({
         amount: payload.amount,
         payee: payload.payee,
         categoryId: payload.categoryId,
-        accountId: payload.accountId as Id<'accounts'>,
-        toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
+        accountId: payload.accountId,
+        toAccountId: payload.toAccountId,
         items: payload.items,
         note: payload.note,
         sourceId,
@@ -133,13 +134,13 @@ export function useQuickAddSheet({
         if (payload.occurredAt === undefined) {
           throw new Error('Transaction date is missing')
         }
-        await updateTransaction({
-          transactionId: payload.transactionId as Id<'transactions'>,
+        await updateTransaction(db, {
+          transactionId: payload.transactionId,
           ...transaction,
           occurredAt: payload.occurredAt,
         })
       } else {
-        await addTransaction({
+        await addTransaction(db, {
           ...transaction,
           occurredAt: payload.occurredAt,
         })
