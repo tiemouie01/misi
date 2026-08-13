@@ -182,12 +182,16 @@ export function TransactionsCard({
                       disabled={!canMutate}
                       aria-label={
                         canMutate
-                          ? `Edit ${transaction.payee} transaction`
+                          ? transaction.autoSave
+                            ? `Edit ${transaction.payee}`
+                            : `Edit ${transaction.payee} transaction`
                           : undefined
                       }
                       title={
                         canMutate
-                          ? 'Edit transaction'
+                          ? transaction.autoSave
+                            ? 'Edit auto-save'
+                            : 'Edit transaction'
                           : 'Generated transactions cannot be edited'
                       }
                       className="group h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-2.5 text-left disabled:opacity-100"

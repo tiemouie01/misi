@@ -1,16 +1,17 @@
 import { CalendarIcon, Delete, PiggyBank, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
 
+import { AccountPicker } from '#/components/app/account-picker'
+import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
+import { Calendar } from '#/components/ui/calendar'
+import { Card } from '#/components/ui/card'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
 } from '#/components/ui/dialog'
-import { Badge } from '#/components/ui/badge'
-import { Button } from '#/components/ui/button'
-import { Calendar } from '#/components/ui/calendar'
-import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -23,7 +24,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '#/components/ui/tooltip'
-import { formatK, isSpendableAccount, oneTapRecents } from '#/lib/app-data'
+import { formatK, oneTapRecents } from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
 
 import type {
@@ -220,41 +221,6 @@ export function QuickAddFab({ onOpen }: QuickAddFabProps) {
   )
 }
 
-function AccountPicker({
-  label,
-  accounts,
-  selected,
-  onSelect,
-}: {
-  label: string
-  accounts: Account[]
-  selected: string
-  onSelect: (id: string) => void
-}) {
-  return (
-    <fieldset className="mt-5">
-      <legend className="field-label mb-2">{label}</legend>
-      <div className="flex min-w-0 flex-wrap gap-2">
-        {accounts
-          .filter((account) => isSpendableAccount(account))
-          .map((account) => (
-            <Button
-              key={account.id}
-              type="button"
-              aria-pressed={selected === account.id}
-              variant="secondary"
-              size="sm"
-              className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
-              onClick={() => onSelect(account.id)}
-            >
-              <span className="truncate">{account.name}</span>
-            </Button>
-          ))}
-      </div>
-    </fieldset>
-  )
-}
-
 export function QuickAddSheet({
   initial,
   categories,
@@ -294,10 +260,12 @@ export function QuickAddSheet({
     initial.excludeFromBudget ?? false,
   )
   const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
+  const isAutoSave = initial.autoSave === true
   const amount = Number(digits || '0')
   const autoSaveRate = autoSaveRateForPayee(payee)
   const canSave =
-    amount > 0 && (mode !== 'transfer' || accountId !== toAccountId)
+    amount > 0 &&
+    (isAutoSave || mode !== 'transfer' || accountId !== toAccountId)
 
   function appendDigits(value: string) {
     setDigits((current) => {
@@ -310,13 +278,14 @@ export function QuickAddSheet({
     if (!canSave) return
     onSave({
       transactionId: initial.transactionId,
-      type: mode,
+      type: isAutoSave ? 'transfer' : mode,
       amount,
-      categoryId: mode === 'expense' ? categoryId : undefined,
+      categoryId: isAutoSave || mode !== 'expense' ? undefined : categoryId,
       accountId,
-      toAccountId: mode === 'transfer' ? toAccountId : undefined,
-      payee:
-        mode === 'transfer'
+      toAccountId: isAutoSave || mode !== 'transfer' ? undefined : toAccountId,
+      payee: isAutoSave
+        ? (initial.payee ?? 'Auto-save')
+        : mode === 'transfer'
           ? 'Transfer'
           : payee.trim() ||
             (mode === 'income'
@@ -401,32 +370,42 @@ export function QuickAddSheet({
     >
       <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] w-full min-w-0 max-w-none translate-x-0 translate-y-0 gap-0 overflow-x-hidden overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
         <DialogTitle className="sr-only">
-          {isEditing ? 'Edit transaction' : 'Log a transaction'}
+          {isAutoSave
+            ? 'Edit auto-save'
+            : isEditing
+              ? 'Edit transaction'
+              : 'Log a transaction'}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {isEditing
-            ? 'Update the transaction details.'
-            : 'Enter an amount and optional transaction details.'}
+          {isAutoSave
+            ? 'Change the auto-save amount or the account it is deducted from.'
+            : isEditing
+              ? 'Update the transaction details.'
+              : 'Enter an amount and optional transaction details.'}
         </DialogDescription>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-(--line) sm:hidden" />
-        <div className="mr-11 grid min-w-0 grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
-          {(['expense', 'income', 'transfer'] as const).map((type) => (
-            <Button
-              key={type}
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={mode === type}
-              className="min-w-0 w-full px-1.5 aria-pressed:bg-(--surface-strong) aria-pressed:text-sea-ink aria-pressed:shadow-sm"
-              onClick={() => switchMode(type)}
-            >
-              <span className="truncate">
-                {type[0].toUpperCase()}
-                {type.slice(1)}
-              </span>
-            </Button>
-          ))}
-        </div>
+        {isAutoSave ? (
+          <p className="island-kicker mr-11">Auto-save → Savings</p>
+        ) : (
+          <div className="mr-11 grid min-w-0 grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
+            {(['expense', 'income', 'transfer'] as const).map((type) => (
+              <Button
+                key={type}
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={mode === type}
+                className="min-w-0 w-full px-1.5 aria-pressed:bg-(--surface-strong) aria-pressed:text-sea-ink aria-pressed:shadow-sm"
+                onClick={() => switchMode(type)}
+              >
+                <span className="truncate">
+                  {type[0].toUpperCase()}
+                  {type.slice(1)}
+                </span>
+              </Button>
+            ))}
+          </div>
+        )}
         <div className="mt-5 min-w-0 text-center">
           <p className="island-kicker">Amount (MWK)</p>
           <p
@@ -505,7 +484,14 @@ export function QuickAddSheet({
             </div>
           </>
         )}
-        {mode === 'transfer' ? (
+        {isAutoSave ? (
+          <AccountPicker
+            label="Deduct from"
+            accounts={accounts}
+            selected={accountId}
+            onSelect={setAccountId}
+          />
+        ) : mode === 'transfer' ? (
           <>
             <AccountPicker
               label="From account"

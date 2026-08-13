@@ -380,6 +380,26 @@ async function requireOwnedAccount(
   return account
 }
 
+async function requireAutoSaveSourceAccount(
+  ctx: ReadCtx,
+  userId: string,
+  accountId: Id<'accounts'>,
+) {
+  const account = await requireOwnedAccount(ctx, userId, accountId)
+
+  if (account.currency !== 'MWK') {
+    throw new Error(
+      'Auto-save can only be deducted from a Malawi Kwacha account',
+    )
+  }
+
+  if (account.kind === 'investment') {
+    throw new Error('Auto-save cannot be deducted from an investment account')
+  }
+
+  return account
+}
+
 async function requireOwnedTransaction(
   ctx: ReadCtx,
   userId: string,
@@ -533,6 +553,36 @@ async function applyTransactionBalanceTransition(
     const account = await requireOwnedAccount(ctx, userId, accountId)
     await ctx.db.patch(account._id, { balance: account.balance + change })
   }
+}
+
+async function applyAutoSaveSourceChange(
+  ctx: MutationCtx,
+  userId: string,
+  previous: { accountId: Id<'accounts'>; amount: number } | null,
+  next: { accountId: Id<'accounts'>; amount: number } | null,
+) {
+  const changes = new Map<Id<'accounts'>, number>()
+  const addChange = (accountId: Id<'accounts'>, amount: number) => {
+    changes.set(accountId, (changes.get(accountId) ?? 0) + amount)
+  }
+
+  if (previous) addChange(previous.accountId, previous.amount)
+  if (next) addChange(next.accountId, -next.amount)
+
+  for (const [accountId, change] of changes) {
+    if (change === 0) continue
+    const account = await requireOwnedAccount(ctx, userId, accountId)
+    await ctx.db.patch(account._id, { balance: account.balance + change })
+  }
+}
+
+async function rememberAutoSaveSourceAccount(
+  ctx: MutationCtx,
+  settings: Doc<'settings'>,
+  accountId: Id<'accounts'>,
+) {
+  if (settings.autoSaveSourceAccountId === accountId) return
+  await ctx.db.patch(settings._id, { autoSaveSourceAccountId: accountId })
 }
 
 async function requireOwnedIncomeTransaction(
@@ -1977,6 +2027,10 @@ export const updateTransaction = mutation({
       args.transactionId,
     )
 
+    if (transaction.autoSave) {
+      return await updateAutoSaveTransaction(ctx, user._id, transaction, args)
+    }
+
     await assertMutableUserTransaction(ctx, transaction, 'edited')
 
     await validateTransactionInput(ctx, user._id, args)
@@ -2022,6 +2076,17 @@ export const deleteTransaction = mutation({
       args.transactionId,
     )
 
+    if (transaction.autoSave) {
+      await applyAutoSaveSourceChange(
+        ctx,
+        user._id,
+        { accountId: transaction.accountId, amount: transaction.amount },
+        null,
+      )
+      await ctx.db.delete(transaction._id)
+      return transaction._id
+    }
+
     await assertMutableUserTransaction(ctx, transaction, 'deleted')
     await applyTransactionBalanceTransition(ctx, user._id, transaction, null)
     await ctx.db.delete(transaction._id)
@@ -2030,10 +2095,60 @@ export const deleteTransaction = mutation({
   },
 })
 
+async function updateAutoSaveTransaction(
+  ctx: MutationCtx,
+  userId: string,
+  transaction: Doc<'transactions'>,
+  args: {
+    type: Doc<'transactions'>['type']
+    amount: number
+    accountId: Id<'accounts'>
+    toAccountId?: Id<'accounts'>
+    categoryId?: string
+    occurredAt: number
+    items?: string
+    note?: string
+  },
+) {
+  if (args.type !== 'transfer') {
+    throw new Error('Auto-save transfers cannot change type')
+  }
+  if (args.toAccountId) {
+    throw new Error('Auto-save moves to Savings, not another account')
+  }
+  if (args.categoryId) {
+    throw new Error('A category is only valid for expenses')
+  }
+
+  assertPositiveAmount(args.amount)
+  await requireAutoSaveSourceAccount(ctx, userId, args.accountId)
+  const cycle = await ensureCycleForDate(ctx, userId, args.occurredAt)
+  const settings = await requireSettings(ctx, userId)
+
+  await applyAutoSaveSourceChange(
+    ctx,
+    userId,
+    { accountId: transaction.accountId, amount: transaction.amount },
+    { accountId: args.accountId, amount: args.amount },
+  )
+  await ctx.db.patch(transaction._id, {
+    amount: args.amount,
+    accountId: args.accountId,
+    items: args.items,
+    note: args.note,
+    cycleId: cycle._id,
+    occurredAt: args.occurredAt,
+  })
+  await rememberAutoSaveSourceAccount(ctx, settings, args.accountId)
+
+  return transaction._id
+}
+
 export const confirmAutoSave = mutation({
   args: {
     transactionId: v.id('transactions'),
     amount: v.number(),
+    sourceAccountId: v.id('accounts'),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
@@ -2056,16 +2171,7 @@ export const confirmAutoSave = mutation({
 
     await assertNoAutoSaveEvent(ctx, args.transactionId)
     const settings = await requireSettings(ctx, user._id)
-
-    if (!settings.autoSaveSourceAccountId) {
-      throw new Error('Auto-save source account is not configured')
-    }
-
-    const sourceAccount = await requireOwnedAccount(
-      ctx,
-      user._id,
-      settings.autoSaveSourceAccountId,
-    )
+    await requireAutoSaveSourceAccount(ctx, user._id, args.sourceAccountId)
     const [source, cyclePlans] = await Promise.all([
       incomeTransaction.sourceId
         ? ctx.db.get(incomeTransaction.sourceId)
@@ -2086,14 +2192,15 @@ export const confirmAutoSave = mutation({
       type: 'transfer',
       amount: args.amount,
       payee: `Auto-save — ${Math.round(savingsRate * 100)}% of income`,
-      accountId: settings.autoSaveSourceAccountId,
+      accountId: args.sourceAccountId,
       walletId: 'savings',
       autoSave: true,
       excludeFromBudget: true,
       occurredAt: Date.now(),
     })
-    await ctx.db.patch(sourceAccount._id, {
-      balance: sourceAccount.balance - args.amount,
+    await applyAutoSaveSourceChange(ctx, user._id, null, {
+      accountId: args.sourceAccountId,
+      amount: args.amount,
     })
     await ctx.db.insert('autoSaveEvents', {
       userId: user._id,
@@ -2101,6 +2208,7 @@ export const confirmAutoSave = mutation({
       status: 'confirmed',
       amount: args.amount,
     })
+    await rememberAutoSaveSourceAccount(ctx, settings, args.sourceAccountId)
 
     return transactionId
   },

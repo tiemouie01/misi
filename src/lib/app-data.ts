@@ -73,6 +73,7 @@ export interface QuickAddInitial {
   note?: string
   occurredAt?: number
   excludeFromBudget?: boolean
+  autoSave?: true
   reconcile?: true
 }
 
@@ -113,11 +114,9 @@ export function isSpendableAccount(account: Account | string) {
 export function canMutateTransaction(
   transaction: Pick<Txn, 'adjustment' | 'autoSave' | 'walletId'>,
 ) {
-  return (
-    !transaction.adjustment &&
-    !transaction.autoSave &&
-    transaction.walletId === 'spending'
-  )
+  if (transaction.adjustment) return false
+  if (transaction.autoSave) return true
+  return transaction.walletId === 'spending'
 }
 
 /** Prototype cycle copy and numbers — one source for UI strings and math. */

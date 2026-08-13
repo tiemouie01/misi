@@ -53,6 +53,7 @@ interface AutoSaveUiState {
   status: AutoSaveStatus
   amount: number
   sourceName: string
+  sourceAccountId: string
   savingsRate: number
   occurredAt: number
 }
@@ -384,6 +385,13 @@ function AppDashboard({
       (balance) => balance.accountId !== defaultTransferFromAccountId,
     )?.accountId ??
     defaultTransferFromAccountId
+  const defaultAutoSaveSourceAccountId =
+    data.settings.autoSaveSourceAccountId &&
+    expectedBalances.some(
+      (balance) => balance.accountId === data.settings.autoSaveSourceAccountId,
+    )
+      ? data.settings.autoSaveSourceAccountId
+      : defaultTransferFromAccountId
 
   const {
     sheet,
@@ -414,6 +422,7 @@ function AppDashboard({
           status: 'proposed',
           amount: pendingAutoSave.amount,
           sourceName: pendingAutoSave.sourceName,
+          sourceAccountId: defaultAutoSaveSourceAccountId,
           savingsRate: pendingAutoSave.savingsRate,
           occurredAt: pendingAutoSave.occurredAt,
         }
@@ -437,6 +446,7 @@ function AppDashboard({
       note: transaction.note,
       occurredAt: transaction.occurredAt,
       excludeFromBudget: transaction.excludeFromBudget,
+      autoSave: transaction.autoSave,
     })
   }
 
@@ -458,12 +468,18 @@ function AppDashboard({
   }
 
   async function confirmAutoSave() {
-    if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
+    if (
+      !autoSaveUi ||
+      autoSaveUi.status !== 'proposed' ||
+      !autoSaveUi.sourceAccountId
+    )
+      return
     setActionError(null)
     try {
       await confirmAutoSaveMutation({
         transactionId: autoSaveUi.transactionId as Id<'transactions'>,
         amount: autoSaveUi.amount,
+        sourceAccountId: autoSaveUi.sourceAccountId as Id<'accounts'>,
       })
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'saved' })
     } catch (error) {
@@ -550,10 +566,15 @@ function AppDashboard({
                 status={autoSaveUi.status}
                 amount={autoSaveUi.amount}
                 sourceName={autoSaveUi.sourceName}
+                sourceAccountId={autoSaveUi.sourceAccountId}
+                accounts={accounts}
                 rateLabel={`${Math.round(autoSaveUi.savingsRate * 100)}%`}
                 landedLabel={transactionDayLabel(autoSaveUi.occurredAt, now)}
                 onAmountChange={(amount) =>
                   setLocalAutoSaveUi({ ...autoSaveUi, amount })
+                }
+                onSourceAccountChange={(sourceAccountId) =>
+                  setLocalAutoSaveUi({ ...autoSaveUi, sourceAccountId })
                 }
                 onConfirm={() => void confirmAutoSave()}
                 onDismiss={() => void dismissAutoSave()}
