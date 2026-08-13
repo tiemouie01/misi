@@ -1,4 +1,4 @@
-import { Calendar, Delete, PiggyBank, Plus } from 'lucide-react'
+import { Calendar, Delete, PiggyBank, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
 
 import {
@@ -11,6 +11,11 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '#/components/ui/tooltip'
 import { formatK, isSpendableAccount, oneTapRecents } from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
 
@@ -42,6 +47,7 @@ interface QuickAddSheetProps {
   error?: string | null
   onClose: () => void
   onSave: (payload: QuickAddPayload) => void
+  onDelete?: () => void
 }
 
 interface QuickAddFabProps {
@@ -148,16 +154,21 @@ export function QuickAddCard({
 
 export function QuickAddFab({ onOpen }: QuickAddFabProps) {
   return (
-    <div className="fixed inset-x-0 bottom-5 z-40 flex justify-center lg:hidden">
-      <Button
-        type="button"
-        size="lg"
-        className="h-auto px-6 py-3.5 shadow-xl"
-        onClick={() => onOpen({ mode: 'expense' })}
-      >
-        <Plus className="size-5" />
-        Log transaction
-      </Button>
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            aria-label="Log a transaction"
+            size="icon-lg"
+            className="pointer-events-auto size-14 shadow-lg hover:shadow-xl"
+            onClick={() => onOpen({ mode: 'expense' })}
+          >
+            <Plus className="size-6" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Log a transaction</TooltipContent>
+      </Tooltip>
     </div>
   )
 }
@@ -210,6 +221,7 @@ export function QuickAddSheet({
   error,
   onClose,
   onSave,
+  onDelete,
 }: QuickAddSheetProps) {
   const isEditing = initial.transactionId !== undefined
   const [mode, setMode] = useState<TxnType>(initial.mode)
@@ -573,6 +585,17 @@ export function QuickAddSheet({
         >
           {saveLabel}
         </Button>
+        {isEditing && onDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="mt-3 h-auto w-full py-3 text-coral-deep hover:bg-coral/10 hover:text-coral-deep"
+            onClick={onDelete}
+          >
+            <Trash2 className="size-4" />
+            Delete transaction
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   )

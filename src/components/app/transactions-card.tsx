@@ -1,8 +1,17 @@
-import { ArrowDownToLine, ArrowLeftRight, Tag } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeftRight, Tag, Trash2 } from 'lucide-react'
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
-import { formatK } from '#/lib/app-data'
+import { canMutateTransaction, formatK } from '#/lib/app-data'
 import { resolveCategory } from '#/lib/categories'
 
 import type { Account, Txn } from '#/lib/app-data'
@@ -15,6 +24,70 @@ interface TransactionsCardProps {
   cycleLabel: string
   animationDelay: string
   onEdit: (transaction: Txn) => void
+  onDelete: (transaction: Txn) => void
+}
+
+interface TransactionDeleteDialogProps {
+  transaction: Txn | null
+  error?: string | null
+  busy?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+function transactionAmountLabel(transaction: Txn) {
+  if (transaction.type === 'expense') return formatK(-transaction.amount)
+  if (transaction.type === 'income') return `+${formatK(transaction.amount)}`
+  return formatK(transaction.amount)
+}
+
+export function TransactionDeleteDialog({
+  transaction,
+  error,
+  busy,
+  onCancel,
+  onConfirm,
+}: TransactionDeleteDialogProps) {
+  return (
+    <AlertDialog
+      open={transaction !== null}
+      onOpenChange={(open) => {
+        if (!open && !busy) onCancel()
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Delete {transaction?.payee ?? 'transaction'}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {transaction
+              ? `This permanently removes ${transactionAmountLabel(transaction)} and reverses it on your accounts.`
+              : 'This permanently removes the transaction and reverses it on your accounts.'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+          >
+            {error}
+          </p>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Keep it</AlertDialogCancel>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy ? 'Deleting…' : 'Delete transaction'}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 export function TransactionsCard({
@@ -24,6 +97,7 @@ export function TransactionsCard({
   cycleLabel,
   animationDelay,
   onEdit,
+  onDelete,
 }: TransactionsCardProps) {
   const groups = transactions.reduce<Array<{ day: string; txns: Txn[] }>>(
     (result, transaction) => {
@@ -95,70 +169,82 @@ export function TransactionsCard({
                     : transaction.type === 'income'
                       ? `Income · ${account?.name ?? 'Account'}`
                       : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
-                const amountLabel =
-                  transaction.type === 'expense'
-                    ? formatK(-transaction.amount)
-                    : transaction.type === 'income'
-                      ? `+${formatK(transaction.amount)}`
-                      : formatK(transaction.amount)
-                const canEdit = !transaction.adjustment && !transaction.autoSave
+                const amountLabel = transactionAmountLabel(transaction)
+                const canMutate = canMutateTransaction(transaction)
                 return (
-                  <Button
+                  <div
                     key={transaction.id}
-                    type="button"
-                    variant="ghost"
-                    disabled={!canEdit}
-                    aria-label={
-                      canEdit
-                        ? `Edit ${transaction.payee} transaction`
-                        : undefined
-                    }
-                    title={
-                      canEdit
-                        ? 'Edit transaction'
-                        : 'Generated transactions cannot be edited'
-                    }
-                    className="group h-auto w-full justify-start gap-3 whitespace-normal rounded-xl px-2 py-2.5 text-left disabled:opacity-100"
-                    onClick={() => onEdit(transaction)}
+                    className="flex items-center gap-0.5"
                   >
-                    <span
-                      className="grid size-9 shrink-0 place-items-center rounded-lg"
-                      style={{
-                        background: `color-mix(in oklab, ${color} 14%, transparent)`,
-                        color,
-                      }}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={!canMutate}
+                      aria-label={
+                        canMutate
+                          ? `Edit ${transaction.payee} transaction`
+                          : undefined
+                      }
+                      title={
+                        canMutate
+                          ? 'Edit transaction'
+                          : 'Generated transactions cannot be edited'
+                      }
+                      className="group h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-2.5 text-left disabled:opacity-100"
+                      onClick={() => onEdit(transaction)}
                     >
-                      <Icon className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-sea-ink">
-                        {transaction.payee}
+                      <span
+                        className="grid size-9 shrink-0 place-items-center rounded-lg"
+                        style={{
+                          background: `color-mix(in oklab, ${color} 14%, transparent)`,
+                          color,
+                        }}
+                      >
+                        <Icon className="size-4" />
                       </span>
-                      <span className="block text-[0.75rem] text-sea-ink-soft">
-                        {subline}
-                        {transaction.items && (
-                          <>
-                            {' · '}
-                            <span className="italic">
-                              items: {transaction.items}
-                            </span>
-                          </>
-                        )}
-                        {transaction.adjustment && ' · Reconcile'}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold text-sea-ink">
+                          {transaction.payee}
+                        </span>
+                        <span className="block text-[0.75rem] text-sea-ink-soft">
+                          {subline}
+                          {transaction.items && (
+                            <>
+                              {' · '}
+                              <span className="italic">
+                                items: {transaction.items}
+                              </span>
+                            </>
+                          )}
+                          {transaction.adjustment && ' · Reconcile'}
+                        </span>
                       </span>
-                    </span>
-                    <span
-                      className={`font-mono shrink-0 text-sm font-semibold tabular-nums ${
-                        transaction.type === 'income'
-                          ? 'text-palm'
-                          : transaction.type === 'transfer'
-                            ? 'text-sea-ink-soft'
-                            : 'text-sea-ink'
-                      }`}
-                    >
-                      {amountLabel}
-                    </span>
-                  </Button>
+                      <span
+                        className={`font-mono shrink-0 text-sm font-semibold tabular-nums ${
+                          transaction.type === 'income'
+                            ? 'text-palm'
+                            : transaction.type === 'transfer'
+                              ? 'text-sea-ink-soft'
+                              : 'text-sea-ink'
+                        }`}
+                      >
+                        {amountLabel}
+                      </span>
+                    </Button>
+                    {canMutate && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Delete ${transaction.payee} transaction`}
+                        title="Delete transaction"
+                        className="size-9 shrink-0 text-sea-ink-soft hover:bg-coral/10 hover:text-coral-deep"
+                        onClick={() => onDelete(transaction)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </div>
                 )
               })}
             </div>

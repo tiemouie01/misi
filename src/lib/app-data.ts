@@ -110,6 +110,16 @@ export function isSpendableAccount(account: Account | string) {
   return (SPENDABLE_ACCOUNT_IDS as readonly string[]).includes(account)
 }
 
+export function canMutateTransaction(
+  transaction: Pick<Txn, 'adjustment' | 'autoSave' | 'walletId'>,
+) {
+  return (
+    !transaction.adjustment &&
+    !transaction.autoSave &&
+    transaction.walletId === 'spending'
+  )
+}
+
 /** Prototype cycle copy and numbers — one source for UI strings and math. */
 export const CYCLE = {
   spendingLimit: 650000,

@@ -394,6 +394,32 @@ async function requireOwnedTransaction(
   return transaction
 }
 
+async function assertMutableUserTransaction(
+  ctx: ReadCtx,
+  transaction: Doc<'transactions'>,
+  action: 'edited' | 'deleted',
+) {
+  if (
+    transaction.adjustment ||
+    transaction.autoSave ||
+    transaction.walletId !== 'spending'
+  ) {
+    throw new Error(`Generated transactions cannot be ${action}`)
+  }
+
+  if (transaction.type !== 'income') return
+
+  const autoSaveEvent = await ctx.db
+    .query('autoSaveEvents')
+    .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
+    .first()
+  if (autoSaveEvent) {
+    throw new Error(
+      `Income with a handled savings proposal cannot be ${action}`,
+    )
+  }
+}
+
 async function requireOwnedCycle(
   ctx: ReadCtx,
   userId: string,
@@ -1951,27 +1977,7 @@ export const updateTransaction = mutation({
       args.transactionId,
     )
 
-    if (
-      transaction.adjustment ||
-      transaction.autoSave ||
-      transaction.walletId !== 'spending'
-    ) {
-      throw new Error('Generated transactions cannot be edited')
-    }
-
-    if (transaction.type === 'income') {
-      const autoSaveEvent = await ctx.db
-        .query('autoSaveEvents')
-        .withIndex('by_transaction', (q) =>
-          q.eq('transactionId', transaction._id),
-        )
-        .first()
-      if (autoSaveEvent) {
-        throw new Error(
-          'Income with a handled savings proposal cannot be edited',
-        )
-      }
-    }
+    await assertMutableUserTransaction(ctx, transaction, 'edited')
 
     await validateTransactionInput(ctx, user._id, args)
     const cycle = await ensureCycleForDate(ctx, user._id, args.occurredAt)
@@ -1999,6 +2005,26 @@ export const updateTransaction = mutation({
       cycleId: cycle._id,
       occurredAt: args.occurredAt,
     })
+
+    return transaction._id
+  },
+})
+
+export const deleteTransaction = mutation({
+  args: {
+    transactionId: v.id('transactions'),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const transaction = await requireOwnedTransaction(
+      ctx,
+      user._id,
+      args.transactionId,
+    )
+
+    await assertMutableUserTransaction(ctx, transaction, 'deleted')
+    await applyTransactionBalanceTransition(ctx, user._id, transaction, null)
+    await ctx.db.delete(transaction._id)
 
     return transaction._id
   },

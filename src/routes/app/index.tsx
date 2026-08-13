@@ -1,10 +1,6 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import {
-  createFileRoute,
-  Link,
-  redirect,
-} from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { Waves } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -20,9 +16,17 @@ import {
   QuickAddFab,
   QuickAddSheet,
 } from '#/components/app/quick-add'
-import { TransactionsCard } from '#/components/app/transactions-card'
+import {
+  TransactionsCard,
+  TransactionDeleteDialog,
+} from '#/components/app/transactions-card'
 import { Button } from '#/components/ui/button'
-import { accountMwkValue, formatK, isSpendableAccount } from '#/lib/app-data'
+import {
+  accountMwkValue,
+  canMutateTransaction,
+  formatK,
+  isSpendableAccount,
+} from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import {
   mutationErrorMessage,
@@ -163,6 +167,8 @@ function AppDashboard({
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const accounts = useMemo<Account[]>(
     () =>
@@ -385,6 +391,7 @@ function AppDashboard({
     openSheet,
     closeSheet,
     saveTransaction,
+    deleteTransaction,
     resolveAccountId,
     autoSaveRateForPayee,
   } = useQuickAddSheet({
@@ -416,7 +423,7 @@ function AppDashboard({
       : null
 
   function editTransaction(transaction: Txn) {
-    if (transaction.adjustment || transaction.autoSave) return
+    if (!canMutateTransaction(transaction)) return
     openSheet({
       transactionId: transaction.id,
       mode: transaction.type,
@@ -431,6 +438,23 @@ function AppDashboard({
       occurredAt: transaction.occurredAt,
       excludeFromBudget: transaction.excludeFromBudget,
     })
+  }
+
+  function requestDelete(transaction: Txn) {
+    if (!canMutateTransaction(transaction)) return
+    closeSheet()
+    setPendingDelete(transaction)
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete || deleting) return
+    setDeleting(true)
+    try {
+      const deleted = await deleteTransaction(pendingDelete.id)
+      if (deleted) setPendingDelete(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function confirmAutoSave() {
@@ -495,7 +519,7 @@ function AppDashboard({
           </div>
         </div>
       )}
-      <main className="page-wrap pb-28 py-6 sm:py-8 lg:pb-10">
+      <main className="page-wrap pb-28 py-6 sm:py-8">
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_380px]">
           <div className="space-y-5">
             <section>
@@ -543,6 +567,7 @@ function AppDashboard({
               cycleLabel={cycleInfo.label}
               animationDelay="180ms"
               onEdit={editTransaction}
+              onDelete={requestDelete}
             />
           </div>
           <div className="space-y-5">
@@ -579,7 +604,7 @@ function AppDashboard({
           </Link>
         </footer>
       </main>
-      <QuickAddFab onOpen={openSheet} />
+      {!sheet.open && !pendingDelete && <QuickAddFab onOpen={openSheet} />}
       {sheet.open && (
         <QuickAddSheet
           initial={sheet.initial}
@@ -594,8 +619,29 @@ function AppDashboard({
           error={quickAddError}
           onClose={closeSheet}
           onSave={(payload) => void saveTransaction(payload)}
+          onDelete={
+            sheet.initial.transactionId
+              ? () => {
+                  const transaction = transactions.find(
+                    (item) => item.id === sheet.initial.transactionId,
+                  )
+                  if (transaction) requestDelete(transaction)
+                }
+              : undefined
+          }
         />
       )}
+      <TransactionDeleteDialog
+        transaction={pendingDelete}
+        error={pendingDelete ? quickAddError : null}
+        busy={deleting}
+        onCancel={() => {
+          if (deleting) return
+          closeSheet()
+          setPendingDelete(null)
+        }}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   )
 }

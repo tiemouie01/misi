@@ -4,11 +4,7 @@ import { useCallback, useState } from 'react'
 import { api } from '../../convex/_generated/api'
 
 import type { Id } from '../../convex/_generated/dataModel'
-import type {
-  Account,
-  QuickAddInitial,
-  QuickAddPayload,
-} from '#/lib/app-data'
+import type { Account, QuickAddInitial, QuickAddPayload } from '#/lib/app-data'
 
 interface QuickAddSheetOptions {
   accounts: Account[]
@@ -32,6 +28,7 @@ export function useQuickAddSheet({
 }: QuickAddSheetOptions) {
   const addTransaction = useMutation(api.misi.addTransaction)
   const updateTransaction = useMutation(api.misi.updateTransaction)
+  const removeTransaction = useMutation(api.misi.deleteTransaction)
   const [sheet, setSheet] = useState<{
     open: boolean
     initial: QuickAddInitial
@@ -156,12 +153,33 @@ export function useQuickAddSheet({
     }
   }
 
+  async function deleteTransaction(transactionId: string) {
+    setError(null)
+    try {
+      await removeTransaction({
+        transactionId: transactionId as Id<'transactions'>,
+      })
+      closeSheet()
+      return true
+    } catch (caught) {
+      setError(
+        mutationErrorMessage(
+          caught,
+          'Unable to delete transaction. Try again.',
+        ),
+      )
+      console.error('Unable to delete transaction', caught)
+      return false
+    }
+  }
+
   return {
     sheet,
     error,
     openSheet,
     closeSheet,
     saveTransaction,
+    deleteTransaction,
     resolveAccountId,
     autoSaveRateForPayee,
   }
