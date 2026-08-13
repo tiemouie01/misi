@@ -76,6 +76,61 @@ function formatTransactionDate(occurredAt: number) {
   }).format(new Date(occurredAt))
 }
 
+const MAX_AMOUNT_WHOLE_DIGITS = 9
+const MAX_AMOUNT_FRACTION_DIGITS = 2
+
+function amountToDigits(amount: number) {
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  return String(Math.round(amount * 100) / 100)
+}
+
+function parseAmountDigits(digits: string) {
+  if (!digits || digits === '.') return 0
+  const amount = Number(digits)
+  if (!Number.isFinite(amount)) return 0
+  return Math.round(amount * 100) / 100
+}
+
+function appendAmountInput(current: string, value: string) {
+  if (value === '.' || value === ',') {
+    if (current.includes('.')) return current
+    return current === '' ? '0.' : `${current}.`
+  }
+
+  if (!/^\d+$/.test(value)) return current
+
+  if (current.includes('.')) {
+    const [whole, fraction = ''] = current.split('.')
+    if (fraction.length >= MAX_AMOUNT_FRACTION_DIGITS) return current
+    const nextFraction = `${fraction}${value}`.slice(
+      0,
+      MAX_AMOUNT_FRACTION_DIGITS,
+    )
+    return `${whole}.${nextFraction}`
+  }
+
+  if (current === '0') {
+    return value.replace(/^0+/, '') || '0'
+  }
+
+  const next = `${current}${value}`.replace(/^0+(\d)/, '$1')
+  return next.slice(0, MAX_AMOUNT_WHOLE_DIGITS)
+}
+
+function formatAmountDigitsDisplay(digits: string) {
+  if (!digits) return 'K 0'
+
+  const hasDecimal = digits.includes('.')
+  const [wholePart, fractionPart = ''] = digits.split('.')
+  const whole = Number(wholePart || '0')
+  const formattedWhole = Number.isFinite(whole)
+    ? whole.toLocaleString('en-US')
+    : '0'
+
+  if (!hasDecimal) return `K ${formattedWhole}`
+  return `K ${formattedWhole}.${fractionPart}`
+}
+
 function TransactionDatePicker({
   occurredAt,
   onChange,
@@ -239,7 +294,7 @@ export function QuickAddSheet({
   const isEditing = initial.transactionId !== undefined
   const [mode, setMode] = useState<TxnType>(initial.mode)
   const [digits, setDigits] = useState(
-    initial.amount ? String(initial.amount) : '',
+    initial.amount ? amountToDigits(initial.amount) : '',
   )
   const [categoryId, setCategoryId] = useState(
     initial.categoryId ?? firstExpenseCategoryKey(categories),
@@ -261,17 +316,14 @@ export function QuickAddSheet({
   )
   const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
   const isAutoSave = initial.autoSave === true
-  const amount = Number(digits || '0')
+  const amount = parseAmountDigits(digits)
   const autoSaveRate = autoSaveRateForPayee(payee)
   const canSave =
     amount > 0 &&
     (isAutoSave || mode !== 'transfer' || accountId !== toAccountId)
 
   function appendDigits(value: string) {
-    setDigits((current) => {
-      const next = `${current}${value}`.replace(/^0+/, '')
-      return next.slice(0, 9)
-    })
+    setDigits((current) => appendAmountInput(current, value))
   }
 
   function save() {
@@ -321,6 +373,9 @@ export function QuickAddSheet({
     if (/^\d$/.test(event.key)) {
       event.preventDefault()
       appendDigits(event.key)
+    } else if (event.key === '.' || event.key === ',') {
+      event.preventDefault()
+      appendDigits('.')
     } else if (event.key === 'Backspace') {
       event.preventDefault()
       setDigits((current) => current.slice(0, -1))
@@ -335,7 +390,7 @@ export function QuickAddSheet({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const amountDisplay = amount ? `K ${amount.toLocaleString('en-US')}` : 'K 0'
+  const amountDisplay = formatAmountDigitsDisplay(digits)
   const saveLabel = isEditing
     ? 'Save changes'
     : mode === 'expense'
@@ -345,7 +400,7 @@ export function QuickAddSheet({
         : `Move${amount ? ` ${formatK(amount)}` : ''}`
 
   function selectRecent(recent: RecentTransaction) {
-    setDigits(String(recent.amount))
+    setDigits(amountToDigits(recent.amount))
     setCategoryId(recent.categoryId)
     setAccountId(resolveAccountId(recent.accountId))
     setPayee(recent.payee)
@@ -411,7 +466,7 @@ export function QuickAddSheet({
           <p
             aria-live="polite"
             aria-atomic="true"
-            className={`font-mono mt-1 max-w-full truncate text-[2.6rem] font-bold tracking-tight tabular-nums ${amount ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
+            className={`font-mono mt-1 max-w-full truncate text-[2.6rem] font-bold tracking-tight tabular-nums ${digits ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
           >
             {amountDisplay}
           </p>
@@ -422,12 +477,13 @@ export function QuickAddSheet({
           )}
         </div>
         <div className="mt-4 grid min-w-0 grid-cols-3 gap-2">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0'].map(
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0'].map(
             (key) => (
               <Button
                 key={key}
                 type="button"
                 variant="secondary"
+                aria-label={key === '.' ? 'Decimal point' : undefined}
                 className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
                 onClick={() => appendDigits(key)}
               >

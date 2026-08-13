@@ -216,7 +216,9 @@ export const seedReconcile: ReconcileBalance[] = [
 ]
 
 export function formatK(value: number) {
-  const absolute = Math.abs(value).toLocaleString('en-US')
+  const absolute = Math.abs(value).toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+  })
   return `${value < 0 ? '-' : ''}K${absolute}`
 }
 
