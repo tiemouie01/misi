@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -401,9 +402,9 @@ function CategoryDialog({
         </div>
 
         <div className="mt-5">
-          <label htmlFor="category-name" className="field-label mb-2 block">
+          <Label htmlFor="category-name" className="mb-2">
             Name
-          </label>
+          </Label>
           <Input
             id="category-name"
             disabled={isSystem}
@@ -443,12 +444,14 @@ function CategoryDialog({
           <legend className="field-label mb-2">Color</legend>
           <div className="flex flex-wrap gap-3">
             {CATEGORY_COLORS.map((color) => (
-              <button
+              <Button
                 key={color.id}
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 aria-label={color.label}
                 aria-pressed={editor.colorId === color.id}
-                className="size-8 rounded-full aria-pressed:ring-2 aria-pressed:ring-sea-ink aria-pressed:ring-offset-2 aria-pressed:ring-offset-(--surface-strong)"
+                className="size-8 rounded-full hover:opacity-90 hover:bg-transparent aria-pressed:ring-2 aria-pressed:ring-sea-ink aria-pressed:ring-offset-2 aria-pressed:ring-offset-(--surface-strong)"
                 style={{ background: `var(--${color.id})` }}
                 onClick={() => onChange({ ...editor, colorId: color.id })}
               />
@@ -457,12 +460,9 @@ function CategoryDialog({
         </fieldset>
 
         <div className="mt-5">
-          <label
-            htmlFor="category-budget-group"
-            className="field-label mb-2 block"
-          >
+          <Label htmlFor="category-budget-group" className="mb-2">
             Budget group
-          </label>
+          </Label>
           <Select
             value={editor.budgetGroup}
             disabled={isSystem}

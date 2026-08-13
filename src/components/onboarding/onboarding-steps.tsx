@@ -410,20 +410,17 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
         {ACCOUNT_PRESETS.map((preset) => {
           const selected = isPresetSelected(preset.name)
           return (
-            <button
+            <Button
               key={preset.name}
               type="button"
+              variant={selected ? 'default' : 'outline'}
+              size="sm"
               aria-pressed={selected}
+              className="hover:translate-y-0"
               onClick={() => togglePreset(preset)}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-[0.85rem] font-semibold transition-colors',
-                selected
-                  ? 'border-lagoon-deep bg-lagoon-deep text-(--btn-text)'
-                  : 'border-(--line) text-sea-ink hover:border-lagoon-deep',
-              )}
             >
               {preset.name}
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -668,9 +665,11 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
               />
             </div>
           </div>
-          <button
+          <Button
             type="button"
+            variant="secondary"
             aria-pressed={source.isAnchor}
+            className="h-auto w-full justify-between rounded-xl px-3 py-2 text-left text-[0.8rem] font-normal whitespace-normal aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon/10 aria-pressed:text-sea-ink"
             onClick={() =>
               setDraft((current) => ({
                 ...current,
@@ -680,19 +679,13 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
                 })),
               }))
             }
-            className={cn(
-              'flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-[0.8rem] transition-colors',
-              source.isAnchor
-                ? 'border-lagoon-deep bg-lagoon/10 text-sea-ink'
-                : 'border-(--line) text-sea-ink-soft hover:border-lagoon-deep',
-            )}
           >
             <span>
               <span className="font-semibold">Anchor income</span>
               <span className="ml-2">Used to keep payday cycles aligned.</span>
             </span>
             <span className="font-bold">{source.isAnchor ? 'Yes' : 'Set'}</span>
-          </button>
+          </Button>
         </div>
       ))}
       <Button
@@ -965,14 +958,15 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
             <h2 className="font-display text-[0.95rem] font-bold text-sea-ink">
               {section.title}
             </h2>
-            <button
+            <Button
               type="button"
-              className="text-[0.8rem] font-bold text-lagoon-deep"
+              variant="link"
+              className="h-auto text-[0.8rem] font-bold"
               aria-label={`Edit ${section.title}`}
               onClick={() => goToStep(section.step)}
             >
               Edit
-            </button>
+            </Button>
           </div>
           <dl className="space-y-1.5">
             {section.rows.map(([label, value]) => (

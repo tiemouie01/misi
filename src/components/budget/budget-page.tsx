@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { Progress } from '#/components/ui/progress'
 import {
   Select,
@@ -1109,20 +1110,23 @@ function BudgetEditDialog({
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1.5">
+              <Label
+                htmlFor="budget-spending-limit"
+                className="flex flex-col items-stretch gap-1.5 font-normal normal-case tracking-normal select-text"
+              >
                 <span className="text-xs font-bold text-sea-ink-soft">
                   Spending limit ({currency})
                 </span>
                 <Input
+                  id="budget-spending-limit"
                   type="number"
                   min="0"
                   step="1"
                   inputMode="numeric"
                   value={draft.spendingLimit}
                   onChange={handleAmountChange('spendingLimit')}
-                  aria-label="Spending limit"
                 />
-              </label>
+              </Label>
               <div className="rounded-xl border border-(--line) bg-(--chip-bg) px-3 py-2.5">
                 <p className="text-xs font-bold text-sea-ink-soft">
                   Derived savings target
@@ -1155,9 +1159,10 @@ function BudgetEditDialog({
             <div className="space-y-2.5">
               {cycle.categories.length > 0 ? (
                 cycle.categories.map((category) => (
-                  <label
+                  <Label
                     key={category.id}
-                    className="flex items-center gap-3 rounded-2xl border border-(--line) bg-(--chip-bg) px-3.5 py-3"
+                    htmlFor={`budget-category-${category.id}`}
+                    className="flex items-center gap-3 rounded-2xl border border-(--line) bg-(--chip-bg) px-3.5 py-3 font-normal normal-case tracking-normal select-text"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-bold text-sea-ink">
@@ -1172,6 +1177,7 @@ function BudgetEditDialog({
                         {currency}
                       </span>
                       <Input
+                        id={`budget-category-${category.id}`}
                         type="number"
                         min="0"
                         step="1"
@@ -1182,7 +1188,7 @@ function BudgetEditDialog({
                         className="h-9"
                       />
                     </span>
-                  </label>
+                  </Label>
                 ))
               ) : (
                 <p className="rounded-2xl border border-dashed border-(--line) px-4 py-4 text-sm text-sea-ink-soft">
@@ -1223,11 +1229,15 @@ function BudgetEditDialog({
                       </span>
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <label className="space-y-1">
+                      <Label
+                        htmlFor={`budget-income-expected-${source.id}`}
+                        className="flex flex-col items-stretch gap-1 font-normal normal-case tracking-normal select-text"
+                      >
                         <span className="text-[0.68rem] font-bold text-sea-ink-soft">
                           Expected ({currency})
                         </span>
                         <Input
+                          id={`budget-income-expected-${source.id}`}
                           type="number"
                           min="0"
                           step="1"
@@ -1242,12 +1252,16 @@ function BudgetEditDialog({
                           aria-label={`${source.name} expected income`}
                           className="h-9"
                         />
-                      </label>
-                      <label className="space-y-1">
+                      </Label>
+                      <Label
+                        htmlFor={`budget-income-max-${source.id}`}
+                        className="flex flex-col items-stretch gap-1 font-normal normal-case tracking-normal select-text"
+                      >
                         <span className="text-[0.68rem] font-bold text-sea-ink-soft">
                           Max ({currency}, optional)
                         </span>
                         <Input
+                          id={`budget-income-max-${source.id}`}
                           type="number"
                           min="0"
                           step="1"
@@ -1263,12 +1277,16 @@ function BudgetEditDialog({
                           aria-label={`${source.name} maximum expected income`}
                           className="h-9"
                         />
-                      </label>
-                      <label className="space-y-1">
+                      </Label>
+                      <Label
+                        htmlFor={`budget-income-rate-${source.id}`}
+                        className="flex flex-col items-stretch gap-1 font-normal normal-case tracking-normal select-text"
+                      >
                         <span className="text-[0.68rem] font-bold text-sea-ink-soft">
                           Save rate (%)
                         </span>
                         <Input
+                          id={`budget-income-rate-${source.id}`}
                           type="number"
                           min="0"
                           max="100"
@@ -1284,7 +1302,7 @@ function BudgetEditDialog({
                           aria-label={`${source.name} savings rate`}
                           className="h-9"
                         />
-                      </label>
+                      </Label>
                     </div>
                   </div>
                 ))

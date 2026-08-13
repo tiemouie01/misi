@@ -11,6 +11,7 @@ import { ThemeToggle } from '#/components/theme-toggle'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { authClient } from '#/lib/auth-client'
 
 import type { FormEvent } from 'react'
@@ -171,9 +172,7 @@ function LoginPage() {
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
               {!isSignIn && (
                 <div>
-                  <label className="field-label" htmlFor="login-name">
-                    Name
-                  </label>
+                  <Label htmlFor="login-name">Name</Label>
                   <Input
                     id="login-name"
                     className="mt-2"
@@ -185,9 +184,7 @@ function LoginPage() {
                 </div>
               )}
               <div>
-                <label className="field-label" htmlFor="login-email">
-                  Email
-                </label>
+                <Label htmlFor="login-email">Email</Label>
                 <Input
                   id="login-email"
                   className="mt-2"
@@ -199,9 +196,7 @@ function LoginPage() {
                 />
               </div>
               <div>
-                <label className="field-label" htmlFor="login-password">
-                  Password
-                </label>
+                <Label htmlFor="login-password">Password</Label>
                 <Input
                   id="login-password"
                   className="mt-2"
@@ -238,13 +233,14 @@ function LoginPage() {
 
             <p className="mt-5 text-center text-[0.85rem] text-sea-ink-soft">
               {isSignIn ? 'New to Misi? ' : 'Already have an account? '}
-              <button
+              <Button
                 type="button"
-                className="font-bold text-lagoon-deep"
+                variant="link"
+                className="h-auto align-baseline text-[0.85rem] font-bold"
                 onClick={toggleMode}
               >
                 {isSignIn ? 'Create an account' : 'Sign in'}
-              </button>
+              </Button>
             </p>
           </div>
         </Card>

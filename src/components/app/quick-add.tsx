@@ -1,4 +1,4 @@
-import { Calendar, Delete, PiggyBank, Plus, Trash2 } from 'lucide-react'
+import { CalendarIcon, Delete, PiggyBank, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
 
 import {
@@ -9,8 +9,15 @@ import {
 } from '#/components/ui/dialog'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
+import { Calendar } from '#/components/ui/calendar'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '#/components/ui/popover'
 import {
   Tooltip,
   TooltipContent,
@@ -54,17 +61,57 @@ interface QuickAddFabProps {
   onOpen: (initial: QuickAddInitial) => void
 }
 
-function transactionDateValue(occurredAt: number) {
-  const date = new Date(occurredAt)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+function occurredAtFromDate(date: Date) {
+  const next = new Date(date)
+  next.setHours(12, 0, 0, 0)
+  return next.getTime()
 }
 
-function transactionDateTimestamp(value: string) {
-  const timestamp = new Date(`${value}T12:00:00`).getTime()
-  return Number.isFinite(timestamp) ? timestamp : Date.now()
+function formatTransactionDate(occurredAt: number) {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(occurredAt))
+}
+
+function TransactionDatePicker({
+  occurredAt,
+  onChange,
+}: {
+  occurredAt: number
+  onChange: (occurredAt: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = new Date(occurredAt)
+
+  return (
+    <Popover modal open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 w-[9.25rem] max-w-full shrink justify-start rounded-xl px-3 font-semibold shadow-sm"
+          aria-label="Transaction date"
+        >
+          <CalendarIcon className="size-4 shrink-0 text-lagoon-deep" />
+          <span className="truncate">{formatTransactionDate(occurredAt)}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected}
+          onSelect={(date) => {
+            if (!date) return
+            onChange(occurredAtFromDate(date))
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function RecentChips({
@@ -286,6 +333,12 @@ export function QuickAddSheet({
 
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target
+    if (
+      target instanceof Element &&
+      target.closest('[data-slot="popover-content"], [data-slot="calendar"]')
+    ) {
+      return
+    }
     const inField =
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement
@@ -477,9 +530,9 @@ export function QuickAddSheet({
         )}
         {mode !== 'transfer' && (
           <div className="mt-5">
-            <label htmlFor="quick-add-payee" className="field-label mb-2 block">
+            <Label htmlFor="quick-add-payee" className="mb-2">
               Payee
-            </label>
+            </Label>
             <Input
               id="quick-add-payee"
               className="px-4 py-2.5 font-semibold placeholder:font-normal"
@@ -491,9 +544,9 @@ export function QuickAddSheet({
         )}
         {mode === 'expense' && (
           <div className="mt-4">
-            <label htmlFor="quick-add-items" className="sr-only">
+            <Label htmlFor="quick-add-items" className="sr-only">
               Items
-            </label>
+            </Label>
             <Input
               id="quick-add-items"
               className="px-4 py-2.5 font-semibold placeholder:font-normal"
@@ -544,22 +597,13 @@ export function QuickAddSheet({
           </div>
         )}
         <div className="mt-5 flex min-w-0 gap-2.5">
-          <label className="relative min-w-0 shrink">
-            <span className="sr-only">Transaction date</span>
-            <Calendar className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-lagoon-deep" />
-            <Input
-              type="date"
-              aria-label="Transaction date"
-              className="w-[9.25rem] max-w-full pl-9 font-semibold"
-              value={transactionDateValue(occurredAt)}
-              onChange={(event) =>
-                setOccurredAt(transactionDateTimestamp(event.target.value))
-              }
-            />
-          </label>
-          <label htmlFor="quick-add-note" className="sr-only">
+          <TransactionDatePicker
+            occurredAt={occurredAt}
+            onChange={setOccurredAt}
+          />
+          <Label htmlFor="quick-add-note" className="sr-only">
             Note
-          </label>
+          </Label>
           <Input
             id="quick-add-note"
             className="min-w-0 flex-1 px-4 py-2.5 font-semibold placeholder:font-normal"
