@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_rules.json
+
+# See https://docs.powersync.com/sync/advanced/compatibility
+config:
+  edition: 3
+
+# This app uses Better Auth (@convex-dev/better-auth). The JWT subject is expected
+# to be the Better Auth user id, which matches the `userId` column on each table.
+# IF the subject turns out to carry a session suffix like the Convex Auth demo
+# (format `userid|sessionid`), the filter must become:
+#   userId = substring(auth.user_id(), 1, 32)
+# See the PowerSync Convex todolist demo sync-config for that pattern.
+
+streams:
+  user_data:
+    # AUTO-SUBSCRIBE: always synced for the logged-in user
+    auto_subscribe: true
+    queries:
+      - |
+        SELECT uuid as id, *
+        FROM categories
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM accounts
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM cycles
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM transactions
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM budgets
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM incomeSources
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM cycleIncomePlans
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM debts
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM settings
+        WHERE userId = auth.user_id()
+      - |
+        SELECT uuid as id, *
+        FROM autoSaveEvents
+        WHERE userId = auth.user_id()
