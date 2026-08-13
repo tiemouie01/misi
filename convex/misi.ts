@@ -11,10 +11,22 @@ import {
 import type { Doc, Id } from './_generated/dataModel'
 import type { MutationCtx, QueryCtx } from './_generated/server'
 
+const userTransactionType = v.union(
+  v.literal('expense'),
+  v.literal('income'),
+  v.literal('transfer'),
+)
+
 const transactionType = v.union(
   v.literal('expense'),
   v.literal('income'),
   v.literal('transfer'),
+  v.literal('allocation'),
+)
+
+const allocationDirection = v.union(
+  v.literal('toSavings'),
+  v.literal('toSpending'),
 )
 
 const monthLabels = [
@@ -38,7 +50,7 @@ type TransactionInput = {
   type: Doc<'transactions'>['type']
   amount: number
   categoryId?: string
-  accountId: Id<'accounts'>
+  accountId?: Id<'accounts'>
   toAccountId?: Id<'accounts'>
   sourceId?: Id<'incomeSources'>
   excludeFromBudget?: boolean
@@ -380,24 +392,92 @@ async function requireOwnedAccount(
   return account
 }
 
-async function requireAutoSaveSourceAccount(
+function isSpendableAccount(account: Doc<'accounts'>) {
+  return account.includeInSpendable ?? account.kind !== 'investment'
+}
+
+function computeSpendableTotalMwk(
+  accounts: Array<Doc<'accounts'>>,
+  usdRate: number,
+) {
+  return accounts.reduce((total, account) => {
+    if (!isSpendableAccount(account)) return total
+    return (
+      total +
+      (account.currency === 'USD' ? account.balance * usdRate : account.balance)
+    )
+  }, 0)
+}
+
+function savingsEnvelopeContribution(transaction: Doc<'transactions'>) {
+  if (transaction.type === 'allocation') {
+    if (transaction.direction === 'toSavings') return transaction.amount
+    if (transaction.direction === 'toSpending') return -transaction.amount
+    return 0
+  }
+  if (transaction.type === 'transfer' || transaction.type === 'expense') {
+    return -transaction.amount
+  }
+  return 0
+}
+
+async function computeSavingsBalance(
   ctx: ReadCtx,
   userId: string,
-  accountId: Id<'accounts'>,
+  settings: Doc<'settings'>,
+  excludeTransactionId?: Id<'transactions'>,
 ) {
-  const account = await requireOwnedAccount(ctx, userId, accountId)
-
-  if (account.currency !== 'MWK') {
-    throw new Error(
-      'Auto-save can only be deducted from a Malawi Kwacha account',
+  const savingsTransactions = await ctx.db
+    .query('transactions')
+    .withIndex('by_user_and_wallet', (q) =>
+      q.eq('userId', userId).eq('walletId', 'savings'),
     )
-  }
+    .collect()
+  return savingsTransactions.reduce((sum, transaction) => {
+    if (transaction._id === excludeTransactionId) return sum
+    return sum + savingsEnvelopeContribution(transaction)
+  }, settings.savingsOpeningBalance)
+}
 
-  if (account.kind === 'investment') {
-    throw new Error('Auto-save cannot be deducted from an investment account')
+function assertFromSavingsType(
+  type: Doc<'transactions'>['type'],
+  fromSavings?: boolean,
+) {
+  if (!fromSavings) return
+  if (type !== 'expense' && type !== 'transfer') {
+    throw new Error('Savings spending is only valid for expenses and transfers')
   }
+}
 
-  return account
+async function assertSavingsHasAmount(
+  ctx: ReadCtx,
+  userId: string,
+  amount: number,
+  excludeTransactionId?: Id<'transactions'>,
+) {
+  const settings = await requireSettings(ctx, userId)
+  const savingsBalance = await computeSavingsBalance(
+    ctx,
+    userId,
+    settings,
+    excludeTransactionId,
+  )
+  if (amount > savingsBalance) {
+    throw new Error('Not enough in savings')
+  }
+}
+
+function resolveEnvelopeFields(
+  type: Doc<'transactions'>['type'],
+  fromSavings: boolean | undefined,
+  excludeFromBudget: boolean | undefined,
+) {
+  assertFromSavingsType(type, fromSavings)
+  return {
+    walletId: fromSavings ? 'savings' : 'spending',
+    excludeFromBudget:
+      fromSavings && type === 'expense' ? true : (excludeFromBudget ?? false),
+  }
 }
 
 async function requireOwnedTransaction(
@@ -419,11 +499,10 @@ async function assertMutableUserTransaction(
   transaction: Doc<'transactions'>,
   action: 'edited' | 'deleted',
 ) {
-  if (
-    transaction.adjustment ||
-    transaction.autoSave ||
-    transaction.walletId !== 'spending'
-  ) {
+  if (transaction.adjustment) {
+    throw new Error(`Generated transactions cannot be ${action}`)
+  }
+  if (transaction.type === 'allocation') {
     throw new Error(`Generated transactions cannot be ${action}`)
   }
 
@@ -458,6 +537,26 @@ async function validateTransactionInput(
   input: TransactionInput,
 ) {
   assertPositiveAmount(input.amount)
+
+  if (input.type === 'allocation') {
+    if (input.accountId) {
+      throw new Error('Allocations cannot be tied to an account')
+    }
+    if (input.toAccountId) {
+      throw new Error('A destination account is only valid for transfers')
+    }
+    if (input.categoryId) {
+      throw new Error('A category is only valid for expenses')
+    }
+    if (input.sourceId) {
+      throw new Error('sourceId is only valid for income transactions')
+    }
+    return
+  }
+
+  if (!input.accountId) {
+    throw new Error('An account is required')
+  }
   await requireOwnedAccount(ctx, userId, input.accountId)
 
   if (input.type === 'expense') {
@@ -511,6 +610,14 @@ function getAccountBalanceImpacts(input: TransactionInput) {
     impacts.set(accountId, (impacts.get(accountId) ?? 0) + amount)
   }
 
+  if (input.type === 'allocation') {
+    return impacts
+  }
+
+  if (!input.accountId) {
+    throw new Error('An account is required')
+  }
+
   if (input.type === 'expense') {
     addImpact(input.accountId, -input.amount)
   } else if (input.type === 'income') {
@@ -553,36 +660,6 @@ async function applyTransactionBalanceTransition(
     const account = await requireOwnedAccount(ctx, userId, accountId)
     await ctx.db.patch(account._id, { balance: account.balance + change })
   }
-}
-
-async function applyAutoSaveSourceChange(
-  ctx: MutationCtx,
-  userId: string,
-  previous: { accountId: Id<'accounts'>; amount: number } | null,
-  next: { accountId: Id<'accounts'>; amount: number } | null,
-) {
-  const changes = new Map<Id<'accounts'>, number>()
-  const addChange = (accountId: Id<'accounts'>, amount: number) => {
-    changes.set(accountId, (changes.get(accountId) ?? 0) + amount)
-  }
-
-  if (previous) addChange(previous.accountId, previous.amount)
-  if (next) addChange(next.accountId, -next.amount)
-
-  for (const [accountId, change] of changes) {
-    if (change === 0) continue
-    const account = await requireOwnedAccount(ctx, userId, accountId)
-    await ctx.db.patch(account._id, { balance: account.balance + change })
-  }
-}
-
-async function rememberAutoSaveSourceAccount(
-  ctx: MutationCtx,
-  settings: Doc<'settings'>,
-  accountId: Id<'accounts'>,
-) {
-  if (settings.autoSaveSourceAccountId === accountId) return
-  await ctx.db.patch(settings._id, { autoSaveSourceAccountId: accountId })
 }
 
 async function requireOwnedIncomeTransaction(
@@ -812,18 +889,8 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
 
   transactions.sort((a, b) => b.occurredAt - a.occurredAt)
 
-  const savingsTransactions = await ctx.db
-    .query('transactions')
-    .withIndex('by_user_and_wallet', (q) =>
-      q.eq('userId', userId).eq('walletId', 'savings'),
-    )
-    .collect()
-  const savingsTransfersTotal = savingsTransactions.reduce(
-    (sum, transaction) => sum + transaction.amount,
-    0,
-  )
   const savingsBalance = settings
-    ? settings.savingsOpeningBalance + savingsTransfersTotal
+    ? await computeSavingsBalance(ctx, userId, settings)
     : null
 
   let pendingAutoSave: {
@@ -1086,6 +1153,7 @@ const onboardingAccount = v.object({
   ),
   currency: v.union(v.literal('MWK'), v.literal('USD')),
   balance: v.number(),
+  includeInSpendable: v.optional(v.boolean()),
 })
 
 type OnboardingAccountInput = {
@@ -1093,6 +1161,7 @@ type OnboardingAccountInput = {
   kind: 'bank' | 'mobile' | 'cash' | 'investment'
   currency: 'MWK' | 'USD'
   balance: number
+  includeInSpendable?: boolean
 }
 
 type OnboardingIncomeSourceInput = {
@@ -1317,6 +1386,7 @@ async function reconcileAccounts(
         currency: input.currency,
         balance: input.balance,
         sortOrder: index,
+        includeInSpendable: input.includeInSpendable,
       })
       keptAccountIds.add(match._id)
       accountIds.push(match._id)
@@ -1328,6 +1398,9 @@ async function reconcileAccounts(
         currency: input.currency,
         balance: input.balance,
         sortOrder: index,
+        ...(input.includeInSpendable !== undefined
+          ? { includeInSpendable: input.includeInSpendable }
+          : {}),
       })
       accountIds.push(accountId)
     }
@@ -1342,11 +1415,12 @@ async function reconcileAccounts(
       .withIndex('by_user', (q) => q.eq('userId', userId))
       .collect()
     const referencedIds = new Set(
-      userTransactions.flatMap((transaction) =>
-        transaction.toAccountId
-          ? [transaction.accountId, transaction.toAccountId]
-          : [transaction.accountId],
-      ),
+      userTransactions.flatMap((transaction) => {
+        const ids: Array<Id<'accounts'>> = []
+        if (transaction.accountId) ids.push(transaction.accountId)
+        if (transaction.toAccountId) ids.push(transaction.toAccountId)
+        return ids
+      }),
     )
     let nextSortOrder = accounts.length
     for (const account of removedAccounts) {
@@ -1485,10 +1559,9 @@ export const completeOnboarding = mutation({
     const firstOfKind = (kind: (typeof args.accounts)[number]['kind']) =>
       accountIdAt(args.accounts.findIndex((account) => account.kind === kind))
     const firstAccountId = accountIds[0]
-    const autoSaveSourceAccountId = firstOfKind('bank') ?? firstAccountId
     const defaultExpenseAccountId =
       firstOfKind('mobile') ?? firstOfKind('cash') ?? firstAccountId
-    const defaultTransferFromAccountId = autoSaveSourceAccountId
+    const defaultTransferFromAccountId = firstOfKind('bank') ?? firstAccountId
     const defaultTransferToAccountId =
       firstOfKind('cash') ??
       accountIds.find((id) => id !== defaultTransferFromAccountId) ??
@@ -1498,7 +1571,6 @@ export const completeOnboarding = mutation({
     const settingsValue = {
       usdRate: args.usdRate,
       defaultSavingsRate: args.defaultSavingsRate,
-      autoSaveSourceAccountId,
       defaultExpenseAccountId,
       defaultTransferFromAccountId,
       defaultTransferToAccountId,
@@ -1924,9 +1996,16 @@ export const budgetOverview = query({
               transaction.type === 'expense' && !transaction.excludeFromBudget,
           )
           .reduce((sum, transaction) => sum + transaction.amount, 0)
-        const actualSavings = transactions
-          .filter((transaction) => transaction.walletId === 'savings')
-          .reduce((sum, transaction) => sum + transaction.amount, 0)
+        const actualSavings = transactions.reduce((sum, transaction) => {
+          if (transaction.type !== 'allocation') return sum
+          if (transaction.direction === 'toSavings') {
+            return sum + transaction.amount
+          }
+          if (transaction.direction === 'toSpending') {
+            return sum - transaction.amount
+          }
+          return sum
+        }, 0)
         const plannedIncome = incomePlanRows.reduce(
           (sum, plan) => sum + plan.expectedAmount,
           0,
@@ -1963,7 +2042,7 @@ export const budgetOverview = query({
 
 export const addTransaction = mutation({
   args: {
-    type: transactionType,
+    type: userTransactionType,
     amount: v.number(),
     payee: v.string(),
     categoryId: v.optional(v.string()),
@@ -1974,11 +2053,23 @@ export const addTransaction = mutation({
     sourceId: v.optional(v.id('incomeSources')),
     occurredAt: v.optional(v.number()),
     excludeFromBudget: v.optional(v.boolean()),
+    fromSavings: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
     const occurredAt = args.occurredAt ?? Date.now()
-    await validateTransactionInput(ctx, user._id, args)
+    const envelope = resolveEnvelopeFields(
+      args.type,
+      args.fromSavings,
+      args.excludeFromBudget,
+    )
+    await validateTransactionInput(ctx, user._id, {
+      ...args,
+      excludeFromBudget: envelope.excludeFromBudget,
+    })
+    if (args.fromSavings) {
+      await assertSavingsHasAmount(ctx, user._id, args.amount)
+    }
     const cycle = await ensureCycleForDate(ctx, user._id, occurredAt)
 
     const transactionId = await ctx.db.insert('transactions', {
@@ -1990,11 +2081,11 @@ export const addTransaction = mutation({
       categoryId: args.categoryId,
       accountId: args.accountId,
       toAccountId: args.toAccountId,
-      walletId: 'spending',
+      walletId: envelope.walletId,
       items: args.items,
       note: args.note,
       sourceId: args.sourceId,
-      excludeFromBudget: args.excludeFromBudget ?? false,
+      excludeFromBudget: envelope.excludeFromBudget,
       occurredAt,
     })
 
@@ -2011,13 +2102,14 @@ export const updateTransaction = mutation({
     amount: v.number(),
     payee: v.string(),
     categoryId: v.optional(v.string()),
-    accountId: v.id('accounts'),
+    accountId: v.optional(v.id('accounts')),
     toAccountId: v.optional(v.id('accounts')),
     items: v.optional(v.string()),
     note: v.optional(v.string()),
     sourceId: v.optional(v.id('incomeSources')),
     occurredAt: v.number(),
     excludeFromBudget: v.optional(v.boolean()),
+    fromSavings: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
@@ -2033,12 +2125,29 @@ export const updateTransaction = mutation({
 
     await assertMutableUserTransaction(ctx, transaction, 'edited')
 
-    await validateTransactionInput(ctx, user._id, args)
-    const cycle = await ensureCycleForDate(ctx, user._id, args.occurredAt)
+    if (args.type === 'allocation') {
+      throw new Error('Transactions cannot be converted into envelope moves')
+    }
+
+    const envelope = resolveEnvelopeFields(
+      args.type,
+      args.fromSavings,
+      args.excludeFromBudget,
+    )
     const nextInput = {
       ...args,
-      excludeFromBudget: args.excludeFromBudget ?? false,
+      excludeFromBudget: envelope.excludeFromBudget,
     }
+    await validateTransactionInput(ctx, user._id, nextInput)
+    if (args.fromSavings) {
+      await assertSavingsHasAmount(
+        ctx,
+        user._id,
+        args.amount,
+        transaction._id,
+      )
+    }
+    const cycle = await ensureCycleForDate(ctx, user._id, args.occurredAt)
     await applyTransactionBalanceTransition(
       ctx,
       user._id,
@@ -2052,10 +2161,11 @@ export const updateTransaction = mutation({
       categoryId: args.categoryId,
       accountId: args.accountId,
       toAccountId: args.toAccountId,
+      walletId: envelope.walletId,
       items: args.items,
       note: args.note,
       sourceId: args.sourceId,
-      excludeFromBudget: args.excludeFromBudget ?? false,
+      excludeFromBudget: envelope.excludeFromBudget,
       cycleId: cycle._id,
       occurredAt: args.occurredAt,
     })
@@ -2076,13 +2186,7 @@ export const deleteTransaction = mutation({
       args.transactionId,
     )
 
-    if (transaction.autoSave) {
-      await applyAutoSaveSourceChange(
-        ctx,
-        user._id,
-        { accountId: transaction.accountId, amount: transaction.amount },
-        null,
-      )
+    if (transaction.type === 'allocation') {
       await ctx.db.delete(transaction._id)
       return transaction._id
     }
@@ -2102,7 +2206,7 @@ async function updateAutoSaveTransaction(
   args: {
     type: Doc<'transactions'>['type']
     amount: number
-    accountId: Id<'accounts'>
+    accountId?: Id<'accounts'>
     toAccountId?: Id<'accounts'>
     categoryId?: string
     occurredAt: number
@@ -2110,8 +2214,8 @@ async function updateAutoSaveTransaction(
     note?: string
   },
 ) {
-  if (args.type !== 'transfer') {
-    throw new Error('Auto-save transfers cannot change type')
+  if (args.type !== 'allocation') {
+    throw new Error('Auto-save allocations cannot change type')
   }
   if (args.toAccountId) {
     throw new Error('Auto-save moves to Savings, not another account')
@@ -2121,25 +2225,15 @@ async function updateAutoSaveTransaction(
   }
 
   assertPositiveAmount(args.amount)
-  await requireAutoSaveSourceAccount(ctx, userId, args.accountId)
   const cycle = await ensureCycleForDate(ctx, userId, args.occurredAt)
-  const settings = await requireSettings(ctx, userId)
 
-  await applyAutoSaveSourceChange(
-    ctx,
-    userId,
-    { accountId: transaction.accountId, amount: transaction.amount },
-    { accountId: args.accountId, amount: args.amount },
-  )
   await ctx.db.patch(transaction._id, {
     amount: args.amount,
-    accountId: args.accountId,
     items: args.items,
     note: args.note,
     cycleId: cycle._id,
     occurredAt: args.occurredAt,
   })
-  await rememberAutoSaveSourceAccount(ctx, settings, args.accountId)
 
   return transaction._id
 }
@@ -2148,7 +2242,6 @@ export const confirmAutoSave = mutation({
   args: {
     transactionId: v.id('transactions'),
     amount: v.number(),
-    sourceAccountId: v.id('accounts'),
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
@@ -2171,7 +2264,6 @@ export const confirmAutoSave = mutation({
 
     await assertNoAutoSaveEvent(ctx, args.transactionId)
     const settings = await requireSettings(ctx, user._id)
-    await requireAutoSaveSourceAccount(ctx, user._id, args.sourceAccountId)
     const [source, cyclePlans] = await Promise.all([
       incomeTransaction.sourceId
         ? ctx.db.get(incomeTransaction.sourceId)
@@ -2189,18 +2281,14 @@ export const confirmAutoSave = mutation({
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
       cycleId: incomeTransaction.cycleId,
-      type: 'transfer',
+      type: 'allocation',
+      direction: 'toSavings',
       amount: args.amount,
       payee: `Auto-save — ${Math.round(savingsRate * 100)}% of income`,
-      accountId: args.sourceAccountId,
       walletId: 'savings',
       autoSave: true,
       excludeFromBudget: true,
       occurredAt: Date.now(),
-    })
-    await applyAutoSaveSourceChange(ctx, user._id, null, {
-      accountId: args.sourceAccountId,
-      amount: args.amount,
     })
     await ctx.db.insert('autoSaveEvents', {
       userId: user._id,
@@ -2208,7 +2296,6 @@ export const confirmAutoSave = mutation({
       status: 'confirmed',
       amount: args.amount,
     })
-    await rememberAutoSaveSourceAccount(ctx, settings, args.sourceAccountId)
 
     return transactionId
   },
@@ -2242,6 +2329,71 @@ export const dismissAutoSave = mutation({
       status: 'dismissed',
       amount: args.amount,
     })
+  },
+})
+
+export const moveSavings = mutation({
+  args: {
+    amount: v.number(),
+    direction: allocationDirection,
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    assertPositiveAmount(args.amount)
+
+    const settings = await requireSettings(ctx, user._id)
+    const savingsBalance = await computeSavingsBalance(
+      ctx,
+      user._id,
+      settings,
+    )
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    const spendableTotalMwk = computeSpendableTotalMwk(
+      accounts,
+      settings.usdRate,
+    )
+
+    if (args.direction === 'toSpending') {
+      if (args.amount > savingsBalance) {
+        throw new Error('Not enough in savings')
+      }
+    } else if (args.amount > spendableTotalMwk - savingsBalance) {
+      throw new Error('Not enough unallocated spending money')
+    }
+
+    const cycle = await ensureCurrentCycle(ctx, user._id)
+    return await ctx.db.insert('transactions', {
+      userId: user._id,
+      cycleId: cycle._id,
+      type: 'allocation',
+      direction: args.direction,
+      amount: args.amount,
+      payee:
+        args.direction === 'toSavings'
+          ? 'Moved to savings'
+          : 'Moved to spending',
+      walletId: 'savings',
+      excludeFromBudget: true,
+      occurredAt: Date.now(),
+    })
+  },
+})
+
+export const setAccountSpendable = mutation({
+  args: {
+    accountId: v.id('accounts'),
+    includeInSpendable: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const account = await requireOwnedAccount(ctx, user._id, args.accountId)
+    await ctx.db.patch(account._id, {
+      includeInSpendable: args.includeInSpendable,
+    })
+    return account._id
   },
 })
 

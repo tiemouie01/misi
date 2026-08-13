@@ -1,13 +1,10 @@
 import { Check, Pencil, PiggyBank } from 'lucide-react'
 import { useState } from 'react'
 
-import { AccountPicker } from '#/components/app/account-picker'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { formatK } from '#/lib/app-data'
-
-import type { Account } from '#/lib/app-data'
 
 export type AutoSaveStatus = 'proposed' | 'saved' | 'dismissed'
 
@@ -15,12 +12,9 @@ interface AutoSaveCardProps {
   status: AutoSaveStatus
   amount: number
   sourceName: string
-  sourceAccountId: string
-  accounts: Account[]
   rateLabel: string
   landedLabel: string
   onAmountChange: (amount: number) => void
-  onSourceAccountChange: (accountId: string) => void
   onConfirm: () => void
   onDismiss: () => void
   animationDelay: string
@@ -30,21 +24,15 @@ export function AutoSaveCard({
   status,
   amount,
   sourceName,
-  sourceAccountId,
-  accounts,
   rateLabel,
   landedLabel,
   onAmountChange,
-  onSourceAccountChange,
   onConfirm,
   onDismiss,
   animationDelay,
 }: AutoSaveCardProps) {
   const [editing, setEditing] = useState(false)
   const [draftAmount, setDraftAmount] = useState(String(amount))
-  const sourceAccount = accounts.find(
-    (account) => account.id === sourceAccountId,
-  )
 
   if (status === 'dismissed') return null
 
@@ -59,10 +47,9 @@ export function AutoSaveCard({
             <Check className="size-4" strokeWidth={3} />
           </span>
           <p className="flex-1 text-sm font-bold text-sea-ink">
-            Saved{' '}
-            <span className="font-mono tabular-nums">{formatK(amount)}</span> to
+            Set aside{' '}
+            <span className="font-mono tabular-nums">{formatK(amount)}</span> in
             Savings
-            {sourceAccount ? ` from ${sourceAccount.name}` : ''}
           </p>
           <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
             {landedLabel}
@@ -119,23 +106,17 @@ export function AutoSaveCard({
                 <span className="font-mono font-semibold text-sea-ink tabular-nums">
                   {formatK(amount)}
                 </span>{' '}
-                → Savings
-                {sourceAccount ? ` from ${sourceAccount.name}` : ''}. Proposed
-                when your {sourceName} landed {landedLabel}.
+                → Savings. Sets aside from your Spending envelope — your account
+                balances stay put. Proposed when your {sourceName} landed{' '}
+                {landedLabel}.
               </>
             )}
           </div>
         </div>
       </div>
-      <AccountPicker
-        label="Deduct from"
-        accounts={accounts}
-        selected={sourceAccountId}
-        onSelect={onSourceAccountChange}
-      />
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
-        <Button type="button" disabled={!sourceAccountId} onClick={onConfirm}>
-          Move to Savings
+        <Button type="button" onClick={onConfirm}>
+          Set aside
         </Button>
         <Button
           type="button"

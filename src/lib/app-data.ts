@@ -4,9 +4,11 @@ export interface Account {
   kind: 'bank' | 'mobile' | 'cash' | 'investment'
   currency: 'MWK' | 'USD'
   balance: number
+  includeInSpendable?: boolean
 }
 
-export type TxnType = 'expense' | 'income' | 'transfer'
+export type TxnType = 'expense' | 'income' | 'transfer' | 'allocation'
+export type AllocationDirection = 'toSavings' | 'toSpending'
 
 export interface Txn {
   id: string
@@ -14,8 +16,9 @@ export interface Txn {
   amount: number
   payee: string
   categoryId?: string
-  accountId: string
+  accountId?: string
   toAccountId?: string
+  direction?: AllocationDirection
   walletId: string
   sourceId?: string
   items?: string
@@ -75,6 +78,7 @@ export interface QuickAddInitial {
   excludeFromBudget?: boolean
   autoSave?: true
   reconcile?: true
+  fromSavings?: boolean
 }
 
 export interface QuickAddPayload {
@@ -82,7 +86,7 @@ export interface QuickAddPayload {
   type: TxnType
   amount: number
   categoryId?: string
-  accountId: string
+  accountId?: string
   toAccountId?: string
   payee: string
   sourceId?: string
@@ -91,6 +95,7 @@ export interface QuickAddPayload {
   occurredAt?: number
   excludeFromBudget?: boolean
   reconcile?: true
+  fromSavings?: boolean
 }
 
 export interface RecentTransaction {
@@ -107,16 +112,26 @@ export const SPENDABLE_ACCOUNT_IDS = ['nbs', 'fdh', 'airtel', 'cash'] as const
 export type SpendableAccountId = (typeof SPENDABLE_ACCOUNT_IDS)[number]
 
 export function isSpendableAccount(account: Account | string) {
-  if (typeof account !== 'string') return account.kind !== 'investment'
+  if (typeof account !== 'string') {
+    return account.includeInSpendable ?? account.kind !== 'investment'
+  }
   return (SPENDABLE_ACCOUNT_IDS as readonly string[]).includes(account)
 }
 
 export function canMutateTransaction(
-  transaction: Pick<Txn, 'adjustment' | 'autoSave' | 'walletId'>,
+  transaction: Pick<Txn, 'adjustment' | 'autoSave' | 'type'>,
 ) {
   if (transaction.adjustment) return false
   if (transaction.autoSave) return true
-  return transaction.walletId === 'spending'
+  if (transaction.type === 'allocation') return false
+  return true
+}
+
+export function canDeleteTransaction(
+  transaction: Pick<Txn, 'adjustment' | 'autoSave' | 'type'>,
+) {
+  if (transaction.adjustment) return false
+  return true
 }
 
 /** Prototype cycle copy and numbers — one source for UI strings and math. */
@@ -232,4 +247,11 @@ export function accountMwkValue(account: Account, usdRate = USD_RATE) {
   return account.currency === 'USD'
     ? account.balance * usdRate
     : account.balance
+}
+
+export function spendableTotalMwk(accounts: Account[], usdRate = USD_RATE) {
+  return accounts.reduce((sum, account) => {
+    if (!isSpendableAccount(account)) return sum
+    return sum + accountMwkValue(account, usdRate)
+  }, 0)
 }

@@ -1,4 +1,10 @@
-import { ArrowDownToLine, ArrowLeftRight, Tag, Trash2 } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  Droplets,
+  Tag,
+  Trash2,
+} from 'lucide-react'
 
 import {
   AlertDialog,
@@ -11,7 +17,11 @@ import {
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
-import { canMutateTransaction, formatK } from '#/lib/app-data'
+import {
+  canDeleteTransaction,
+  canMutateTransaction,
+  formatK,
+} from '#/lib/app-data'
 import { resolveCategory } from '#/lib/categories'
 
 import type { Account, Txn } from '#/lib/app-data'
@@ -41,6 +51,10 @@ function transactionAmountLabel(transaction: Txn) {
   return formatK(transaction.amount)
 }
 
+function allocationLabel(transaction: Txn) {
+  return transaction.direction === 'toSpending' ? '→ Spending' : '→ Savings'
+}
+
 export function TransactionDeleteDialog({
   transaction,
   error,
@@ -61,9 +75,11 @@ export function TransactionDeleteDialog({
             Delete {transaction?.payee ?? 'transaction'}?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            {transaction
-              ? `This permanently removes ${transactionAmountLabel(transaction)} and reverses it on your accounts.`
-              : 'This permanently removes the transaction and reverses it on your accounts.'}
+            {transaction?.type === 'allocation'
+              ? `This permanently removes the ${formatK(transaction.amount)} envelope move. Account balances stay put.`
+              : transaction
+                ? `This permanently removes ${transactionAmountLabel(transaction)} and reverses it on your accounts.`
+                : 'This permanently removes the transaction and reverses it on your accounts.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && (
@@ -139,30 +155,39 @@ export function TransactionsCard({
             </div>
             <div className="mt-2 space-y-1">
               {group.txns.map((transaction) => {
-                const account = accounts.find(
-                  (item) => item.id === transaction.accountId,
-                )
-                const toAccount = accounts.find(
-                  (item) => item.id === transaction.toAccountId,
-                )
+                const account = transaction.accountId
+                  ? accounts.find((item) => item.id === transaction.accountId)
+                  : undefined
+                const toAccount = transaction.toAccountId
+                  ? accounts.find((item) => item.id === transaction.toAccountId)
+                  : undefined
                 const category = resolveCategory(
                   categories,
                   transaction.categoryId,
                 )
-                const Icon =
-                  transaction.type === 'transfer'
+                const isAllocation = transaction.type === 'allocation'
+                const Icon = isAllocation
+                  ? Droplets
+                  : transaction.type === 'transfer'
                     ? ArrowLeftRight
                     : transaction.type === 'income'
                       ? ArrowDownToLine
                       : (category?.icon ?? Tag)
-                const color =
-                  transaction.type === 'income'
+                const color = isAllocation
+                  ? 'var(--lagoon)'
+                  : transaction.type === 'income'
                     ? 'var(--palm)'
                     : transaction.type === 'transfer'
                       ? 'var(--lagoon-deep)'
                       : (category?.color ?? 'var(--lagoon-deep)')
-                const subline =
-                  transaction.type === 'transfer'
+                const title = isAllocation
+                  ? allocationLabel(transaction)
+                  : transaction.payee
+                const subline = isAllocation
+                  ? transaction.autoSave
+                    ? 'Auto-save'
+                    : transaction.payee
+                  : transaction.type === 'transfer'
                     ? transaction.toAccountId
                       ? `${account?.name ?? 'Account'} → ${toAccount?.name ?? 'Account'}`
                       : `Savings · ${account?.name ?? 'Account'}`
@@ -170,7 +195,8 @@ export function TransactionsCard({
                       ? `Income · ${account?.name ?? 'Account'}`
                       : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
                 const amountLabel = transactionAmountLabel(transaction)
-                const canMutate = canMutateTransaction(transaction)
+                const canEdit = canMutateTransaction(transaction)
+                const canDelete = canDeleteTransaction(transaction)
                 return (
                   <div
                     key={transaction.id}
@@ -179,20 +205,22 @@ export function TransactionsCard({
                     <Button
                       type="button"
                       variant="ghost"
-                      disabled={!canMutate}
+                      disabled={!canEdit}
                       aria-label={
-                        canMutate
+                        canEdit
                           ? transaction.autoSave
-                            ? `Edit ${transaction.payee}`
-                            : `Edit ${transaction.payee} transaction`
+                            ? `Edit ${title}`
+                            : `Edit ${title} transaction`
                           : undefined
                       }
                       title={
-                        canMutate
+                        canEdit
                           ? transaction.autoSave
                             ? 'Edit auto-save'
                             : 'Edit transaction'
-                          : 'Generated transactions cannot be edited'
+                          : isAllocation
+                            ? 'Envelope moves can be deleted but not edited'
+                            : 'Generated transactions cannot be edited'
                       }
                       className="group h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-2.5 text-left disabled:opacity-100"
                       onClick={() => onEdit(transaction)}
@@ -208,7 +236,7 @@ export function TransactionsCard({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold text-sea-ink">
-                          {transaction.payee}
+                          {title}
                         </span>
                         <span className="block text-[0.75rem] text-sea-ink-soft">
                           {subline}
@@ -227,7 +255,7 @@ export function TransactionsCard({
                         className={`font-mono shrink-0 text-sm font-semibold tabular-nums ${
                           transaction.type === 'income'
                             ? 'text-palm'
-                            : transaction.type === 'transfer'
+                            : transaction.type === 'transfer' || isAllocation
                               ? 'text-sea-ink-soft'
                               : 'text-sea-ink'
                         }`}
@@ -235,12 +263,12 @@ export function TransactionsCard({
                         {amountLabel}
                       </span>
                     </Button>
-                    {canMutate && (
+                    {canDelete && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={`Delete ${transaction.payee} transaction`}
+                        aria-label={`Delete ${title} transaction`}
                         title="Delete transaction"
                         className="size-9 shrink-0 text-sea-ink-soft hover:bg-coral/10 hover:text-coral-deep"
                         onClick={() => onDelete(transaction)}

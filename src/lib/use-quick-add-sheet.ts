@@ -113,33 +113,55 @@ export function useQuickAddSheet({
   async function saveTransaction(payload: QuickAddPayload) {
     setError(null)
     try {
-      const sourceId = resolveIncomeSourceId(payload)
-      const transaction = {
-        type: payload.type,
-        amount: payload.amount,
-        payee: payload.payee,
-        categoryId: payload.categoryId,
-        accountId: payload.accountId as Id<'accounts'>,
-        toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
-        items: payload.items,
-        note: payload.note,
-        sourceId,
-        excludeFromBudget: payload.excludeFromBudget,
-      }
       if (payload.transactionId) {
         if (payload.occurredAt === undefined) {
           throw new Error('Transaction date is missing')
         }
-        await updateTransaction({
-          transactionId: payload.transactionId as Id<'transactions'>,
-          ...transaction,
+        if (payload.type === 'allocation') {
+          await updateTransaction({
+            transactionId: payload.transactionId as Id<'transactions'>,
+            type: 'allocation',
+            amount: payload.amount,
+            payee: payload.payee,
+            note: payload.note,
+            occurredAt: payload.occurredAt,
+          })
+        } else {
+          await updateTransaction({
+            transactionId: payload.transactionId as Id<'transactions'>,
+            type: payload.type,
+            amount: payload.amount,
+            payee: payload.payee,
+            categoryId: payload.categoryId,
+            accountId: payload.accountId as Id<'accounts'>,
+            toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
+            items: payload.items,
+            note: payload.note,
+            sourceId: resolveIncomeSourceId(payload),
+            excludeFromBudget: payload.excludeFromBudget,
+            fromSavings: payload.fromSavings,
+            occurredAt: payload.occurredAt,
+          })
+        }
+      } else if (payload.type !== 'allocation') {
+        await addTransaction({
+          type: payload.type,
+          amount: payload.amount,
+          payee: payload.payee,
+          categoryId: payload.categoryId,
+          accountId: payload.accountId as Id<'accounts'>,
+          toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
+          items: payload.items,
+          note: payload.note,
+          sourceId: resolveIncomeSourceId(payload),
+          excludeFromBudget: payload.excludeFromBudget,
+          fromSavings: payload.fromSavings,
           occurredAt: payload.occurredAt,
         })
       } else {
-        await addTransaction({
-          ...transaction,
-          occurredAt: payload.occurredAt,
-        })
+        throw new Error(
+          'Envelope moves are created from Spendable, not Quick add',
+        )
       }
       closeSheet()
     } catch (caught) {

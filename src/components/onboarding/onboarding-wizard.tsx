@@ -80,6 +80,8 @@ function draftFromPrefill(data: Prefill): OnboardingDraft {
       currency: account.currency,
       balance: formatAmountInput(String(account.balance)),
       isPreset: accountIsPreset(account.name),
+      includeInSpendable:
+        account.includeInSpendable ?? account.kind !== 'investment',
     })),
     incomeSources: data.incomeSources.map((source) => {
       const cyclePlan = cyclePlansBySource.get(source._id)
@@ -209,6 +211,7 @@ export function OnboardingWizard({
           kind: account.kind,
           currency: account.currency,
           balance: parseAmount(account.balance),
+          includeInSpendable: account.includeInSpendable,
         })),
         incomeSources: draft.incomeSources.map((source) => ({
           name: source.name.trim(),

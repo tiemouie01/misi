@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select'
+import { Switch } from '#/components/ui/switch'
 import { formatK } from '#/lib/app-data'
 import {
   ACCOUNT_KIND_LABELS,
@@ -385,6 +386,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
             currency: preset.currency,
             balance: '',
             isPreset: true,
+            includeInSpendable: preset.kind !== 'investment',
           },
         ],
       }
@@ -471,6 +473,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                       onValueChange={(value) =>
                         updateAccount(account.key, {
                           kind: value as Account['kind'],
+                          includeInSpendable: value !== 'investment',
                         })
                       }
                     >
@@ -523,6 +526,23 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                   }
                 />
               </div>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <Label
+                  htmlFor={`ob-spendable-${account.key}`}
+                  className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+                >
+                  Counts toward spendable
+                </Label>
+                <Switch
+                  id={`ob-spendable-${account.key}`}
+                  checked={account.includeInSpendable}
+                  onCheckedChange={(checked) =>
+                    updateAccount(account.key, {
+                      includeInSpendable: checked,
+                    })
+                  }
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -543,6 +563,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                 currency: 'MWK',
                 balance: '',
                 isPreset: false,
+                includeInSpendable: true,
               },
             ],
           }))

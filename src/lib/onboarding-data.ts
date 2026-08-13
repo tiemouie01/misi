@@ -53,6 +53,7 @@ export interface DraftAccount {
   currency: Account['currency']
   balance: string
   isPreset: boolean
+  includeInSpendable: boolean
 }
 
 export interface DraftIncomeSource {
@@ -266,6 +267,7 @@ export function defaultDraft(): OnboardingDraft {
         currency: 'MWK',
         balance: '',
         isPreset: true,
+        includeInSpendable: true,
       },
     ],
     incomeSources: [],
@@ -322,13 +324,19 @@ function parseDraftAccount(raw: unknown): DraftAccount | null {
     typeof account.isPreset === 'boolean'
       ? account.isPreset
       : isPresetAccountName(account.name)
+  const kind = account.kind as Account['kind']
+  const includeInSpendable =
+    typeof account.includeInSpendable === 'boolean'
+      ? account.includeInSpendable
+      : kind !== 'investment'
   return {
     key: account.key,
     name: account.name,
-    kind: account.kind as Account['kind'],
+    kind,
     currency: account.currency as Account['currency'],
     balance: account.balance,
     isPreset,
+    includeInSpendable,
   }
 }
 

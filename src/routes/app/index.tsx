@@ -23,9 +23,11 @@ import {
 import { Button } from '#/components/ui/button'
 import {
   accountMwkValue,
+  canDeleteTransaction,
   canMutateTransaction,
   formatK,
   isSpendableAccount,
+  spendableTotalMwk,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import {
@@ -53,7 +55,6 @@ interface AutoSaveUiState {
   status: AutoSaveStatus
   amount: number
   sourceName: string
-  sourceAccountId: string
   savingsRate: number
   occurredAt: number
 }
@@ -165,6 +166,8 @@ function AppDashboard({
 }) {
   const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
   const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
+  const moveSavingsMutation = useMutation(api.misi.moveSavings)
+  const setAccountSpendableMutation = useMutation(api.misi.setAccountSpendable)
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -179,6 +182,7 @@ function AppDashboard({
         kind: account.kind,
         currency: account.currency,
         balance: account.balance,
+        includeInSpendable: account.includeInSpendable,
       })),
     [data.accounts],
   )
@@ -207,6 +211,7 @@ function AppDashboard({
         categoryId: transaction.categoryId,
         accountId: transaction.accountId,
         toAccountId: transaction.toAccountId,
+        direction: transaction.direction,
         walletId: transaction.walletId,
         sourceId: transaction.sourceId,
         items: transaction.items,
@@ -273,8 +278,10 @@ function AppDashboard({
     (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
     0,
   )
+  const spendable = spendableTotalMwk(accounts, data.settings.usdRate)
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
+  const spendingEnvelope = spendable - savingsBalance
 
   const incomeSources = useMemo<PulseIncomeSource[]>(
     () =>
@@ -308,20 +315,13 @@ function AppDashboard({
     [data.cycleIncomePlans, data.transactions],
   )
 
-  const unitTrustAccount = accounts.find((account) =>
-    account.name.toLowerCase().includes('unit trust'),
-  )
-  const usdAccount = accounts.find(
-    (account) =>
-      account.currency === 'USD' || account.name.toLowerCase().includes('usd'),
-  )
-  const wallets: Wallet[] = [
+  const envelopes: Wallet[] = [
     {
       id: 'spending',
       name: 'Spending',
-      balance: spendingLeft,
+      balance: spendingEnvelope,
       currency: 'MWK',
-      detail: `K${spendingLeft.toLocaleString()} left of K${cycleInfo.spendingLimit.toLocaleString()}`,
+      detail: 'Unallocated spendable money',
     },
     {
       id: 'savings',
@@ -329,36 +329,16 @@ function AppDashboard({
       balance: savingsBalance,
       currency: 'MWK',
     },
-    ...(unitTrustAccount
-      ? [
-          {
-            id: unitTrustAccount.id,
-            name: 'Unit Trust',
-            balance: unitTrustAccount.balance,
-            currency: unitTrustAccount.currency,
-          } satisfies Wallet,
-        ]
-      : []),
-    ...(usdAccount
-      ? [
-          {
-            id: usdAccount.id,
-            name: 'USD',
-            balance: usdAccount.balance,
-            currency: usdAccount.currency,
-          } satisfies Wallet,
-        ]
-      : []),
-    ...data.debts.map(
-      (debt) =>
-        ({
-          id: `debt-${debt._id}`,
-          name: debt.name,
-          balance: debt.balance,
-          currency: 'MWK',
-        }) satisfies Wallet,
-    ),
   ]
+  const debts: Wallet[] = data.debts.map(
+    (debt) =>
+      ({
+        id: `debt-${debt._id}`,
+        name: debt.name,
+        balance: debt.balance,
+        currency: 'MWK',
+      }) satisfies Wallet,
+  )
 
   const expectedBalances = useMemo(
     () =>
@@ -385,14 +365,6 @@ function AppDashboard({
       (balance) => balance.accountId !== defaultTransferFromAccountId,
     )?.accountId ??
     defaultTransferFromAccountId
-  const defaultAutoSaveSourceAccountId =
-    data.settings.autoSaveSourceAccountId &&
-    expectedBalances.some(
-      (balance) => balance.accountId === data.settings.autoSaveSourceAccountId,
-    )
-      ? data.settings.autoSaveSourceAccountId
-      : defaultTransferFromAccountId
-
   const {
     sheet,
     error: quickAddError,
@@ -422,7 +394,6 @@ function AppDashboard({
           status: 'proposed',
           amount: pendingAutoSave.amount,
           sourceName: pendingAutoSave.sourceName,
-          sourceAccountId: defaultAutoSaveSourceAccountId,
           savingsRate: pendingAutoSave.savingsRate,
           occurredAt: pendingAutoSave.occurredAt,
         }
@@ -447,11 +418,13 @@ function AppDashboard({
       occurredAt: transaction.occurredAt,
       excludeFromBudget: transaction.excludeFromBudget,
       autoSave: transaction.autoSave,
+      fromSavings:
+        transaction.walletId === 'savings' && transaction.type !== 'allocation',
     })
   }
 
   function requestDelete(transaction: Txn) {
-    if (!canMutateTransaction(transaction)) return
+    if (!canDeleteTransaction(transaction)) return
     closeSheet()
     setPendingDelete(transaction)
   }
@@ -468,18 +441,12 @@ function AppDashboard({
   }
 
   async function confirmAutoSave() {
-    if (
-      !autoSaveUi ||
-      autoSaveUi.status !== 'proposed' ||
-      !autoSaveUi.sourceAccountId
-    )
-      return
+    if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
     setActionError(null)
     try {
       await confirmAutoSaveMutation({
         transactionId: autoSaveUi.transactionId as Id<'transactions'>,
         amount: autoSaveUi.amount,
-        sourceAccountId: autoSaveUi.sourceAccountId as Id<'accounts'>,
       })
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'saved' })
     } catch (error) {
@@ -509,6 +476,39 @@ function AppDashboard({
       setActionError(message)
       console.error('Unable to dismiss auto-save', error)
     }
+  }
+
+  async function moveSavings(input: {
+    amount: number
+    direction: 'toSavings' | 'toSpending'
+  }) {
+    setActionError(null)
+    try {
+      await moveSavingsMutation(input)
+    } catch (error) {
+      const message = mutationErrorMessage(
+        error,
+        'Unable to move money. Try again.',
+      )
+      setActionError(message)
+      console.error('Unable to move money', error)
+      throw error
+    }
+  }
+
+  function setAccountSpendable(accountId: string, includeInSpendable: boolean) {
+    setActionError(null)
+    void setAccountSpendableMutation({
+      accountId: accountId as Id<'accounts'>,
+      includeInSpendable,
+    }).catch((error) => {
+      const message = mutationErrorMessage(
+        error,
+        'Unable to update account. Try again.',
+      )
+      setActionError(message)
+      console.error('Unable to update account spendable flag', error)
+    })
   }
 
   return (
@@ -566,15 +566,10 @@ function AppDashboard({
                 status={autoSaveUi.status}
                 amount={autoSaveUi.amount}
                 sourceName={autoSaveUi.sourceName}
-                sourceAccountId={autoSaveUi.sourceAccountId}
-                accounts={accounts}
                 rateLabel={`${Math.round(autoSaveUi.savingsRate * 100)}%`}
                 landedLabel={transactionDayLabel(autoSaveUi.occurredAt, now)}
                 onAmountChange={(amount) =>
                   setLocalAutoSaveUi({ ...autoSaveUi, amount })
-                }
-                onSourceAccountChange={(sourceAccountId) =>
-                  setLocalAutoSaveUi({ ...autoSaveUi, sourceAccountId })
                 }
                 onConfirm={() => void confirmAutoSave()}
                 onDismiss={() => void dismissAutoSave()}
@@ -594,12 +589,16 @@ function AppDashboard({
           <div className="space-y-5">
             <NetWorthCard
               accounts={accounts}
-              wallets={wallets}
+              envelopes={envelopes}
+              debts={debts}
               netWorth={netWorth}
-              cycleBudget={cycleInfo.spendingLimit}
+              spendable={spendable}
+              savingsBalance={savingsBalance}
               cycleGain={cycleInfo.cycleGain}
               usdRate={data.settings.usdRate}
               animationDelay="240ms"
+              onMoveSavings={moveSavings}
+              onSetAccountSpendable={setAccountSpendable}
             />
             <CyclePulseCard
               cycleLabel={cycleInfo.label}

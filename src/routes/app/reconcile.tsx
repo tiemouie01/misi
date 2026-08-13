@@ -59,6 +59,7 @@ function ReconcileRoute() {
         kind: account.kind,
         currency: account.currency,
         balance: account.balance,
+        includeInSpendable: account.includeInSpendable,
       })),
     [data?.accounts],
   )

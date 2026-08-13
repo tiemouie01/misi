@@ -14,6 +14,7 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import { Switch } from '#/components/ui/switch'
 import {
   Popover,
   PopoverContent,
@@ -314,13 +315,16 @@ export function QuickAddSheet({
   const [excludeFromBudget, setExcludeFromBudget] = useState(
     initial.excludeFromBudget ?? false,
   )
+  const [fromSavings, setFromSavings] = useState(initial.fromSavings ?? false)
   const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
   const isAutoSave = initial.autoSave === true
   const amount = parseAmountDigits(digits)
   const autoSaveRate = autoSaveRateForPayee(payee)
   const canSave =
     amount > 0 &&
-    (isAutoSave || mode !== 'transfer' || accountId !== toAccountId)
+    (isAutoSave ||
+      (Boolean(accountId) &&
+        (mode !== 'transfer' || accountId !== toAccountId)))
 
   function appendDigits(value: string) {
     setDigits((current) => appendAmountInput(current, value))
@@ -328,16 +332,26 @@ export function QuickAddSheet({
 
   function save() {
     if (!canSave) return
+    if (isAutoSave) {
+      onSave({
+        transactionId: initial.transactionId,
+        type: 'allocation',
+        amount,
+        payee: initial.payee ?? 'Auto-save',
+        note: note.trim() || undefined,
+        occurredAt,
+      })
+      return
+    }
     onSave({
       transactionId: initial.transactionId,
-      type: isAutoSave ? 'transfer' : mode,
+      type: mode,
       amount,
-      categoryId: isAutoSave || mode !== 'expense' ? undefined : categoryId,
+      categoryId: mode !== 'expense' ? undefined : categoryId,
       accountId,
-      toAccountId: isAutoSave || mode !== 'transfer' ? undefined : toAccountId,
-      payee: isAutoSave
-        ? (initial.payee ?? 'Auto-save')
-        : mode === 'transfer'
+      toAccountId: mode !== 'transfer' ? undefined : toAccountId,
+      payee:
+        mode === 'transfer'
           ? 'Transfer'
           : payee.trim() ||
             (mode === 'income'
@@ -349,6 +363,10 @@ export function QuickAddSheet({
       occurredAt,
       excludeFromBudget: mode === 'expense' && excludeFromBudget,
       reconcile: initial.reconcile,
+      fromSavings:
+        (mode === 'expense' || mode === 'transfer') && fromSavings
+          ? true
+          : undefined,
     })
   }
 
@@ -433,7 +451,7 @@ export function QuickAddSheet({
         </DialogTitle>
         <DialogDescription className="sr-only">
           {isAutoSave
-            ? 'Change the auto-save amount or the account it is deducted from.'
+            ? 'Change the auto-save amount or date. Account balances stay put.'
             : isEditing
               ? 'Update the transaction details.'
               : 'Enter an amount and optional transaction details.'}
@@ -501,7 +519,7 @@ export function QuickAddSheet({
             <Delete className="size-5" />
           </Button>
         </div>
-        {mode === 'expense' && (
+        {!isAutoSave && mode === 'expense' && (
           <>
             {!isEditing && (
               <div className="mt-5 min-w-0">
@@ -540,29 +558,45 @@ export function QuickAddSheet({
             </div>
           </>
         )}
-        {isAutoSave ? (
-          <AccountPicker
-            label="Deduct from"
-            accounts={accounts}
-            selected={accountId}
-            onSelect={setAccountId}
-          />
-        ) : mode === 'transfer' ? (
+        {!isAutoSave && mode === 'transfer' && (
           <>
             <AccountPicker
               label="From account"
               accounts={accounts}
               selected={accountId}
               onSelect={setAccountId}
+              includeAll
             />
             <AccountPicker
               label="To account"
               accounts={accounts}
               selected={toAccountId}
               onSelect={setToAccountId}
+              includeAll
             />
+            <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+              <div className="min-w-0">
+                <Label
+                  htmlFor="quick-add-from-savings"
+                  className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+                >
+                  From savings
+                </Label>
+                {fromSavings && (
+                  <p className="mt-1 text-xs font-normal text-sea-ink-soft">
+                    Sweeps earmarked savings into the destination account.
+                  </p>
+                )}
+              </div>
+              <Switch
+                id="quick-add-from-savings"
+                checked={fromSavings}
+                onCheckedChange={setFromSavings}
+              />
+            </div>
           </>
-        ) : (
+        )}
+        {!isAutoSave && mode !== 'transfer' && (
           <AccountPicker
             label={mode === 'income' ? 'Into account' : 'From account'}
             accounts={accounts}
@@ -570,7 +604,7 @@ export function QuickAddSheet({
             onSelect={setAccountId}
           />
         )}
-        {mode !== 'transfer' && (
+        {!isAutoSave && mode !== 'transfer' && (
           <div className="mt-5">
             <Label htmlFor="quick-add-payee" className="mb-2">
               Payee
@@ -584,7 +618,7 @@ export function QuickAddSheet({
             />
           </div>
         )}
-        {mode === 'expense' && (
+        {!isAutoSave && mode === 'expense' && (
           <div className="mt-4">
             <Label htmlFor="quick-add-items" className="sr-only">
               Items
@@ -601,7 +635,30 @@ export function QuickAddSheet({
             </p>
           </div>
         )}
-        {mode === 'expense' && (
+        {!isAutoSave && mode === 'expense' && (
+          <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+            <div className="min-w-0">
+              <Label
+                htmlFor="quick-add-pay-from-savings"
+                className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+              >
+                Pay from savings
+              </Label>
+              {fromSavings && (
+                <p className="mt-1 text-xs font-normal text-sea-ink-soft">
+                  Won't count against this cycle's budget. The savings envelope
+                  covers it.
+                </p>
+              )}
+            </div>
+            <Switch
+              id="quick-add-pay-from-savings"
+              checked={fromSavings}
+              onCheckedChange={setFromSavings}
+            />
+          </div>
+        )}
+        {!isAutoSave && mode === 'expense' && !fromSavings && (
           <Button
             type="button"
             variant="secondary"
@@ -626,7 +683,7 @@ export function QuickAddSheet({
             </span>
           </Button>
         )}
-        {mode === 'income' && !isEditing && (
+        {!isAutoSave && mode === 'income' && !isEditing && (
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">
