@@ -205,6 +205,7 @@ function AppDashboard({
         id: transaction._id,
         type: transaction.type,
         amount: transaction.amount,
+        fxRate: transaction.fxRate,
         payee: transaction.payee,
         categoryId: transaction.categoryId,
         accountId: transaction.accountId,
@@ -406,6 +407,7 @@ function AppDashboard({
       transactionId: transaction.id,
       mode: transaction.type,
       amount: transaction.amount,
+      fxRate: transaction.fxRate,
       categoryId: transaction.categoryId,
       accountId: transaction.accountId,
       toAccountId: transaction.toAccountId,
@@ -602,6 +604,7 @@ function AppDashboard({
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}
+          usdRate={data.settings.usdRate}
           reconcileNote={cycleInfo.reconcileNote}
           autoSaveRateForPayee={autoSaveRateForPayee}
           resolveAccountId={resolveAccountId}

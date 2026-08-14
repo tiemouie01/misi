@@ -44,6 +44,7 @@ export default defineSchema({
       v.literal('allocation'),
     ),
     amount: v.number(),
+    fxRate: v.optional(v.number()),
     payee: v.string(),
     categoryId: v.optional(v.string()),
     accountId: v.optional(v.id('accounts')),

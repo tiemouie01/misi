@@ -25,7 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '#/components/ui/tooltip'
-import { formatK, oneTapRecents } from '#/lib/app-data'
+import { currencyToMwk, formatK, formatUsd, mwkToCurrency, oneTapRecents } from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
 
 import type {
@@ -50,6 +50,7 @@ interface QuickAddSheetProps {
   defaultExpenseAccountId: string
   defaultTransferFromAccountId: string
   defaultTransferToAccountId: string
+  usdRate: number
   reconcileNote: string
   autoSaveRateForPayee: (payee: string) => number
   resolveAccountId: (accountId: string) => string
@@ -118,8 +119,25 @@ function appendAmountInput(current: string, value: string) {
   return next.slice(0, MAX_AMOUNT_WHOLE_DIGITS)
 }
 
-function formatAmountDigitsDisplay(digits: string) {
-  if (!digits) return 'K 0'
+function formatTransferLeg(
+  account: Account,
+  mwkAmount: number,
+  usdRate: number,
+  sign: '+' | '−',
+) {
+  const native =
+    account.currency === 'USD'
+      ? formatUsd(mwkToCurrency(mwkAmount, 'USD', usdRate))
+      : formatK(mwkAmount)
+  return `${account.name} ${sign}${native}`
+}
+
+function formatAmountDigitsDisplay(
+  digits: string,
+  currency: Account['currency'],
+) {
+  const prefix = currency === 'USD' ? '$ ' : 'K '
+  if (!digits) return `${prefix}0`
 
   const hasDecimal = digits.includes('.')
   const [wholePart, fractionPart = ''] = digits.split('.')
@@ -128,8 +146,12 @@ function formatAmountDigitsDisplay(digits: string) {
     ? whole.toLocaleString('en-US')
     : '0'
 
-  if (!hasDecimal) return `K ${formattedWhole}`
-  return `K ${formattedWhole}.${fractionPart}`
+  if (!hasDecimal) return `${prefix}${formattedWhole}`
+  return `${prefix}${formattedWhole}.${fractionPart}`
+}
+
+function formatEnteredAmount(value: number, currency: Account['currency']) {
+  return currency === 'USD' ? formatUsd(value) : formatK(value)
 }
 
 function TransactionDatePicker({
@@ -284,6 +306,7 @@ export function QuickAddSheet({
   defaultExpenseAccountId,
   defaultTransferFromAccountId,
   defaultTransferToAccountId,
+  usdRate,
   reconcileNote,
   autoSaveRateForPayee,
   resolveAccountId,
@@ -293,19 +316,31 @@ export function QuickAddSheet({
   onDelete,
 }: QuickAddSheetProps) {
   const isEditing = initial.transactionId !== undefined
+  const initialAccountId =
+    initial.accountId ??
+    (initial.mode === 'transfer'
+      ? defaultTransferFromAccountId
+      : defaultExpenseAccountId)
+  const initialAmountCurrency =
+    initial.autoSave === true
+      ? 'MWK'
+      : (accounts.find((account) => account.id === initialAccountId)
+          ?.currency ?? 'MWK')
+  const initialUsdRate = initial.fxRate ?? usdRate
   const [mode, setMode] = useState<TxnType>(initial.mode)
-  const [digits, setDigits] = useState(
-    initial.amount ? amountToDigits(initial.amount) : '',
+  const [digits, setDigits] = useState(() =>
+    initial.amount
+      ? amountToDigits(
+          initialAmountCurrency === 'USD'
+            ? mwkToCurrency(initial.amount, 'USD', initialUsdRate)
+            : initial.amount,
+        )
+      : '',
   )
   const [categoryId, setCategoryId] = useState(
     initial.categoryId ?? firstExpenseCategoryKey(categories),
   )
-  const [accountId, setAccountId] = useState(
-    initial.accountId ??
-      (initial.mode === 'transfer'
-        ? defaultTransferFromAccountId
-        : defaultExpenseAccountId),
-  )
+  const [accountId, setAccountId] = useState(initialAccountId)
   const [toAccountId, setToAccountId] = useState(
     initial.toAccountId ?? defaultTransferToAccountId,
   )
@@ -318,13 +353,52 @@ export function QuickAddSheet({
   const [fromSavings, setFromSavings] = useState(initial.fromSavings ?? false)
   const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
   const isAutoSave = initial.autoSave === true
+  const fromAccount = accounts.find((account) => account.id === accountId)
+  const toAccount = accounts.find((account) => account.id === toAccountId)
+  const amountCurrency: Account['currency'] = isAutoSave
+    ? 'MWK'
+    : (fromAccount?.currency ?? 'MWK')
+  const conversionRate = initial.fxRate ?? usdRate
   const amount = parseAmountDigits(digits)
+  let amountMwk = amount
+  if (amount > 0 && amountCurrency === 'USD' && conversionRate > 0) {
+    try {
+      amountMwk = currencyToMwk(amount, 'USD', conversionRate)
+    } catch {
+      amountMwk = 0
+    }
+  }
   const autoSaveRate = autoSaveRateForPayee(payee)
   const canSave =
     amount > 0 &&
+    amountMwk > 0 &&
+    (amountCurrency !== 'USD' || conversionRate > 0) &&
     (isAutoSave ||
       (Boolean(accountId) &&
         (mode !== 'transfer' || accountId !== toAccountId)))
+
+  function retargetAmount(previousAccountId: string, nextAccountId: string) {
+    const previous = accounts.find((account) => account.id === previousAccountId)
+    const next = accounts.find((account) => account.id === nextAccountId)
+    if (!previous || !next || previous.currency === next.currency) return
+    setDigits((current) => {
+      const parsed = parseAmountDigits(current)
+      if (parsed <= 0 || conversionRate <= 0) return current
+      try {
+        const mwk = currencyToMwk(parsed, previous.currency, conversionRate)
+        return amountToDigits(
+          mwkToCurrency(mwk, next.currency, conversionRate),
+        )
+      } catch {
+        return current
+      }
+    })
+  }
+
+  function selectAccount(nextAccountId: string) {
+    retargetAmount(accountId, nextAccountId)
+    setAccountId(nextAccountId)
+  }
 
   function appendDigits(value: string) {
     setDigits((current) => appendAmountInput(current, value))
@@ -336,7 +410,7 @@ export function QuickAddSheet({
       onSave({
         transactionId: initial.transactionId,
         type: 'allocation',
-        amount,
+        amount: amountMwk,
         payee: initial.payee ?? 'Auto-save',
         note: note.trim() || undefined,
         occurredAt,
@@ -346,7 +420,7 @@ export function QuickAddSheet({
     onSave({
       transactionId: initial.transactionId,
       type: mode,
-      amount,
+      amount: amountMwk,
       categoryId: mode !== 'expense' ? undefined : categoryId,
       accountId,
       toAccountId: mode !== 'transfer' ? undefined : toAccountId,
@@ -408,14 +482,14 @@ export function QuickAddSheet({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const amountDisplay = formatAmountDigitsDisplay(digits)
+  const amountDisplay = formatAmountDigitsDisplay(digits, amountCurrency)
   const saveLabel = isEditing
     ? 'Save changes'
     : mode === 'expense'
-      ? `Log expense${amount ? ` — ${formatK(amount)}` : ''}`
+      ? `Log expense${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
       : mode === 'income'
-        ? `Log income${amount ? ` — ${formatK(amount)}` : ''}`
-        : `Move${amount ? ` ${formatK(amount)}` : ''}`
+        ? `Log income${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
+        : `Move${amount ? ` ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
 
   function selectRecent(recent: RecentTransaction) {
     setDigits(amountToDigits(recent.amount))
@@ -425,6 +499,13 @@ export function QuickAddSheet({
   }
 
   function switchMode(nextMode: TxnType) {
+    const nextAccountId =
+      nextMode === 'transfer'
+        ? defaultTransferFromAccountId
+        : mode === 'transfer'
+          ? defaultExpenseAccountId
+          : accountId
+    retargetAmount(accountId, nextAccountId)
     setMode(nextMode)
     if (nextMode === 'transfer') {
       setAccountId(defaultTransferFromAccountId)
@@ -480,7 +561,7 @@ export function QuickAddSheet({
           </div>
         )}
         <div className="mt-5 min-w-0 text-center">
-          <p className="island-kicker">Amount (MWK)</p>
+          <p className="island-kicker">Amount ({amountCurrency})</p>
           <p
             aria-live="polite"
             aria-atomic="true"
@@ -488,6 +569,21 @@ export function QuickAddSheet({
           >
             {amountDisplay}
           </p>
+          {mode === 'transfer' &&
+          fromAccount &&
+          toAccount &&
+          fromAccount.currency !== toAccount.currency &&
+          conversionRate > 0 &&
+          amountMwk > 0 ? (
+            <p className="mt-2 text-sm text-sea-ink-soft">
+              {formatTransferLeg(fromAccount, amountMwk, conversionRate, '−')}
+              {' → '}
+              {formatTransferLeg(toAccount, amountMwk, conversionRate, '+')}
+              <span className="mt-0.5 block text-xs">
+                at K{conversionRate.toLocaleString('en-US')}/$
+              </span>
+            </p>
+          ) : null}
           {initial.reconcile && (
             <Badge variant="destructive" className="mt-1">
               {reconcileNote}
@@ -564,7 +660,7 @@ export function QuickAddSheet({
               label="From account"
               accounts={accounts}
               selected={accountId}
-              onSelect={setAccountId}
+              onSelect={selectAccount}
               includeAll
             />
             <AccountPicker
@@ -601,7 +697,7 @@ export function QuickAddSheet({
             label={mode === 'income' ? 'Into account' : 'From account'}
             accounts={accounts}
             selected={accountId}
-            onSelect={setAccountId}
+            onSelect={selectAccount}
           />
         )}
         {!isAutoSave && mode !== 'transfer' && (

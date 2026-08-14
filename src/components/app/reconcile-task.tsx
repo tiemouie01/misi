@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { api } from '../../../convex/_generated/api'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { ReconcileCard } from '#/components/app/reconcile-card'
-import { isSpendableAccount } from '#/lib/app-data'
+import { isSpendableAccount, USD_RATE } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import {
   mutationErrorMessage,
@@ -181,6 +181,7 @@ export function ReconcileTask() {
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}
+          usdRate={data?.settings?.usdRate ?? USD_RATE}
           reconcileNote={reconcileNote}
           autoSaveRateForPayee={autoSaveRateForPayee}
           resolveAccountId={resolveAccountId}

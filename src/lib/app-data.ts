@@ -14,6 +14,7 @@ export interface Txn {
   id: string
   type: TxnType
   amount: number
+  fxRate?: number
   payee: string
   categoryId?: string
   accountId?: string
@@ -67,6 +68,7 @@ export interface QuickAddInitial {
   transactionId?: string
   mode: TxnType
   amount?: number
+  fxRate?: number
   categoryId?: string
   accountId?: string
   toAccountId?: string
@@ -236,6 +238,16 @@ export function formatK(value: number) {
   })
   return `${value < 0 ? '-' : ''}K${absolute}`
 }
+
+export function formatUsd(value: number) {
+  const absolute = Math.abs(value).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  return `${value < 0 ? '-' : ''}$${absolute}`
+}
+
+export { currencyToMwk, mwkToCurrency } from '../../shared/fx'
 
 export function formatAccountAmount(account: Account) {
   return account.currency === 'USD'

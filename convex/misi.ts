@@ -6,6 +6,7 @@ import {
   spentByCategory,
   totalBudgetSpending,
 } from '../shared/budget-rollover'
+import { accountBalanceImpacts, assertUsdRate, roundMoney } from '../shared/fx'
 import { mutation, query } from './_generated/server'
 import { requireAuthUser } from './auth'
 import {
@@ -60,6 +61,7 @@ type TransactionInput = {
   toAccountId?: Id<'accounts'>
   sourceId?: Id<'incomeSources'>
   excludeFromBudget?: boolean
+  fxRate?: number
 }
 
 async function getCategories(ctx: ReadCtx, userId: string) {
@@ -639,33 +641,60 @@ async function validateTransactionInput(
   }
 }
 
-function getAccountBalanceImpacts(input: TransactionInput) {
-  const impacts = new Map<Id<'accounts'>, number>()
-  const addImpact = (accountId: Id<'accounts'>, amount: number) => {
-    impacts.set(accountId, (impacts.get(accountId) ?? 0) + amount)
+async function loadAccountCurrencies(
+  ctx: MutationCtx,
+  userId: string,
+  input: TransactionInput | null,
+  currencyByAccountId: Map<string, Doc<'accounts'>['currency']>,
+) {
+  if (!input) return
+  for (const accountId of [input.accountId, input.toAccountId]) {
+    if (!accountId || currencyByAccountId.has(accountId)) continue
+    const account = await requireOwnedAccount(ctx, userId, accountId)
+    currencyByAccountId.set(account._id, account.currency)
+  }
+}
+
+async function withCapturedFxRate(
+  ctx: ReadCtx,
+  userId: string,
+  input: TransactionInput,
+): Promise<TransactionInput> {
+  if (input.fxRate !== undefined) {
+    assertUsdRate(input.fxRate)
+    return input
   }
 
-  if (input.type === 'allocation') {
-    return impacts
-  }
-
-  if (!input.accountId) {
-    throw new Error('An account is required')
-  }
-
-  if (input.type === 'expense') {
-    addImpact(input.accountId, -input.amount)
-  } else if (input.type === 'income') {
-    addImpact(input.accountId, input.amount)
-  } else {
-    if (!input.toAccountId) {
-      throw new Error('A destination account is required for transfers')
+  for (const accountId of [input.accountId, input.toAccountId]) {
+    if (!accountId) continue
+    const account = await requireOwnedAccount(ctx, userId, accountId)
+    if (account.currency === 'USD') {
+      const settings = await requireSettings(ctx, userId)
+      assertUsdRate(settings.usdRate)
+      return { ...input, fxRate: settings.usdRate }
     }
-    addImpact(input.accountId, -input.amount)
-    addImpact(input.toAccountId, input.amount)
   }
 
-  return impacts
+  return input
+}
+
+function getAccountBalanceImpacts(
+  input: TransactionInput,
+  currencyByAccountId: Map<string, Doc<'accounts'>['currency']>,
+) {
+  const impacts = accountBalanceImpacts({
+    type: input.type,
+    amount: input.amount,
+    accountId: input.accountId,
+    toAccountId: input.toAccountId,
+    currencyByAccountId,
+    usdRate: input.fxRate,
+  })
+  const typed = new Map<Id<'accounts'>, number>()
+  for (const [accountId, amount] of impacts) {
+    typed.set(accountId as Id<'accounts'>, amount)
+  }
+  return typed
 }
 
 async function applyTransactionBalanceTransition(
@@ -674,18 +703,41 @@ async function applyTransactionBalanceTransition(
   previous: TransactionInput | null,
   next: TransactionInput | null,
 ) {
+  const currencyByAccountId = new Map<string, Doc<'accounts'>['currency']>()
+  await loadAccountCurrencies(ctx, userId, previous, currencyByAccountId)
+  const nextInput = next ? await withCapturedFxRate(ctx, userId, next) : null
+  await loadAccountCurrencies(ctx, userId, nextInput, currencyByAccountId)
+
+  if (previous && previous.fxRate === undefined) {
+    const previousTouchesUsd = [previous.accountId, previous.toAccountId].some(
+      (accountId) =>
+        accountId !== undefined && currencyByAccountId.get(accountId) === 'USD',
+    )
+    if (previousTouchesUsd) {
+      throw new Error(
+        'This USD transfer is missing a stored exchange rate. Run the FX repair before editing or deleting it.',
+      )
+    }
+  }
+
   const changes = new Map<Id<'accounts'>, number>()
   const addChange = (accountId: Id<'accounts'>, amount: number) => {
     changes.set(accountId, (changes.get(accountId) ?? 0) + amount)
   }
 
   if (previous) {
-    for (const [accountId, amount] of getAccountBalanceImpacts(previous)) {
+    for (const [accountId, amount] of getAccountBalanceImpacts(
+      previous,
+      currencyByAccountId,
+    )) {
       addChange(accountId, -amount)
     }
   }
-  if (next) {
-    for (const [accountId, amount] of getAccountBalanceImpacts(next)) {
+  if (nextInput) {
+    for (const [accountId, amount] of getAccountBalanceImpacts(
+      nextInput,
+      currencyByAccountId,
+    )) {
       addChange(accountId, amount)
     }
   }
@@ -693,7 +745,9 @@ async function applyTransactionBalanceTransition(
   for (const [accountId, change] of changes) {
     if (change === 0) continue
     const account = await requireOwnedAccount(ctx, userId, accountId)
-    await ctx.db.patch(account._id, { balance: account.balance + change })
+    await ctx.db.patch(account._id, {
+      balance: roundMoney(account.balance + change),
+    })
   }
 }
 
@@ -2111,6 +2165,10 @@ export const addTransaction = mutation({
       await assertSavingsHasAmount(ctx, user._id, args.amount)
     }
     const cycle = await ensureCycleForDate(ctx, user._id, occurredAt)
+    const input = await withCapturedFxRate(ctx, user._id, {
+      ...args,
+      excludeFromBudget: envelope.excludeFromBudget,
+    })
 
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
@@ -2127,9 +2185,10 @@ export const addTransaction = mutation({
       sourceId: args.sourceId,
       excludeFromBudget: envelope.excludeFromBudget,
       occurredAt,
+      ...(input.fxRate !== undefined ? { fxRate: input.fxRate } : {}),
     })
 
-    await applyTransactionBalanceTransition(ctx, user._id, null, args)
+    await applyTransactionBalanceTransition(ctx, user._id, null, input)
 
     return transactionId
   },
@@ -2174,10 +2233,11 @@ export const updateTransaction = mutation({
       args.fromSavings,
       args.excludeFromBudget,
     )
-    const nextInput = {
+    const nextInput = await withCapturedFxRate(ctx, user._id, {
       ...args,
       excludeFromBudget: envelope.excludeFromBudget,
-    }
+      fxRate: transaction.fxRate,
+    })
     await validateTransactionInput(ctx, user._id, nextInput)
     if (args.fromSavings) {
       await assertSavingsHasAmount(ctx, user._id, args.amount, transaction._id)
@@ -2203,6 +2263,7 @@ export const updateTransaction = mutation({
       excludeFromBudget: envelope.excludeFromBudget,
       cycleId: cycle._id,
       occurredAt: args.occurredAt,
+      ...(nextInput.fxRate !== undefined ? { fxRate: nextInput.fxRate } : {}),
     })
 
     return transaction._id
