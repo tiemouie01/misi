@@ -11,7 +11,6 @@
 import type * as auth from "../auth.js";
 import type * as categories from "../categories.js";
 import type * as http from "../http.js";
-import type * as migrations from "../migrations.js";
 import type * as misi from "../misi.js";
 
 import type {
@@ -24,7 +23,6 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   categories: typeof categories;
   http: typeof http;
-  migrations: typeof migrations;
   misi: typeof misi;
 }>;
 
