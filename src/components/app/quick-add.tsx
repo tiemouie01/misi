@@ -39,6 +39,7 @@ import {
   claimForbidsAccount,
   claimRequiresAccount,
   defaultClaimAction,
+  remainingAfterReplacement,
 } from '../../../shared/claim'
 
 import type {
@@ -325,6 +326,7 @@ function ClaimFields({
   accountId,
   fromSavings,
   lockIdentity,
+  nextRemaining,
   onDebtId,
   onClaimAction,
   onAdjustPolarity,
@@ -339,6 +341,7 @@ function ClaimFields({
   accountId: string
   fromSavings: boolean
   lockIdentity: boolean
+  nextRemaining: number | null
   onDebtId: (id: string) => void
   onClaimAction: (action: ClaimAction) => void
   onAdjustPolarity: (polarity: AdjustPolarity) => void
@@ -381,6 +384,17 @@ function ClaimFields({
             ))}
           </div>
         )}
+        {selected && (
+          <p className="mt-1.5 text-xs text-sea-ink-soft">
+            Remaining {formatK(selected.remaining)}
+            {nextRemaining !== null && nextRemaining !== selected.remaining
+              ? ` → ${formatK(nextRemaining)}`
+              : ''}
+            {nextRemaining !== null && nextRemaining < 0
+              ? ' · cannot go below zero'
+              : ''}
+          </p>
+        )}
       </fieldset>
       <fieldset className="mt-4">
         <legend className="field-label mb-2">Action</legend>
@@ -396,7 +410,7 @@ function ClaimFields({
               className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
               onClick={() => onClaimAction(action)}
             >
-              {claimActionLabel(action, adjustPolarity)}
+              {claimActionLabel(action)}
             </Button>
           ))}
         </div>
@@ -567,15 +581,39 @@ export function QuickAddSheet({
   }
   const autoSaveRate = autoSaveRateForPayee(payee)
   const selectedDebt = debts.find((debt) => debt.id === debtId)
+  const pickerDebts = debts.filter(
+    (debt) => !debt.archived || debt.id === (initial.debtId ?? debtId),
+  )
   const activeDebts = debts.filter((debt) => !debt.archived)
   const mwkAccounts = accounts.filter((account) => account.currency === 'MWK')
   const claimNeedsAccount =
     mode === 'claim' && claimRequiresAccount(claimAction)
   const claimHidesAccount = mode === 'claim' && claimForbidsAccount(claimAction)
+  const nextRemaining =
+    mode === 'claim' && selectedDebt && amountMwk > 0
+      ? remainingAfterReplacement(
+          selectedDebt.remaining,
+          {
+            action: claimAction,
+            amount: amountMwk,
+            adjustPolarity:
+              claimAction === 'adjust' ? adjustPolarity : undefined,
+          },
+          isEditing && initial.claimAction
+            ? {
+                action: initial.claimAction,
+                amount: initial.amount ?? 0,
+                adjustPolarity: initial.adjustPolarity,
+              }
+            : undefined,
+        )
+      : null
+  const claimWouldGoNegative = nextRemaining !== null && nextRemaining < 0
   const canSave =
     amount > 0 &&
     amountMwk > 0 &&
     (amountCurrency !== 'USD' || conversionRate > 0) &&
+    !claimWouldGoNegative &&
     (isAutoSave ||
       (mode === 'claim'
         ? Boolean(debtId) && (!claimNeedsAccount || Boolean(accountId))
@@ -774,26 +812,33 @@ export function QuickAddSheet({
             {claimActionLabel(claimAction, adjustPolarity)}
           </p>
         ) : (
-          <div className="mr-11 grid min-h-10 min-w-0 grid-cols-2 gap-1 rounded-2xl border border-(--chip-line) bg-(--chip-bg) p-1 sm:h-10 sm:grid-cols-4 sm:rounded-full">
-            {(['expense', 'income', 'transfer', 'claim'] as const).map(
-              (type) => (
-                <Button
-                  key={type}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-pressed={mode === type}
-                  className="h-full min-w-0 w-full rounded-full px-1.5 text-sea-ink-soft shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
-                  onClick={() => switchMode(type)}
-                >
-                  <span className="truncate">
-                    {type === 'claim'
-                      ? 'Debt'
-                      : `${type[0].toUpperCase()}${type.slice(1)}`}
-                  </span>
-                </Button>
-              ),
-            )}
+          <div
+            className={`mr-11 grid min-h-10 min-w-0 gap-1 rounded-2xl border border-(--chip-line) bg-(--chip-bg) p-1 sm:h-10 sm:rounded-full ${
+              isEditing
+                ? 'grid-cols-3 sm:grid-cols-3'
+                : 'grid-cols-2 sm:grid-cols-4'
+            }`}
+          >
+            {(isEditing
+              ? (['expense', 'income', 'transfer'] as const)
+              : (['expense', 'income', 'transfer', 'claim'] as const)
+            ).map((type) => (
+              <Button
+                key={type}
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={mode === type}
+                className="h-full min-w-0 w-full rounded-full px-1.5 text-sea-ink-soft shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
+                onClick={() => switchMode(type)}
+              >
+                <span className="truncate">
+                  {type === 'claim'
+                    ? 'Debt'
+                    : `${type[0].toUpperCase()}${type.slice(1)}`}
+                </span>
+              </Button>
+            ))}
           </div>
         )}
         <div className="mt-5 min-w-0 text-center">
@@ -938,7 +983,7 @@ export function QuickAddSheet({
         )}
         {!isAutoSave && mode === 'claim' && (
           <ClaimFields
-            debts={activeDebts}
+            debts={pickerDebts}
             mwkAccounts={mwkAccounts}
             debtId={debtId}
             claimAction={claimAction}
@@ -946,6 +991,7 @@ export function QuickAddSheet({
             accountId={accountId}
             fromSavings={fromSavings}
             lockIdentity={isEditing}
+            nextRemaining={nextRemaining}
             onDebtId={(id) => {
               setDebtId(id)
               const debt = debts.find((item) => item.id === id)

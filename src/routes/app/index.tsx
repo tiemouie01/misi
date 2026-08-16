@@ -29,6 +29,7 @@ import {
   spendableTotalMwk,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { mapDebt } from '#/lib/debts'
 import {
   mutationErrorMessage,
   useQuickAddSheet,
@@ -342,14 +343,7 @@ function AppDashboard({
       currency: 'MWK',
     },
   ]
-  const debts = activeDebts.map((debt) => ({
-    id: debt._id,
-    name: debt.name,
-    direction: debt.direction,
-    openingBalance: debt.openingBalance,
-    remaining: debt.remaining,
-    archived: false,
-  }))
+  const debts = data.debts.map(mapDebt)
 
   const expectedBalances = useMemo(
     () =>

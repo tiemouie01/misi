@@ -86,12 +86,25 @@ export function computeClaimRemaining(
   }, openingBalance)
 }
 
+export function remainingAfterReplacement(
+  currentRemaining: number,
+  next: ClaimMovement,
+  previous?: ClaimMovement,
+) {
+  const withoutPrevious = previous
+    ? currentRemaining - claimRemainingDelta(previous)
+    : currentRemaining
+  return Math.round((withoutPrevious + claimRemainingDelta(next)) * 100) / 100
+}
+
 export function claimActionLabel(
   action: ClaimAction,
   polarity?: AdjustPolarity,
 ) {
   if (action === 'adjust') {
-    return polarity === 'decrease' ? 'Adjust down' : 'Adjust up'
+    if (polarity === 'decrease') return 'Adjust down'
+    if (polarity === 'increase') return 'Adjust up'
+    return 'Adjust'
   }
   if (action === 'borrow') return 'Borrow'
   if (action === 'lend') return 'Lend'

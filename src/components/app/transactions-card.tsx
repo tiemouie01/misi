@@ -93,9 +93,11 @@ export function TransactionDeleteDialog({
           <AlertDialogDescription>
             {transaction?.type === 'allocation'
               ? `This permanently removes the ${formatK(transaction.amount)} envelope move. Account balances stay put.`
-              : transaction
-                ? `This permanently removes ${transactionAmountLabel(transaction)} and reverses it on your accounts.`
-                : 'This permanently removes the transaction and reverses it on your accounts.'}
+              : transaction?.type === 'claim' && !transaction.accountId
+                ? `This permanently removes ${formatK(transaction.amount)} from the debt ledger. Account balances stay put.`
+                : transaction
+                  ? `This permanently removes ${transactionAmountLabel(transaction)} and reverses it on your accounts.`
+                  : 'This permanently removes the transaction and reverses it on your accounts.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && (

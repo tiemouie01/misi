@@ -2,12 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  claimActionLabel,
   claimActionMatchesDirection,
   claimCashKind,
   claimFeedTitle,
   claimRemainingDelta,
   computeClaimRemaining,
   defaultClaimAction,
+  remainingAfterReplacement,
   sortDebtsByRemaining,
 } from './claim.ts'
 
@@ -78,6 +80,39 @@ test('feed titles name the action and the obligation', () => {
   assert.equal(
     claimFeedTitle('adjust', 'NBS car', 'decrease'),
     'Adjust down · NBS car',
+  )
+})
+
+test('adjust label stays generic until polarity is chosen', () => {
+  assert.equal(claimActionLabel('adjust'), 'Adjust')
+  assert.equal(claimActionLabel('adjust', 'increase'), 'Adjust up')
+  assert.equal(claimActionLabel('adjust', 'decrease'), 'Adjust down')
+  assert.equal(claimActionLabel('repay'), 'Repay')
+})
+
+test('remaining after replacement accounts for the edited movement', () => {
+  assert.equal(
+    remainingAfterReplacement(30_000, {
+      action: 'repay',
+      amount: 40_000,
+    }),
+    -10_000,
+  )
+  assert.equal(
+    remainingAfterReplacement(
+      30_000,
+      { action: 'repay', amount: 20_000 },
+      { action: 'repay', amount: 20_000 },
+    ),
+    30_000,
+  )
+  assert.equal(
+    remainingAfterReplacement(
+      30_000,
+      { action: 'repay', amount: 40_000 },
+      { action: 'repay', amount: 20_000 },
+    ),
+    10_000,
   )
 })
 

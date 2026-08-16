@@ -734,6 +734,7 @@ async function validateClaimInput(
   ctx: ReadCtx,
   userId: string,
   input: TransactionInput,
+  options?: { allowArchived?: boolean },
 ) {
   if (!input.debtId) {
     throw new Error('A debt is required')
@@ -761,7 +762,7 @@ async function validateClaimInput(
   }
 
   const debt = await requireOwnedDebt(ctx, userId, input.debtId)
-  if (debt.archivedAt !== undefined) {
+  if (debt.archivedAt !== undefined && !options?.allowArchived) {
     throw new Error('Unarchive this debt before logging a movement')
   }
   if (!claimActionMatchesDirection(input.claimAction, debtDirection(debt))) {
@@ -786,6 +787,7 @@ async function validateTransactionInput(
   ctx: ReadCtx,
   userId: string,
   input: TransactionInput,
+  options?: { allowArchivedDebt?: boolean },
 ) {
   assertPositiveAmount(input.amount)
 
@@ -809,7 +811,9 @@ async function validateTransactionInput(
   }
 
   if (input.type === 'claim') {
-    await validateClaimInput(ctx, userId, input)
+    await validateClaimInput(ctx, userId, input, {
+      allowArchived: options?.allowArchivedDebt,
+    })
     return
   }
 
@@ -2513,7 +2517,9 @@ export const updateTransaction = mutation({
       excludeFromBudget: envelope.excludeFromBudget,
       fxRate: transaction.fxRate,
     })
-    await validateTransactionInput(ctx, user._id, nextInput)
+    await validateTransactionInput(ctx, user._id, nextInput, {
+      allowArchivedDebt: type === 'claim',
+    })
     if (type === 'claim' && debtId && claimAction) {
       const debt = await requireOwnedDebt(ctx, user._id, debtId)
       const remaining = await computeDebtRemaining(
@@ -2539,10 +2545,7 @@ export const updateTransaction = mutation({
       transaction,
       nextInput,
     )
-    const payee =
-      type === 'claim' && debtId
-        ? (await requireOwnedDebt(ctx, user._id, debtId)).name
-        : args.payee
+    const payee = type === 'claim' ? transaction.payee : args.payee
     await ctx.db.patch(transaction._id, {
       type,
       amount: args.amount,

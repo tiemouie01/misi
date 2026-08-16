@@ -11,6 +11,15 @@ import { claimFeedTitle } from '../../../shared/claim'
 import { AppProviders } from '#/components/app/app-providers'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { TransactionDeleteDialog } from '#/components/app/transactions-card'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import {
@@ -90,6 +99,7 @@ function DebtDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
 
   const debt = mapDebt(detail)
   const accounts = useMemo<Account[]>(
@@ -117,9 +127,7 @@ function DebtDetailPage() {
       })),
     [data?.categories],
   )
-  const debts = (data?.debts ?? [])
-    .filter((item) => item.archivedAt === undefined)
-    .map(mapDebt)
+  const debts = (data?.debts ?? []).map(mapDebt)
   const transactions = useMemo<Txn[]>(
     () =>
       detail.movements.map((transaction) => ({
@@ -293,7 +301,13 @@ function DebtDetailPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => void archive()}
+                  onClick={() => {
+                    if (debt.remaining > 0) {
+                      setArchiveOpen(true)
+                      return
+                    }
+                    void archive()
+                  }}
                 >
                   <Archive className="size-4" />
                   Archive
@@ -483,6 +497,31 @@ function DebtDetailPage() {
           }
         />
       )}
+      <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive {debt.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This debt still has {formatK(debt.remaining)} remaining. Archiving
+              hides it from net worth and stops new movements. It does not write
+              an adjustment.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setArchiveOpen(false)
+                void archive()
+              }}
+            >
+              Archive
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <TransactionDeleteDialog
         transaction={pendingDelete}
         error={pendingDelete ? quickAddError : null}
