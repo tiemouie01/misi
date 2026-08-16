@@ -1,5 +1,10 @@
+import { claimCashKind } from './claim.ts'
+
+import type { ClaimAction } from './claim.ts'
+
 export type MoneyCurrency = 'MWK' | 'USD'
-export type BalanceTxnType = 'expense' | 'income' | 'transfer' | 'allocation'
+export type BalanceTxnType =
+  'expense' | 'income' | 'transfer' | 'allocation' | 'claim'
 
 export function roundMoney(amount: number) {
   return Math.round(amount * 100) / 100
@@ -47,6 +52,7 @@ export function accountBalanceImpacts({
   amount,
   accountId,
   toAccountId,
+  claimAction,
   currencyByAccountId,
   usdRate,
 }: {
@@ -54,6 +60,7 @@ export function accountBalanceImpacts({
   amount: number
   accountId?: string
   toAccountId?: string
+  claimAction?: ClaimAction
   currencyByAccountId: ReadonlyMap<string, MoneyCurrency>
   usdRate?: number
 }) {
@@ -71,6 +78,17 @@ export function accountBalanceImpacts({
   }
 
   if (type === 'allocation') {
+    return impacts
+  }
+
+  if (type === 'claim') {
+    if (!accountId || !claimAction) return impacts
+    const cash = claimCashKind(claimAction)
+    if (cash === 'in') {
+      addImpact(accountId, nativeDelta(accountId, amount))
+    } else if (cash === 'out') {
+      addImpact(accountId, nativeDelta(accountId, -amount))
+    }
     return impacts
   }
 

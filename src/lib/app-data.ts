@@ -7,8 +7,11 @@ export interface Account {
   includeInSpendable?: boolean
 }
 
-export type TxnType = 'expense' | 'income' | 'transfer' | 'allocation'
+export type TxnType = 'expense' | 'income' | 'transfer' | 'allocation' | 'claim'
 export type AllocationDirection = 'toSavings' | 'toSpending'
+export type DebtDirection = 'you_owe' | 'owed_to_you'
+export type ClaimAction = 'borrow' | 'lend' | 'repay' | 'collect' | 'adjust'
+export type AdjustPolarity = 'increase' | 'decrease'
 
 export interface Txn {
   id: string
@@ -19,6 +22,9 @@ export interface Txn {
   categoryId?: string
   accountId?: string
   toAccountId?: string
+  debtId?: string
+  claimAction?: ClaimAction
+  adjustPolarity?: AdjustPolarity
   direction?: AllocationDirection
   walletId: string
   sourceId?: string
@@ -64,6 +70,15 @@ export interface ReconcileBalance {
   actual: number
 }
 
+export interface Debt {
+  id: string
+  name: string
+  direction: DebtDirection
+  openingBalance: number
+  remaining: number
+  archived: boolean
+}
+
 export interface QuickAddInitial {
   transactionId?: string
   mode: TxnType
@@ -81,6 +96,9 @@ export interface QuickAddInitial {
   autoSave?: true
   reconcile?: true
   fromSavings?: boolean
+  debtId?: string
+  claimAction?: ClaimAction
+  adjustPolarity?: AdjustPolarity
 }
 
 export interface QuickAddPayload {
@@ -98,6 +116,9 @@ export interface QuickAddPayload {
   excludeFromBudget?: boolean
   reconcile?: true
   fromSavings?: boolean
+  debtId?: string
+  claimAction?: ClaimAction
+  adjustPolarity?: AdjustPolarity
 }
 
 export interface RecentTransaction {

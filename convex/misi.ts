@@ -6,7 +6,19 @@ import {
   spentByCategory,
   totalBudgetSpending,
 } from '../shared/budget-rollover'
+import {
+  claimActionMatchesDirection,
+  claimAllowsFromSavings,
+  claimForbidsAccount,
+  claimRequiresAccount,
+  computeClaimRemaining,
+  debtDirection,
+  debtOpeningBalance,
+  sortDebtsByRemaining,
+} from '../shared/claim'
 import { accountBalanceImpacts, assertUsdRate, roundMoney } from '../shared/fx'
+
+import type { ClaimAction, AdjustPolarity } from '../shared/claim'
 import { mutation, query } from './_generated/server'
 import { requireAuthUser } from './auth'
 import {
@@ -22,6 +34,7 @@ const userTransactionType = v.union(
   v.literal('expense'),
   v.literal('income'),
   v.literal('transfer'),
+  v.literal('claim'),
 )
 
 const transactionType = v.union(
@@ -29,6 +42,25 @@ const transactionType = v.union(
   v.literal('income'),
   v.literal('transfer'),
   v.literal('allocation'),
+  v.literal('claim'),
+)
+
+const claimActionValidator = v.union(
+  v.literal('borrow'),
+  v.literal('lend'),
+  v.literal('repay'),
+  v.literal('collect'),
+  v.literal('adjust'),
+)
+
+const adjustPolarityValidator = v.union(
+  v.literal('increase'),
+  v.literal('decrease'),
+)
+
+const debtDirectionValidator = v.union(
+  v.literal('you_owe'),
+  v.literal('owed_to_you'),
 )
 
 const allocationDirection = v.union(
@@ -60,6 +92,9 @@ type TransactionInput = {
   accountId?: Id<'accounts'>
   toAccountId?: Id<'accounts'>
   sourceId?: Id<'incomeSources'>
+  debtId?: Id<'debts'>
+  claimAction?: ClaimAction
+  adjustPolarity?: AdjustPolarity
   excludeFromBudget?: boolean
   fxRate?: number
 }
@@ -429,6 +464,123 @@ async function requireOwnedAccount(
   return account
 }
 
+function validateDebtName(name: string) {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Every debt needs a name')
+  return trimmed
+}
+
+async function assertUniqueDebtName(
+  ctx: ReadCtx,
+  userId: string,
+  name: string,
+  excludeId?: Id<'debts'>,
+) {
+  const debts = await ctx.db
+    .query('debts')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect()
+  const duplicate = debts.some(
+    (debt) =>
+      debt._id !== excludeId &&
+      debt.archivedAt === undefined &&
+      debt.name.toLowerCase() === name.toLowerCase(),
+  )
+  if (duplicate) throw new Error(`A debt named ${name} already exists`)
+}
+
+async function requireOwnedDebt(
+  ctx: ReadCtx,
+  userId: string,
+  debtId: Id<'debts'>,
+) {
+  const debt = await ctx.db.get(debtId)
+  if (!debt || debt.userId !== userId) {
+    throw new Error('Debt not found')
+  }
+  return debt
+}
+
+async function getClaimMovements(
+  ctx: ReadCtx,
+  userId: string,
+  debtId: Id<'debts'>,
+) {
+  const movements = await ctx.db
+    .query('transactions')
+    .withIndex('by_user_and_debt', (q) =>
+      q.eq('userId', userId).eq('debtId', debtId),
+    )
+    .collect()
+  return movements.filter((transaction) => transaction.type === 'claim')
+}
+
+function toClaimMovement(transaction: Doc<'transactions'>) {
+  if (!transaction.claimAction) {
+    throw new Error('Claim transaction is missing an action')
+  }
+  return {
+    id: transaction._id,
+    action: transaction.claimAction,
+    amount: transaction.amount,
+    adjustPolarity: transaction.adjustPolarity,
+  }
+}
+
+async function computeDebtRemaining(
+  ctx: ReadCtx,
+  userId: string,
+  debt: Doc<'debts'>,
+  excludeTransactionId?: Id<'transactions'>,
+  replacement?: {
+    action: ClaimAction
+    amount: number
+    adjustPolarity?: AdjustPolarity
+  },
+) {
+  const movements = (await getClaimMovements(ctx, userId, debt._id)).map(
+    toClaimMovement,
+  )
+  const remaining = computeClaimRemaining(
+    debtOpeningBalance(debt),
+    movements,
+    excludeTransactionId,
+  )
+  if (!replacement) return remaining
+  return (
+    Math.round(
+      (remaining +
+        computeClaimRemaining(0, [
+          {
+            action: replacement.action,
+            amount: replacement.amount,
+            adjustPolarity: replacement.adjustPolarity,
+          },
+        ])) *
+        100,
+    ) / 100
+  )
+}
+
+function assertRemainingNonNegative(remaining: number) {
+  if (remaining < 0) {
+    throw new Error('This would take the remaining below zero')
+  }
+}
+
+async function presentDebt(ctx: ReadCtx, userId: string, debt: Doc<'debts'>) {
+  const remaining = await computeDebtRemaining(ctx, userId, debt)
+  return {
+    _id: debt._id,
+    name: debt.name,
+    direction: debtDirection(debt),
+    openingBalance: debtOpeningBalance(debt),
+    remaining,
+    archivedAt: debt.archivedAt,
+    sortOrder: debt.sortOrder ?? 0,
+  }
+}
+
 function isSpendableAccount(account: Doc<'accounts'>) {
   return account.includeInSpendable ?? account.kind !== 'investment'
 }
@@ -452,7 +604,11 @@ function savingsEnvelopeContribution(transaction: Doc<'transactions'>) {
     if (transaction.direction === 'toSpending') return -transaction.amount
     return 0
   }
-  if (transaction.type === 'transfer' || transaction.type === 'expense') {
+  if (
+    transaction.type === 'transfer' ||
+    transaction.type === 'expense' ||
+    transaction.type === 'claim'
+  ) {
     return -transaction.amount
   }
   return 0
@@ -478,12 +634,17 @@ async function computeSavingsBalance(
 
 function assertFromSavingsType(
   type: Doc<'transactions'>['type'],
-  fromSavings?: boolean,
+  fromSavings: boolean | undefined,
+  claimAction?: ClaimAction,
 ) {
   if (!fromSavings) return
-  if (type !== 'expense' && type !== 'transfer') {
-    throw new Error('Savings spending is only valid for expenses and transfers')
+  if (type === 'expense' || type === 'transfer') return
+  if (type === 'claim' && claimAction && claimAllowsFromSavings(claimAction)) {
+    return
   }
+  throw new Error(
+    'Savings spending is only valid for expenses, transfers, and debt repayments or loans',
+  )
 }
 
 async function assertSavingsHasAmount(
@@ -508,8 +669,9 @@ function resolveEnvelopeFields(
   type: Doc<'transactions'>['type'],
   fromSavings: boolean | undefined,
   excludeFromBudget: boolean | undefined,
+  claimAction?: ClaimAction,
 ) {
-  assertFromSavingsType(type, fromSavings)
+  assertFromSavingsType(type, fromSavings, claimAction)
   return {
     walletId: fromSavings ? 'savings' : 'spending',
     excludeFromBudget:
@@ -568,6 +730,58 @@ async function requireOwnedCycle(
   return cycle
 }
 
+async function validateClaimInput(
+  ctx: ReadCtx,
+  userId: string,
+  input: TransactionInput,
+) {
+  if (!input.debtId) {
+    throw new Error('A debt is required')
+  }
+  if (!input.claimAction) {
+    throw new Error('A claim action is required')
+  }
+  if (input.categoryId) {
+    throw new Error('A category is only valid for expenses')
+  }
+  if (input.sourceId) {
+    throw new Error('sourceId is only valid for income transactions')
+  }
+  if (input.toAccountId) {
+    throw new Error('A destination account is only valid for transfers')
+  }
+  if (input.claimAction === 'adjust') {
+    if (!input.adjustPolarity) {
+      throw new Error(
+        'Choose whether this adjust increases or decreases the remaining',
+      )
+    }
+  } else if (input.adjustPolarity) {
+    throw new Error('Adjust polarity is only valid for adjustments')
+  }
+
+  const debt = await requireOwnedDebt(ctx, userId, input.debtId)
+  if (debt.archivedAt !== undefined) {
+    throw new Error('Unarchive this debt before logging a movement')
+  }
+  if (!claimActionMatchesDirection(input.claimAction, debtDirection(debt))) {
+    throw new Error('That action does not match this debt')
+  }
+
+  if (claimForbidsAccount(input.claimAction) && input.accountId) {
+    throw new Error('Adjustments cannot be tied to an account')
+  }
+  if (claimRequiresAccount(input.claimAction) && !input.accountId) {
+    throw new Error('An account is required')
+  }
+  if (input.accountId) {
+    const account = await requireOwnedAccount(ctx, userId, input.accountId)
+    if (account.currency !== 'MWK') {
+      throw new Error('Debt cash movements can only use MWK accounts')
+    }
+  }
+}
+
 async function validateTransactionInput(
   ctx: ReadCtx,
   userId: string,
@@ -588,7 +802,19 @@ async function validateTransactionInput(
     if (input.sourceId) {
       throw new Error('sourceId is only valid for income transactions')
     }
+    if (input.debtId || input.claimAction) {
+      throw new Error('Allocations cannot be tied to a debt')
+    }
     return
+  }
+
+  if (input.type === 'claim') {
+    await validateClaimInput(ctx, userId, input)
+    return
+  }
+
+  if (input.debtId || input.claimAction || input.adjustPolarity) {
+    throw new Error('Debt fields are only valid for claim transactions')
   }
 
   if (!input.accountId) {
@@ -687,6 +913,7 @@ function getAccountBalanceImpacts(
     amount: input.amount,
     accountId: input.accountId,
     toAccountId: input.toAccountId,
+    claimAction: input.claimAction,
     currencyByAccountId,
     usdRate: input.fxRate,
   })
@@ -915,11 +1142,6 @@ async function seedData(ctx: MutationCtx, userId: string) {
     })
   }
 
-  await ctx.db.insert('debts', {
-    userId,
-    name: 'Chisomo',
-    balance: 50000,
-  })
   await ctx.db.insert('settings', {
     userId,
     usdRate: 1735,
@@ -947,10 +1169,13 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
       .withIndex('by_user', (q) => q.eq('userId', userId))
       .collect()
   ).filter((source) => source.archivedAt === undefined)
-  const debts = await ctx.db
+  const debtDocs = await ctx.db
     .query('debts')
     .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect()
+  const debts = sortDebtsByRemaining(
+    await Promise.all(debtDocs.map((debt) => presentDebt(ctx, userId, debt))),
+  )
   const categories = await getCategories(ctx, userId)
 
   accounts.sort((a, b) => a.sortOrder - b.sortOrder)
@@ -2140,8 +2365,11 @@ export const addTransaction = mutation({
     amount: v.number(),
     payee: v.string(),
     categoryId: v.optional(v.string()),
-    accountId: v.id('accounts'),
+    accountId: v.optional(v.id('accounts')),
     toAccountId: v.optional(v.id('accounts')),
+    debtId: v.optional(v.id('debts')),
+    claimAction: v.optional(claimActionValidator),
+    adjustPolarity: v.optional(adjustPolarityValidator),
     items: v.optional(v.string()),
     note: v.optional(v.string()),
     sourceId: v.optional(v.id('incomeSources')),
@@ -2156,29 +2384,50 @@ export const addTransaction = mutation({
       args.type,
       args.fromSavings,
       args.excludeFromBudget,
+      args.claimAction,
     )
-    await validateTransactionInput(ctx, user._id, {
+    const draft = {
       ...args,
       excludeFromBudget: envelope.excludeFromBudget,
-    })
+    }
+    await validateTransactionInput(ctx, user._id, draft)
+    if (args.type === 'claim' && args.debtId && args.claimAction) {
+      const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
+      const remaining = await computeDebtRemaining(
+        ctx,
+        user._id,
+        debt,
+        undefined,
+        {
+          action: args.claimAction,
+          amount: args.amount,
+          adjustPolarity: args.adjustPolarity,
+        },
+      )
+      assertRemainingNonNegative(remaining)
+    }
     if (args.fromSavings) {
       await assertSavingsHasAmount(ctx, user._id, args.amount)
     }
     const cycle = await ensureCycleForDate(ctx, user._id, occurredAt)
-    const input = await withCapturedFxRate(ctx, user._id, {
-      ...args,
-      excludeFromBudget: envelope.excludeFromBudget,
-    })
+    const input = await withCapturedFxRate(ctx, user._id, draft)
+    const payee =
+      args.type === 'claim' && args.debtId
+        ? (await requireOwnedDebt(ctx, user._id, args.debtId)).name
+        : args.payee
 
     const transactionId = await ctx.db.insert('transactions', {
       userId: user._id,
       cycleId: cycle._id,
       type: args.type,
       amount: args.amount,
-      payee: args.payee,
+      payee,
       categoryId: args.categoryId,
       accountId: args.accountId,
       toAccountId: args.toAccountId,
+      debtId: args.debtId,
+      claimAction: args.claimAction,
+      adjustPolarity: args.adjustPolarity,
       walletId: envelope.walletId,
       items: args.items,
       note: args.note,
@@ -2203,6 +2452,9 @@ export const updateTransaction = mutation({
     categoryId: v.optional(v.string()),
     accountId: v.optional(v.id('accounts')),
     toAccountId: v.optional(v.id('accounts')),
+    debtId: v.optional(v.id('debts')),
+    claimAction: v.optional(claimActionValidator),
+    adjustPolarity: v.optional(adjustPolarityValidator),
     items: v.optional(v.string()),
     note: v.optional(v.string()),
     sourceId: v.optional(v.id('incomeSources')),
@@ -2227,18 +2479,56 @@ export const updateTransaction = mutation({
     if (args.type === 'allocation') {
       throw new Error('Transactions cannot be converted into envelope moves')
     }
+    if (transaction.type === 'claim' && args.type !== 'claim') {
+      throw new Error('Claim transactions cannot change type')
+    }
+    if (transaction.type !== 'claim' && args.type === 'claim') {
+      throw new Error('Transactions cannot be converted into claims')
+    }
+
+    const type = transaction.type === 'claim' ? 'claim' : args.type
+    const debtId =
+      transaction.type === 'claim' ? transaction.debtId : args.debtId
+    const claimAction =
+      transaction.type === 'claim' ? transaction.claimAction : args.claimAction
+    const adjustPolarity =
+      type === 'claim' && claimAction === 'adjust'
+        ? (args.adjustPolarity ?? transaction.adjustPolarity)
+        : type === 'claim'
+          ? undefined
+          : args.adjustPolarity
 
     const envelope = resolveEnvelopeFields(
-      args.type,
+      type,
       args.fromSavings,
       args.excludeFromBudget,
+      claimAction,
     )
     const nextInput = await withCapturedFxRate(ctx, user._id, {
       ...args,
+      type,
+      debtId,
+      claimAction,
+      adjustPolarity,
       excludeFromBudget: envelope.excludeFromBudget,
       fxRate: transaction.fxRate,
     })
     await validateTransactionInput(ctx, user._id, nextInput)
+    if (type === 'claim' && debtId && claimAction) {
+      const debt = await requireOwnedDebt(ctx, user._id, debtId)
+      const remaining = await computeDebtRemaining(
+        ctx,
+        user._id,
+        debt,
+        transaction._id,
+        {
+          action: claimAction,
+          amount: args.amount,
+          adjustPolarity,
+        },
+      )
+      assertRemainingNonNegative(remaining)
+    }
     if (args.fromSavings) {
       await assertSavingsHasAmount(ctx, user._id, args.amount, transaction._id)
     }
@@ -2249,13 +2539,20 @@ export const updateTransaction = mutation({
       transaction,
       nextInput,
     )
+    const payee =
+      type === 'claim' && debtId
+        ? (await requireOwnedDebt(ctx, user._id, debtId)).name
+        : args.payee
     await ctx.db.patch(transaction._id, {
-      type: args.type,
+      type,
       amount: args.amount,
-      payee: args.payee,
+      payee,
       categoryId: args.categoryId,
       accountId: args.accountId,
       toAccountId: args.toAccountId,
+      debtId,
+      claimAction,
+      adjustPolarity,
       walletId: envelope.walletId,
       items: args.items,
       note: args.note,
@@ -2288,10 +2585,131 @@ export const deleteTransaction = mutation({
     }
 
     await assertMutableUserTransaction(ctx, transaction, 'deleted')
+    if (transaction.type === 'claim' && transaction.debtId) {
+      const debt = await requireOwnedDebt(ctx, user._id, transaction.debtId)
+      const remaining = await computeDebtRemaining(
+        ctx,
+        user._id,
+        debt,
+        transaction._id,
+      )
+      assertRemainingNonNegative(remaining)
+    }
     await applyTransactionBalanceTransition(ctx, user._id, transaction, null)
     await ctx.db.delete(transaction._id)
 
     return transaction._id
+  },
+})
+
+export const listDebts = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuthUser(ctx)
+    const debts = await ctx.db
+      .query('debts')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    return sortDebtsByRemaining(
+      await Promise.all(debts.map((debt) => presentDebt(ctx, user._id, debt))),
+    )
+  },
+})
+
+export const getDebt = query({
+  args: { debtId: v.id('debts') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
+    const presented = await presentDebt(ctx, user._id, debt)
+    const movements = (await getClaimMovements(ctx, user._id, debt._id)).sort(
+      (left, right) => right.occurredAt - left.occurredAt,
+    )
+    return { ...presented, movements }
+  },
+})
+
+export const createDebt = mutation({
+  args: {
+    name: v.string(),
+    direction: debtDirectionValidator,
+    openingBalance: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const name = validateDebtName(args.name)
+    await assertUniqueDebtName(ctx, user._id, name)
+    const openingBalance = args.openingBalance ?? 0
+    assertNonnegativeFinite(openingBalance, 'Opening balance')
+    const existing = await ctx.db
+      .query('debts')
+      .withIndex('by_user', (q) => q.eq('userId', user._id))
+      .collect()
+    return await ctx.db.insert('debts', {
+      userId: user._id,
+      name,
+      direction: args.direction,
+      openingBalance,
+      sortOrder: existing.length,
+    })
+  },
+})
+
+export const updateDebt = mutation({
+  args: {
+    debtId: v.id('debts'),
+    name: v.optional(v.string()),
+    openingBalance: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
+    const patch: {
+      name?: string
+      openingBalance?: number
+    } = {}
+    if (args.name !== undefined) {
+      const name = validateDebtName(args.name)
+      await assertUniqueDebtName(ctx, user._id, name, debt._id)
+      patch.name = name
+    }
+    if (args.openingBalance !== undefined) {
+      assertNonnegativeFinite(args.openingBalance, 'Opening balance')
+      const remaining = computeClaimRemaining(
+        args.openingBalance,
+        (await getClaimMovements(ctx, user._id, debt._id)).map(toClaimMovement),
+      )
+      assertRemainingNonNegative(remaining)
+      patch.openingBalance = args.openingBalance
+    }
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(debt._id, patch)
+    }
+    return debt._id
+  },
+})
+
+export const archiveDebt = mutation({
+  args: { debtId: v.id('debts') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
+    if (debt.archivedAt !== undefined) return debt._id
+    await ctx.db.patch(debt._id, { archivedAt: Date.now() })
+    return debt._id
+  },
+})
+
+export const restoreDebt = mutation({
+  args: { debtId: v.id('debts') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
+    if (debt.archivedAt === undefined) return debt._id
+    const name = validateDebtName(debt.name)
+    await assertUniqueDebtName(ctx, user._id, name, debt._id)
+    await ctx.db.patch(debt._id, { archivedAt: undefined })
+    return debt._id
   },
 })
 

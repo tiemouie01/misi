@@ -3,6 +3,7 @@ import {
   ChartNoAxesCombined,
   House,
   LogOut,
+  Scale,
   Tags,
   Wifi,
 } from 'lucide-react'
@@ -26,6 +27,12 @@ const APP_NAV = [
     to: '/app/budget',
     label: 'Budget',
     icon: ChartNoAxesCombined,
+    exact: false,
+  },
+  {
+    to: '/app/debts',
+    label: 'Debts',
+    icon: Scale,
     exact: false,
   },
   {
@@ -60,11 +67,7 @@ function cycleBadgeLabel(cycle: CycleBadgeSource, now = Date.now()) {
   return `${cycle.label} · day ${dayNumber}`
 }
 
-export function AppHeader({
-  cycle,
-}: {
-  cycle?: CycleBadgeSource | null
-}) {
+export function AppHeader({ cycle }: { cycle?: CycleBadgeSource | null }) {
   const badge = cycle ? cycleBadgeLabel(cycle) : null
 
   return (

@@ -134,8 +134,15 @@ export function useQuickAddSheet({
             amount: payload.amount,
             payee: payload.payee,
             categoryId: payload.categoryId,
-            accountId: payload.accountId as Id<'accounts'>,
+            accountId: payload.accountId
+              ? (payload.accountId as Id<'accounts'>)
+              : undefined,
             toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
+            debtId: payload.debtId
+              ? (payload.debtId as Id<'debts'>)
+              : undefined,
+            claimAction: payload.claimAction,
+            adjustPolarity: payload.adjustPolarity,
             items: payload.items,
             note: payload.note,
             sourceId: resolveIncomeSourceId(payload),
@@ -151,8 +158,13 @@ export function useQuickAddSheet({
           amount: payload.amount,
           payee: payload.payee,
           categoryId: payload.categoryId,
-          accountId: payload.accountId as Id<'accounts'>,
+          accountId: payload.accountId
+            ? (payload.accountId as Id<'accounts'>)
+            : undefined,
           toAccountId: payload.toAccountId as Id<'accounts'> | undefined,
+          debtId: payload.debtId ? (payload.debtId as Id<'debts'>) : undefined,
+          claimAction: payload.claimAction,
+          adjustPolarity: payload.adjustPolarity,
           items: payload.items,
           note: payload.note,
           sourceId: resolveIncomeSourceId(payload),

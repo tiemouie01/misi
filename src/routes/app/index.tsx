@@ -218,6 +218,9 @@ function AppDashboard({
         excludeFromBudget: transaction.excludeFromBudget,
         occurredAt: transaction.occurredAt,
         day: transactionDayLabel(transaction.occurredAt, now),
+        debtId: transaction.debtId,
+        claimAction: transaction.claimAction,
+        adjustPolarity: transaction.adjustPolarity,
         adjustment: transaction.adjustment ? true : undefined,
         autoSave: transaction.autoSave ? true : undefined,
       })),
@@ -273,10 +276,20 @@ function AppDashboard({
     cycleInfo.daysRemaining > 0
       ? Math.max(0, Math.round(spendingLeft / cycleInfo.daysRemaining))
       : 0
-  const netWorth = accounts.reduce(
-    (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
-    0,
-  )
+  const activeDebts = data.debts.filter((debt) => debt.archivedAt === undefined)
+  const youOwe = activeDebts
+    .filter((debt) => debt.direction === 'you_owe')
+    .reduce((sum, debt) => sum + debt.remaining, 0)
+  const owedToYou = activeDebts
+    .filter((debt) => debt.direction === 'owed_to_you')
+    .reduce((sum, debt) => sum + debt.remaining, 0)
+  const netWorth =
+    accounts.reduce(
+      (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
+      0,
+    ) +
+    owedToYou -
+    youOwe
   const spendable = spendableTotalMwk(accounts, data.settings.usdRate)
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
@@ -329,15 +342,14 @@ function AppDashboard({
       currency: 'MWK',
     },
   ]
-  const debts: Wallet[] = data.debts.map(
-    (debt) =>
-      ({
-        id: `debt-${debt._id}`,
-        name: debt.name,
-        balance: debt.balance,
-        currency: 'MWK',
-      }) satisfies Wallet,
-  )
+  const debts = activeDebts.map((debt) => ({
+    id: debt._id,
+    name: debt.name,
+    direction: debt.direction,
+    openingBalance: debt.openingBalance,
+    remaining: debt.remaining,
+    archived: false,
+  }))
 
   const expectedBalances = useMemo(
     () =>
@@ -420,6 +432,9 @@ function AppDashboard({
       autoSave: transaction.autoSave,
       fromSavings:
         transaction.walletId === 'savings' && transaction.type !== 'allocation',
+      debtId: transaction.debtId,
+      claimAction: transaction.claimAction,
+      adjustPolarity: transaction.adjustPolarity,
     })
   }
 
@@ -561,7 +576,9 @@ function AppDashboard({
             <NetWorthCard
               accounts={accounts}
               envelopes={envelopes}
-              debts={debts}
+              youOwe={youOwe}
+              owedToYou={owedToYou}
+              activeDebtCount={activeDebts.length}
               netWorth={netWorth}
               spendable={spendable}
               savingsBalance={savingsBalance}
@@ -601,6 +618,7 @@ function AppDashboard({
           initial={sheet.initial}
           categories={categories}
           accounts={accounts}
+          debts={debts}
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}

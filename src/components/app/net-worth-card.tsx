@@ -1,4 +1,5 @@
-import { Droplets, Settings2 } from 'lucide-react'
+import { Droplets, Scale, Settings2 } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { Badge } from '#/components/ui/badge'
@@ -30,7 +31,9 @@ import type { Account, AllocationDirection, Wallet } from '#/lib/app-data'
 interface NetWorthCardProps {
   accounts: Account[]
   envelopes: Wallet[]
-  debts: Wallet[]
+  youOwe: number
+  owedToYou: number
+  activeDebtCount: number
   netWorth: number
   spendable: number
   savingsBalance: number
@@ -300,7 +303,9 @@ function ManageAccountsDialog({
 export function NetWorthCard({
   accounts,
   envelopes,
-  debts,
+  youOwe,
+  owedToYou,
+  activeDebtCount,
   netWorth,
   spendable,
   savingsBalance,
@@ -337,13 +342,22 @@ export function NetWorthCard({
     color: envelope.id === 'spending' ? 'var(--lagoon)' : 'var(--palm)',
     ratioBase: spendable,
   }))
-  const debtRows: DisplayRow[] = debts.map((debt) => ({
-    id: debt.id,
-    name: debt.name,
-    amount: debt.balance,
-    amountLabel: formatK(debt.balance),
-    color: 'var(--coral)',
-  }))
+  const claimSummaryRows: DisplayRow[] = [
+    {
+      id: 'you-owe',
+      name: 'You owe',
+      amount: youOwe,
+      amountLabel: formatK(youOwe),
+      color: 'var(--coral)',
+    },
+    {
+      id: 'owed-to-you',
+      name: 'Owed to you',
+      amount: owedToYou,
+      amountLabel: formatK(owedToYou),
+      color: 'var(--palm)',
+    },
+  ]
 
   return (
     <Card
@@ -403,13 +417,17 @@ export function NetWorthCard({
         </TabsContent>
         <TabsContent value="wallets">
           <BalanceRows rows={envelopeRows} />
-          {debtRows.length > 0 && (
-            <>
-              <div className="mt-5 border-t border-dashed border-(--line) pt-4">
-                <p className="island-kicker mb-3">Debts</p>
-                <BalanceRows rows={debtRows} />
-              </div>
-            </>
+          {activeDebtCount > 0 && (
+            <Link
+              to="/app/debts"
+              className="mt-5 block rounded-2xl border border-dashed border-(--line) p-4 no-underline transition-colors hover:bg-(--chip-bg)"
+            >
+              <p className="island-kicker mb-3 flex items-center gap-1.5">
+                <Scale className="size-3.5" />
+                Debts
+              </p>
+              <BalanceRows rows={claimSummaryRows} />
+            </Link>
           )}
           <Button
             type="button"

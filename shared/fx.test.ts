@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import {
-  accountBalanceImpacts,
-  currencyToMwk,
-  mwkToCurrency,
-} from './fx.ts'
+import { accountBalanceImpacts, currencyToMwk, mwkToCurrency } from './fx.ts'
 
 const currencies = new Map([
   ['usd', 'USD' as const],
@@ -133,4 +129,43 @@ test('allocations do not move account balances', () => {
   })
 
   assert.equal(impacts.size, 0)
+})
+
+test('claim repay and lend debit the account', () => {
+  const repay = accountBalanceImpacts({
+    type: 'claim',
+    amount: 20_000,
+    accountId: 'cash',
+    claimAction: 'repay',
+    currencyByAccountId: currencies,
+  })
+  assert.equal(repay.get('cash'), -20_000)
+})
+
+test('claim borrow and collect credit the account', () => {
+  const borrow = accountBalanceImpacts({
+    type: 'claim',
+    amount: 20_000,
+    accountId: 'cash',
+    claimAction: 'borrow',
+    currencyByAccountId: currencies,
+  })
+  assert.equal(borrow.get('cash'), 20_000)
+})
+
+test('claim adjust and claim-only tabs do not move accounts', () => {
+  const adjust = accountBalanceImpacts({
+    type: 'claim',
+    amount: 20_000,
+    claimAction: 'adjust',
+    currencyByAccountId: currencies,
+  })
+  const tab = accountBalanceImpacts({
+    type: 'claim',
+    amount: 20_000,
+    claimAction: 'borrow',
+    currencyByAccountId: currencies,
+  })
+  assert.equal(adjust.size, 0)
+  assert.equal(tab.size, 0)
 })

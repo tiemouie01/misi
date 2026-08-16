@@ -2,9 +2,12 @@ import {
   ArrowDownToLine,
   ArrowLeftRight,
   Droplets,
+  Scale,
   Tag,
   Trash2,
 } from 'lucide-react'
+
+import { claimFeedTitle } from '../../../shared/claim'
 
 import {
   AlertDialog,
@@ -48,6 +51,19 @@ interface TransactionDeleteDialogProps {
 function transactionAmountLabel(transaction: Txn) {
   if (transaction.type === 'expense') return formatK(-transaction.amount)
   if (transaction.type === 'income') return `+${formatK(transaction.amount)}`
+  if (transaction.type === 'claim') {
+    const action = transaction.claimAction
+    if (action === 'borrow' || action === 'collect') {
+      return transaction.accountId
+        ? `+${formatK(transaction.amount)}`
+        : formatK(transaction.amount)
+    }
+    if (action === 'repay' || action === 'lend') {
+      return transaction.accountId
+        ? formatK(-transaction.amount)
+        : formatK(transaction.amount)
+    }
+  }
   return formatK(transaction.amount)
 }
 
@@ -166,34 +182,49 @@ export function TransactionsCard({
                   transaction.categoryId,
                 )
                 const isAllocation = transaction.type === 'allocation'
+                const isClaim = transaction.type === 'claim'
                 const Icon = isAllocation
                   ? Droplets
-                  : transaction.type === 'transfer'
-                    ? ArrowLeftRight
-                    : transaction.type === 'income'
-                      ? ArrowDownToLine
-                      : (category?.icon ?? Tag)
+                  : isClaim
+                    ? Scale
+                    : transaction.type === 'transfer'
+                      ? ArrowLeftRight
+                      : transaction.type === 'income'
+                        ? ArrowDownToLine
+                        : (category?.icon ?? Tag)
                 const color = isAllocation
                   ? 'var(--lagoon)'
-                  : transaction.type === 'income'
-                    ? 'var(--palm)'
-                    : transaction.type === 'transfer'
-                      ? 'var(--lagoon-deep)'
-                      : (category?.color ?? 'var(--lagoon-deep)')
+                  : isClaim
+                    ? 'var(--coral)'
+                    : transaction.type === 'income'
+                      ? 'var(--palm)'
+                      : transaction.type === 'transfer'
+                        ? 'var(--lagoon-deep)'
+                        : (category?.color ?? 'var(--lagoon-deep)')
                 const title = isAllocation
                   ? allocationLabel(transaction)
-                  : transaction.payee
+                  : isClaim && transaction.claimAction
+                    ? claimFeedTitle(
+                        transaction.claimAction,
+                        transaction.payee,
+                        transaction.adjustPolarity,
+                      )
+                    : transaction.payee
                 const subline = isAllocation
                   ? transaction.autoSave
                     ? 'Auto-save'
                     : transaction.payee
-                  : transaction.type === 'transfer'
-                    ? transaction.toAccountId
-                      ? `${account?.name ?? 'Account'} → ${toAccount?.name ?? 'Account'}`
-                      : `Savings · ${account?.name ?? 'Account'}`
-                    : transaction.type === 'income'
-                      ? `Income · ${account?.name ?? 'Account'}`
-                      : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
+                  : isClaim
+                    ? transaction.accountId
+                      ? `Claim · ${account?.name ?? 'Account'}`
+                      : 'Claim · no account'
+                    : transaction.type === 'transfer'
+                      ? transaction.toAccountId
+                        ? `${account?.name ?? 'Account'} → ${toAccount?.name ?? 'Account'}`
+                        : `Savings · ${account?.name ?? 'Account'}`
+                      : transaction.type === 'income'
+                        ? `Income · ${account?.name ?? 'Account'}`
+                        : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
                 const amountLabel = transactionAmountLabel(transaction)
                 const canEdit = canMutateTransaction(transaction)
                 const canDelete = canDeleteTransaction(transaction)

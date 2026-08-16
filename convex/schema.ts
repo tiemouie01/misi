@@ -42,6 +42,7 @@ export default defineSchema({
       v.literal('income'),
       v.literal('transfer'),
       v.literal('allocation'),
+      v.literal('claim'),
     ),
     amount: v.number(),
     fxRate: v.optional(v.number()),
@@ -49,6 +50,19 @@ export default defineSchema({
     categoryId: v.optional(v.string()),
     accountId: v.optional(v.id('accounts')),
     toAccountId: v.optional(v.id('accounts')),
+    debtId: v.optional(v.id('debts')),
+    claimAction: v.optional(
+      v.union(
+        v.literal('borrow'),
+        v.literal('lend'),
+        v.literal('repay'),
+        v.literal('collect'),
+        v.literal('adjust'),
+      ),
+    ),
+    adjustPolarity: v.optional(
+      v.union(v.literal('increase'), v.literal('decrease')),
+    ),
     direction: v.optional(
       v.union(v.literal('toSavings'), v.literal('toSpending')),
     ),
@@ -64,7 +78,8 @@ export default defineSchema({
     .index('by_user_and_cycle', ['userId', 'cycleId'])
     .index('by_user', ['userId'])
     .index('by_user_and_wallet', ['userId', 'walletId'])
-    .index('by_user_and_category', ['userId', 'categoryId']),
+    .index('by_user_and_category', ['userId', 'categoryId'])
+    .index('by_user_and_debt', ['userId', 'debtId']),
   budgets: defineTable({
     userId: v.string(),
     cycleId: v.id('cycles'),
@@ -103,7 +118,13 @@ export default defineSchema({
   debts: defineTable({
     userId: v.string(),
     name: v.string(),
-    balance: v.number(),
+    direction: v.optional(
+      v.union(v.literal('you_owe'), v.literal('owed_to_you')),
+    ),
+    openingBalance: v.optional(v.number()),
+    balance: v.optional(v.number()),
+    sortOrder: v.optional(v.number()),
+    archivedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
   settings: defineTable({
     userId: v.string(),

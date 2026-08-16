@@ -25,11 +25,27 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '#/components/ui/tooltip'
-import { currencyToMwk, formatK, formatUsd, mwkToCurrency, oneTapRecents } from '#/lib/app-data'
+import {
+  currencyToMwk,
+  formatK,
+  formatUsd,
+  mwkToCurrency,
+  oneTapRecents,
+} from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
+import {
+  claimActionLabel,
+  claimAllowsFromSavings,
+  claimForbidsAccount,
+  claimRequiresAccount,
+  defaultClaimAction,
+} from '../../../shared/claim'
 
 import type {
   Account,
+  AdjustPolarity,
+  ClaimAction,
+  Debt,
   QuickAddInitial,
   QuickAddPayload,
   RecentTransaction,
@@ -47,6 +63,7 @@ interface QuickAddSheetProps {
   initial: QuickAddInitial
   categories: Category[]
   accounts: Account[]
+  debts?: Debt[]
   defaultExpenseAccountId: string
   defaultTransferFromAccountId: string
   defaultTransferToAccountId: string
@@ -299,10 +316,179 @@ export function QuickAddFab({ onOpen }: QuickAddFabProps) {
   )
 }
 
+function ClaimFields({
+  debts,
+  mwkAccounts,
+  debtId,
+  claimAction,
+  adjustPolarity,
+  accountId,
+  fromSavings,
+  lockIdentity,
+  onDebtId,
+  onClaimAction,
+  onAdjustPolarity,
+  onAccountId,
+  onFromSavings,
+}: {
+  debts: Debt[]
+  mwkAccounts: Account[]
+  debtId: string
+  claimAction: ClaimAction
+  adjustPolarity: AdjustPolarity
+  accountId: string
+  fromSavings: boolean
+  lockIdentity: boolean
+  onDebtId: (id: string) => void
+  onClaimAction: (action: ClaimAction) => void
+  onAdjustPolarity: (polarity: AdjustPolarity) => void
+  onAccountId: (id: string) => void
+  onFromSavings: (value: boolean) => void
+}) {
+  const selected = debts.find((debt) => debt.id === debtId)
+  const actions: ClaimAction[] = selected
+    ? selected.direction === 'you_owe'
+      ? ['repay', 'borrow', 'adjust']
+      : ['collect', 'lend', 'adjust']
+    : ['repay']
+  const needsAccount = claimRequiresAccount(claimAction)
+  const hidesAccount = claimForbidsAccount(claimAction)
+  const showFromSavings = claimAllowsFromSavings(claimAction)
+
+  return (
+    <>
+      <fieldset className="mt-5">
+        <legend className="field-label mb-2">Debt</legend>
+        {debts.length === 0 ? (
+          <p className="text-sm text-sea-ink-soft">
+            Add a debt first from the Debts page.
+          </p>
+        ) : (
+          <div className="flex min-w-0 flex-wrap gap-2">
+            {debts.map((debt) => (
+              <Button
+                key={debt.id}
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={lockIdentity}
+                aria-pressed={debtId === debt.id}
+                className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                onClick={() => onDebtId(debt.id)}
+              >
+                <span className="truncate">{debt.name}</span>
+              </Button>
+            ))}
+          </div>
+        )}
+      </fieldset>
+      <fieldset className="mt-4">
+        <legend className="field-label mb-2">Action</legend>
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {actions.map((action) => (
+            <Button
+              key={action}
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={lockIdentity}
+              aria-pressed={claimAction === action}
+              className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+              onClick={() => onClaimAction(action)}
+            >
+              {claimActionLabel(action, adjustPolarity)}
+            </Button>
+          ))}
+        </div>
+      </fieldset>
+      {claimAction === 'adjust' && (
+        <fieldset className="mt-4">
+          <legend className="field-label mb-2">Adjust</legend>
+          <div className="flex gap-2">
+            {(['increase', 'decrease'] as const).map((polarity) => (
+              <Button
+                key={polarity}
+                type="button"
+                variant="secondary"
+                size="sm"
+                aria-pressed={adjustPolarity === polarity}
+                className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                onClick={() => onAdjustPolarity(polarity)}
+              >
+                {polarity === 'increase'
+                  ? 'Increase remaining'
+                  : 'Decrease remaining'}
+              </Button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {!hidesAccount && (
+        <fieldset className="mt-5">
+          <legend className="field-label mb-2">
+            {needsAccount ? 'Account' : 'Account (optional)'}
+          </legend>
+          <div className="flex min-w-0 flex-wrap gap-2">
+            {!needsAccount && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                aria-pressed={!accountId}
+                className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                onClick={() => onAccountId('')}
+              >
+                No account
+              </Button>
+            )}
+            {mwkAccounts.map((account) => (
+              <Button
+                key={account.id}
+                type="button"
+                variant="secondary"
+                size="sm"
+                aria-pressed={accountId === account.id}
+                className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                onClick={() => onAccountId(account.id)}
+              >
+                <span className="truncate">{account.name}</span>
+              </Button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {showFromSavings && (
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+          <div className="min-w-0">
+            <Label
+              htmlFor="quick-add-claim-from-savings"
+              className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+            >
+              From savings
+            </Label>
+            {fromSavings && (
+              <p className="mt-1 text-xs font-normal text-sea-ink-soft">
+                Uses the savings envelope. Does not count toward the spending
+                plan.
+              </p>
+            )}
+          </div>
+          <Switch
+            id="quick-add-claim-from-savings"
+            checked={fromSavings}
+            onCheckedChange={onFromSavings}
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
 export function QuickAddSheet({
   initial,
   categories,
   accounts,
+  debts = [],
   defaultExpenseAccountId,
   defaultTransferFromAccountId,
   defaultTransferToAccountId,
@@ -351,6 +537,17 @@ export function QuickAddSheet({
     initial.excludeFromBudget ?? false,
   )
   const [fromSavings, setFromSavings] = useState(initial.fromSavings ?? false)
+  const [debtId, setDebtId] = useState(initial.debtId ?? '')
+  const [claimAction, setClaimAction] = useState<ClaimAction>(
+    initial.claimAction ??
+      defaultClaimAction(
+        debts.find((debt) => debt.id === initial.debtId)?.direction ??
+          'you_owe',
+      ),
+  )
+  const [adjustPolarity, setAdjustPolarity] = useState<AdjustPolarity>(
+    initial.adjustPolarity ?? 'decrease',
+  )
   const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
   const isAutoSave = initial.autoSave === true
   const fromAccount = accounts.find((account) => account.id === accountId)
@@ -369,16 +566,26 @@ export function QuickAddSheet({
     }
   }
   const autoSaveRate = autoSaveRateForPayee(payee)
+  const selectedDebt = debts.find((debt) => debt.id === debtId)
+  const activeDebts = debts.filter((debt) => !debt.archived)
+  const mwkAccounts = accounts.filter((account) => account.currency === 'MWK')
+  const claimNeedsAccount =
+    mode === 'claim' && claimRequiresAccount(claimAction)
+  const claimHidesAccount = mode === 'claim' && claimForbidsAccount(claimAction)
   const canSave =
     amount > 0 &&
     amountMwk > 0 &&
     (amountCurrency !== 'USD' || conversionRate > 0) &&
     (isAutoSave ||
-      (Boolean(accountId) &&
-        (mode !== 'transfer' || accountId !== toAccountId)))
+      (mode === 'claim'
+        ? Boolean(debtId) && (!claimNeedsAccount || Boolean(accountId))
+        : Boolean(accountId) &&
+          (mode !== 'transfer' || accountId !== toAccountId)))
 
   function retargetAmount(previousAccountId: string, nextAccountId: string) {
-    const previous = accounts.find((account) => account.id === previousAccountId)
+    const previous = accounts.find(
+      (account) => account.id === previousAccountId,
+    )
     const next = accounts.find((account) => account.id === nextAccountId)
     if (!previous || !next || previous.currency === next.currency) return
     setDigits((current) => {
@@ -386,9 +593,7 @@ export function QuickAddSheet({
       if (parsed <= 0 || conversionRate <= 0) return current
       try {
         const mwk = currencyToMwk(parsed, previous.currency, conversionRate)
-        return amountToDigits(
-          mwkToCurrency(mwk, next.currency, conversionRate),
-        )
+        return amountToDigits(mwkToCurrency(mwk, next.currency, conversionRate))
       } catch {
         return current
       }
@@ -422,15 +627,20 @@ export function QuickAddSheet({
       type: mode,
       amount: amountMwk,
       categoryId: mode !== 'expense' ? undefined : categoryId,
-      accountId,
+      accountId:
+        mode === 'claim' && (claimHidesAccount || !accountId)
+          ? undefined
+          : accountId,
       toAccountId: mode !== 'transfer' ? undefined : toAccountId,
       payee:
-        mode === 'transfer'
-          ? 'Transfer'
-          : payee.trim() ||
-            (mode === 'income'
-              ? 'Income'
-              : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
+        mode === 'claim'
+          ? (selectedDebt?.name ?? (payee.trim() || 'Debt'))
+          : mode === 'transfer'
+            ? 'Transfer'
+            : payee.trim() ||
+              (mode === 'income'
+                ? 'Income'
+                : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
       sourceId: mode === 'income' ? initial.sourceId : undefined,
       items: mode === 'expense' && items.trim() ? items.trim() : undefined,
       note: note.trim() || undefined,
@@ -438,8 +648,15 @@ export function QuickAddSheet({
       excludeFromBudget: mode === 'expense' && excludeFromBudget,
       reconcile: initial.reconcile,
       fromSavings:
-        (mode === 'expense' || mode === 'transfer') && fromSavings
+        ((mode === 'expense' || mode === 'transfer') && fromSavings) ||
+        (mode === 'claim' && fromSavings && claimAllowsFromSavings(claimAction))
           ? true
+          : undefined,
+      debtId: mode === 'claim' ? debtId : undefined,
+      claimAction: mode === 'claim' ? claimAction : undefined,
+      adjustPolarity:
+        mode === 'claim' && claimAction === 'adjust'
+          ? adjustPolarity
           : undefined,
     })
   }
@@ -489,7 +706,9 @@ export function QuickAddSheet({
       ? `Log expense${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
       : mode === 'income'
         ? `Log income${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
-        : `Move${amount ? ` ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
+        : mode === 'claim'
+          ? `${claimActionLabel(claimAction, adjustPolarity)}${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
+          : `Move${amount ? ` ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
 
   function selectRecent(recent: RecentTransaction) {
     setDigits(amountToDigits(recent.amount))
@@ -502,16 +721,26 @@ export function QuickAddSheet({
     const nextAccountId =
       nextMode === 'transfer'
         ? defaultTransferFromAccountId
-        : mode === 'transfer'
-          ? defaultExpenseAccountId
-          : accountId
+        : nextMode === 'claim'
+          ? (mwkAccounts.find(
+              (account) => account.id === defaultExpenseAccountId,
+            )?.id ??
+            mwkAccounts.at(0)?.id ??
+            '')
+          : mode === 'transfer' || mode === 'claim'
+            ? defaultExpenseAccountId
+            : accountId
     retargetAmount(accountId, nextAccountId)
     setMode(nextMode)
     if (nextMode === 'transfer') {
       setAccountId(defaultTransferFromAccountId)
       setToAccountId(defaultTransferToAccountId)
-    } else if (mode === 'transfer') {
-      setAccountId(defaultExpenseAccountId)
+    } else if (mode === 'transfer' || nextMode === 'claim') {
+      setAccountId(nextAccountId)
+    }
+    if (nextMode === 'claim' && !debtId && activeDebts[0]) {
+      setDebtId(activeDebts[0].id)
+      setClaimAction(defaultClaimAction(activeDebts[0].direction))
     }
   }
 
@@ -540,24 +769,31 @@ export function QuickAddSheet({
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-(--line) sm:hidden" />
         {isAutoSave ? (
           <p className="island-kicker mr-11">Auto-save → Savings</p>
+        ) : isEditing && initial.mode === 'claim' ? (
+          <p className="island-kicker mr-11">
+            {claimActionLabel(claimAction, adjustPolarity)}
+          </p>
         ) : (
-          <div className="mr-11 grid h-10 min-w-0 grid-cols-3 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
-            {(['expense', 'income', 'transfer'] as const).map((type) => (
-              <Button
-                key={type}
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-pressed={mode === type}
-                className="h-full min-w-0 w-full rounded-full px-1.5 text-sea-ink-soft shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
-                onClick={() => switchMode(type)}
-              >
-                <span className="truncate">
-                  {type[0].toUpperCase()}
-                  {type.slice(1)}
-                </span>
-              </Button>
-            ))}
+          <div className="mr-11 grid h-10 min-w-0 grid-cols-4 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
+            {(['expense', 'income', 'transfer', 'claim'] as const).map(
+              (type) => (
+                <Button
+                  key={type}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={mode === type}
+                  className="h-full min-w-0 w-full rounded-full px-1.5 text-sea-ink-soft shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
+                  onClick={() => switchMode(type)}
+                >
+                  <span className="truncate">
+                    {type === 'claim'
+                      ? 'Debt'
+                      : `${type[0].toUpperCase()}${type.slice(1)}`}
+                  </span>
+                </Button>
+              ),
+            )}
           </div>
         )}
         <div className="mt-5 min-w-0 text-center">
@@ -692,7 +928,7 @@ export function QuickAddSheet({
             </div>
           </>
         )}
-        {!isAutoSave && mode !== 'transfer' && (
+        {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
           <AccountPicker
             label={mode === 'income' ? 'Into account' : 'From account'}
             accounts={accounts}
@@ -700,7 +936,30 @@ export function QuickAddSheet({
             onSelect={selectAccount}
           />
         )}
-        {!isAutoSave && mode !== 'transfer' && (
+        {!isAutoSave && mode === 'claim' && (
+          <ClaimFields
+            debts={activeDebts}
+            mwkAccounts={mwkAccounts}
+            debtId={debtId}
+            claimAction={claimAction}
+            adjustPolarity={adjustPolarity}
+            accountId={accountId}
+            fromSavings={fromSavings}
+            lockIdentity={isEditing}
+            onDebtId={(id) => {
+              setDebtId(id)
+              const debt = debts.find((item) => item.id === id)
+              if (debt && !isEditing) {
+                setClaimAction(defaultClaimAction(debt.direction))
+              }
+            }}
+            onClaimAction={setClaimAction}
+            onAdjustPolarity={setAdjustPolarity}
+            onAccountId={setAccountId}
+            onFromSavings={setFromSavings}
+          />
+        )}
+        {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
           <div className="mt-5">
             <Label htmlFor="quick-add-payee" className="mb-2">
               Payee

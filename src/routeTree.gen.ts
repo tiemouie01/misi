@@ -16,9 +16,12 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppBudgetRouteImport } from './routes/app/budget'
 import { Route as AppCategoriesRouteImport } from './routes/app/categories'
+import { Route as AppDebtsRouteImport } from './routes/app/debts'
 import { Route as AppIncomeSourcesRouteImport } from './routes/app/income-sources'
 import { Route as AppReconcileRouteImport } from './routes/app/reconcile'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AppDebtsIndexRouteImport } from './routes/app/debts.index'
+import { Route as AppDebtsDebtIdRouteImport } from './routes/app/debts.$debtId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -55,6 +58,11 @@ const AppCategoriesRoute = AppCategoriesRouteImport.update({
   path: '/categories',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDebtsRoute = AppDebtsRouteImport.update({
+  id: '/debts',
+  path: '/debts',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppIncomeSourcesRoute = AppIncomeSourcesRouteImport.update({
   id: '/income-sources',
   path: '/income-sources',
@@ -70,6 +78,16 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppDebtsIndexRoute = AppDebtsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppDebtsRoute,
+} as any)
+const AppDebtsDebtIdRoute = AppDebtsDebtIdRouteImport.update({
+  id: '/$debtId',
+  path: '/$debtId',
+  getParentRoute: () => AppDebtsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -78,10 +96,13 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
+  '/app/debts': typeof AppDebtsRouteWithChildren
   '/app/income-sources': typeof AppIncomeSourcesRoute
   '/app/reconcile': typeof AppReconcileRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/app/debts/$debtId': typeof AppDebtsDebtIdRoute
+  '/app/debts/': typeof AppDebtsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,6 +114,8 @@ export interface FileRoutesByTo {
   '/app/reconcile': typeof AppReconcileRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/app/debts/$debtId': typeof AppDebtsDebtIdRoute
+  '/app/debts': typeof AppDebtsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -102,10 +125,13 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/app/budget': typeof AppBudgetRoute
   '/app/categories': typeof AppCategoriesRoute
+  '/app/debts': typeof AppDebtsRouteWithChildren
   '/app/income-sources': typeof AppIncomeSourcesRoute
   '/app/reconcile': typeof AppReconcileRoute
   '/app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/app/debts/$debtId': typeof AppDebtsDebtIdRoute
+  '/app/debts/': typeof AppDebtsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -116,10 +142,13 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/app/budget'
     | '/app/categories'
+    | '/app/debts'
     | '/app/income-sources'
     | '/app/reconcile'
     | '/app/'
     | '/api/auth/$'
+    | '/app/debts/$debtId'
+    | '/app/debts/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -131,6 +160,8 @@ export interface FileRouteTypes {
     | '/app/reconcile'
     | '/app'
     | '/api/auth/$'
+    | '/app/debts/$debtId'
+    | '/app/debts'
   id:
     | '__root__'
     | '/'
@@ -139,10 +170,13 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/app/budget'
     | '/app/categories'
+    | '/app/debts'
     | '/app/income-sources'
     | '/app/reconcile'
     | '/app/'
     | '/api/auth/$'
+    | '/app/debts/$debtId'
+    | '/app/debts/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -204,6 +238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCategoriesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/debts': {
+      id: '/app/debts'
+      path: '/debts'
+      fullPath: '/app/debts'
+      preLoaderRoute: typeof AppDebtsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/income-sources': {
       id: '/app/income-sources'
       path: '/income-sources'
@@ -225,12 +266,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/debts/': {
+      id: '/app/debts/'
+      path: '/'
+      fullPath: '/app/debts/'
+      preLoaderRoute: typeof AppDebtsIndexRouteImport
+      parentRoute: typeof AppDebtsRoute
+    }
+    '/app/debts/$debtId': {
+      id: '/app/debts/$debtId'
+      path: '/$debtId'
+      fullPath: '/app/debts/$debtId'
+      preLoaderRoute: typeof AppDebtsDebtIdRouteImport
+      parentRoute: typeof AppDebtsRoute
+    }
   }
 }
+
+interface AppDebtsRouteChildren {
+  AppDebtsDebtIdRoute: typeof AppDebtsDebtIdRoute
+  AppDebtsIndexRoute: typeof AppDebtsIndexRoute
+}
+
+const AppDebtsRouteChildren: AppDebtsRouteChildren = {
+  AppDebtsDebtIdRoute: AppDebtsDebtIdRoute,
+  AppDebtsIndexRoute: AppDebtsIndexRoute,
+}
+
+const AppDebtsRouteWithChildren = AppDebtsRoute._addFileChildren(
+  AppDebtsRouteChildren,
+)
 
 interface AppRouteChildren {
   AppBudgetRoute: typeof AppBudgetRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
+  AppDebtsRoute: typeof AppDebtsRouteWithChildren
   AppIncomeSourcesRoute: typeof AppIncomeSourcesRoute
   AppReconcileRoute: typeof AppReconcileRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -239,6 +309,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppBudgetRoute: AppBudgetRoute,
   AppCategoriesRoute: AppCategoriesRoute,
+  AppDebtsRoute: AppDebtsRouteWithChildren,
   AppIncomeSourcesRoute: AppIncomeSourcesRoute,
   AppReconcileRoute: AppReconcileRoute,
   AppIndexRoute: AppIndexRoute,
@@ -256,12 +327,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
