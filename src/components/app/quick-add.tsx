@@ -774,7 +774,7 @@ export function QuickAddSheet({
             {claimActionLabel(claimAction, adjustPolarity)}
           </p>
         ) : (
-          <div className="mr-11 grid h-10 min-w-0 grid-cols-4 gap-1 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1">
+          <div className="mr-11 grid min-h-10 min-w-0 grid-cols-2 gap-1 rounded-2xl border border-(--chip-line) bg-(--chip-bg) p-1 sm:h-10 sm:grid-cols-4 sm:rounded-full">
             {(['expense', 'income', 'transfer', 'claim'] as const).map(
               (type) => (
                 <Button

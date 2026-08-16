@@ -93,7 +93,7 @@ export function AppHeader({ cycle }: { cycle?: CycleBadgeSource | null }) {
         </div>
         <nav
           aria-label="App"
-          className="inline-flex h-9 shrink-0 items-center rounded-full border border-(--chip-line) bg-(--chip-bg) p-0.5 sm:h-10 sm:p-1"
+          className="inline-flex h-9 max-w-[calc(100vw-10rem)] shrink-0 items-center overflow-x-auto rounded-full border border-(--chip-line) bg-(--chip-bg) p-0.5 sm:h-10 sm:max-w-none sm:p-1"
         >
           {APP_NAV.map((item) => {
             const Icon = item.icon

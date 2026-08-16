@@ -2,7 +2,7 @@ import { convexQuery } from '@convex-dev/react-query'
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { Archive, Pencil, Plus } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -49,11 +49,15 @@ export const Route = createFileRoute('/app/debts/$debtId')({
     if (data === null || !data.settings?.onboardedAt) {
       throw redirect({ to: '/onboarding' })
     }
-    await context.queryClient.ensureQueryData(
-      convexQuery(api.misi.getDebt, {
-        debtId: params.debtId as Id<'debts'>,
-      }),
-    )
+    try {
+      await context.queryClient.ensureQueryData(
+        convexQuery(api.misi.getDebt, {
+          debtId: params.debtId as Id<'debts'>,
+        }),
+      )
+    } catch {
+      throw redirect({ to: '/app/debts' })
+    }
   },
   component: DebtDetailPage,
 })
@@ -76,6 +80,7 @@ function DebtDetailPage() {
   )
   const updateDebt = useMutation(api.misi.updateDebt)
   const archiveDebt = useMutation(api.misi.archiveDebt)
+  const restoreDebt = useMutation(api.misi.restoreDebt)
   const [editorOpen, setEditorOpen] = useState(false)
   const [name, setName] = useState(detail.name)
   const [opening, setOpening] = useState(
@@ -86,14 +91,10 @@ function DebtDetailPage() {
   const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  if (!data?.settings || !data.currentCycle) {
-    throw redirect({ to: '/onboarding' })
-  }
-
   const debt = mapDebt(detail)
   const accounts = useMemo<Account[]>(
     () =>
-      data.accounts.map((account) => ({
+      (data?.accounts ?? []).map((account) => ({
         id: account._id,
         name: account.name,
         kind: account.kind,
@@ -101,11 +102,11 @@ function DebtDetailPage() {
         balance: account.balance,
         includeInSpendable: account.includeInSpendable,
       })),
-    [data.accounts],
+    [data?.accounts],
   )
   const categories = useMemo<Category[]>(
     () =>
-      data.categories.map((category) => ({
+      (data?.categories ?? []).map((category) => ({
         id: category._id,
         key: category.key,
         name: category.name,
@@ -114,9 +115,9 @@ function DebtDetailPage() {
         isSystem: category.isSystem,
         archived: category.archivedAt !== undefined,
       })),
-    [data.categories],
+    [data?.categories],
   )
-  const debts = data.debts
+  const debts = (data?.debts ?? [])
     .filter((item) => item.archivedAt === undefined)
     .map(mapDebt)
   const transactions = useMemo<Txn[]>(
@@ -142,7 +143,7 @@ function DebtDetailPage() {
     isSpendableAccount(account),
   )
   const defaultExpenseAccountId =
-    data.settings.defaultExpenseAccountId || expectedBalances[0]?.id || ''
+    data?.settings?.defaultExpenseAccountId || expectedBalances[0]?.id || ''
   const {
     sheet,
     error: quickAddError,
@@ -154,12 +155,12 @@ function DebtDetailPage() {
     autoSaveRateForPayee,
   } = useQuickAddSheet({
     accounts,
-    incomeSources: data.incomeSources.map((source) => ({
+    incomeSources: (data?.incomeSources ?? []).map((source) => ({
       id: source._id,
       name: source.name,
     })),
-    incomePlans: data.cycleIncomePlans,
-    defaultSavingsRate: data.settings.defaultSavingsRate,
+    incomePlans: data?.cycleIncomePlans ?? [],
+    defaultSavingsRate: data?.settings?.defaultSavingsRate ?? 0,
     defaultExpenseAccountId,
   })
 
@@ -207,6 +208,16 @@ function DebtDetailPage() {
     }
   }
 
+  async function restore() {
+    try {
+      await restoreDebt({ debtId: debt.id as Id<'debts'> })
+      await invalidate()
+      toast.success('Debt restored')
+    } catch (caught) {
+      toast.error(mutationErrorMessage(caught, 'Unable to restore debt'))
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete || deleting) return
     setDeleting(true)
@@ -222,6 +233,10 @@ function DebtDetailPage() {
     }
   }
 
+  if (!data?.settings) {
+    return null
+  }
+
   return (
     <AppProviders>
       <div className="min-h-screen">
@@ -232,6 +247,7 @@ function DebtDetailPage() {
             </Link>
             {' · '}
             {debt.direction === 'you_owe' ? 'You owe' : 'Owed to you'}
+            {debt.archived ? ' · Archived' : ''}
           </p>
           <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -264,7 +280,16 @@ function DebtDetailPage() {
                 <Pencil className="size-4" />
                 Edit
               </Button>
-              {!debt.archived && (
+              {debt.archived ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void restore()}
+                >
+                  <ArchiveRestore className="size-4" />
+                  Restore
+                </Button>
+              ) : (
                 <Button
                   type="button"
                   variant="secondary"
