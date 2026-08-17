@@ -125,3 +125,20 @@ tanstackIntent:
 - Build UI with the existing Shadcn components in `src/components/ui` as the base.
 - Adapt and extend those shared components to match Misi's visual style instead of recreating equivalent controls from raw elements or one-off components.
 - Add a new shared primitive only when no existing Shadcn component provides the required semantics or behavior.
+
+## Cursor Cloud specific instructions
+
+Misi is a personal-budgeting web app: a TanStack Start (React 19 + Vite) frontend backed by a Convex deployment, with Better Auth for sign-in. PowerSync, PostHog, and Google OAuth are optional.
+
+### Services to run (dev)
+- **Convex backend (local, anonymous)** — must be running/pushed before the app's `/app` routes work: `CONVEX_AGENT_MODE=anonymous npx convex dev` (serves http://127.0.0.1:3210 and hot-reloads `convex/`). Use `--once` to push functions and exit.
+- **Web app** — `pnpm dev` → http://localhost:3000. The marketing page `/` renders without a backend, but `getContext()` in `src/integrations/tanstack-query/root-provider.tsx` throws if `VITE_CONVEX_URL` is unset, so Convex must be configured for the app to boot.
+
+Standard scripts live in `package.json` (`lint`, `typecheck`, `test`, `dev`, `check`). `pnpm test` uses Node's built-in test runner over `shared/*.test.ts`.
+
+### Non-obvious gotchas
+- Convex here runs in anonymous local mode; every Convex CLI command needs the `CONVEX_AGENT_MODE=anonymous` env prefix (plain `npx convex ...` tries to log in and fails in a non-interactive shell).
+- Connection details are written to `.env.local` (gitignored) by `convex dev`: `CONVEX_DEPLOYMENT`, `VITE_CONVEX_URL`, `VITE_CONVEX_SITE_URL`. The local backend state lives in `/workspace/.convex/` (gitignored). Both persist in the VM snapshot, so a normal restart just needs the two services started — no reconfiguration.
+- Better Auth reads two vars set ON the Convex deployment (not `.env.local`): `SITE_URL=http://localhost:3000` and `BETTER_AUTH_SECRET`. Set them with `CONVEX_AGENT_MODE=anonymous npx convex env set <NAME> <value>`; without them email/password sign-in fails. List with `... npx convex env list`.
+- To rebuild the Convex deployment from scratch (e.g. fresh VM without the snapshot): `CONVEX_AGENT_MODE=anonymous npx convex dev --once` (downloads a local backend binary on first run), then set `SITE_URL` and `BETTER_AUTH_SECRET` as above.
+- New users go through a required onboarding wizard (`/onboarding`) before `/app` loads; the wizard ships with valid defaults, so you can click through every step.
