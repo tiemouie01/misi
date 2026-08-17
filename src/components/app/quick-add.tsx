@@ -516,13 +516,24 @@ export function QuickAddSheet({
   onDelete,
 }: QuickAddSheetProps) {
   const isEditing = initial.transactionId !== undefined
+  const defaultMwkAccountId =
+    accounts.find(
+      (account) =>
+        account.id === defaultExpenseAccountId && account.currency === 'MWK',
+    )?.id ??
+    accounts.find((account) => account.currency === 'MWK')?.id ??
+    ''
   const initialAccountId =
     initial.accountId ??
     (initial.mode === 'transfer'
       ? defaultTransferFromAccountId
-      : defaultExpenseAccountId)
+      : initial.mode === 'claim'
+        ? isEditing
+          ? ''
+          : defaultMwkAccountId
+        : defaultExpenseAccountId)
   const initialAmountCurrency =
-    initial.autoSave === true
+    initial.autoSave === true || initial.mode === 'claim'
       ? 'MWK'
       : (accounts.find((account) => account.id === initialAccountId)
           ?.currency ?? 'MWK')
@@ -568,7 +579,9 @@ export function QuickAddSheet({
   const toAccount = accounts.find((account) => account.id === toAccountId)
   const amountCurrency: Account['currency'] = isAutoSave
     ? 'MWK'
-    : (fromAccount?.currency ?? 'MWK')
+    : mode === 'claim'
+      ? 'MWK'
+      : (fromAccount?.currency ?? 'MWK')
   const conversionRate = initial.fxRate ?? usdRate
   const amount = parseAmountDigits(digits)
   let amountMwk = amount
@@ -760,11 +773,7 @@ export function QuickAddSheet({
       nextMode === 'transfer'
         ? defaultTransferFromAccountId
         : nextMode === 'claim'
-          ? (mwkAccounts.find(
-              (account) => account.id === defaultExpenseAccountId,
-            )?.id ??
-            mwkAccounts.at(0)?.id ??
-            '')
+          ? defaultMwkAccountId
           : mode === 'transfer' || mode === 'claim'
             ? defaultExpenseAccountId
             : accountId

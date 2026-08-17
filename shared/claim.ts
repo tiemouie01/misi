@@ -19,17 +19,6 @@ export interface ClaimMovement {
   adjustPolarity?: AdjustPolarity
 }
 
-export function debtOpeningBalance(debt: {
-  openingBalance?: number
-  balance?: number
-}) {
-  return debt.openingBalance ?? debt.balance ?? 0
-}
-
-export function debtDirection(debt: { direction?: DebtDirection }) {
-  return debt.direction ?? 'you_owe'
-}
-
 export function defaultClaimAction(
   direction: DebtDirection,
 ): Extract<ClaimAction, 'repay' | 'collect'> {

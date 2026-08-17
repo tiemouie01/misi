@@ -12,8 +12,6 @@ import {
   claimForbidsAccount,
   claimRequiresAccount,
   computeClaimRemaining,
-  debtDirection,
-  debtOpeningBalance,
   sortDebtsByRemaining,
 } from '../shared/claim'
 import { accountBalanceImpacts, assertUsdRate, roundMoney } from '../shared/fx'
@@ -542,7 +540,7 @@ async function computeDebtRemaining(
     toClaimMovement,
   )
   const remaining = computeClaimRemaining(
-    debtOpeningBalance(debt),
+    debt.openingBalance,
     movements,
     excludeTransactionId,
   )
@@ -573,11 +571,11 @@ async function presentDebt(ctx: ReadCtx, userId: string, debt: Doc<'debts'>) {
   return {
     _id: debt._id,
     name: debt.name,
-    direction: debtDirection(debt),
-    openingBalance: debtOpeningBalance(debt),
+    direction: debt.direction,
+    openingBalance: debt.openingBalance,
     remaining,
     archivedAt: debt.archivedAt,
-    sortOrder: debt.sortOrder ?? 0,
+    sortOrder: debt.sortOrder,
   }
 }
 
@@ -765,7 +763,7 @@ async function validateClaimInput(
   if (debt.archivedAt !== undefined && !options?.allowArchived) {
     throw new Error('Unarchive this debt before logging a movement')
   }
-  if (!claimActionMatchesDirection(input.claimAction, debtDirection(debt))) {
+  if (!claimActionMatchesDirection(input.claimAction, debt.direction)) {
     throw new Error('That action does not match this debt')
   }
 
@@ -2698,6 +2696,12 @@ export const archiveDebt = mutation({
     const user = await requireAuthUser(ctx)
     const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
     if (debt.archivedAt !== undefined) return debt._id
+    const remaining = await computeDebtRemaining(ctx, user._id, debt)
+    if (remaining !== 0) {
+      throw new Error(
+        'Settle or adjust the remaining balance to zero before archiving',
+      )
+    }
     await ctx.db.patch(debt._id, { archivedAt: Date.now() })
     return debt._id
   },

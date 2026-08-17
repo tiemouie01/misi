@@ -118,12 +118,9 @@ export default defineSchema({
   debts: defineTable({
     userId: v.string(),
     name: v.string(),
-    direction: v.optional(
-      v.union(v.literal('you_owe'), v.literal('owed_to_you')),
-    ),
-    openingBalance: v.optional(v.number()),
-    balance: v.optional(v.number()),
-    sortOrder: v.optional(v.number()),
+    direction: v.union(v.literal('you_owe'), v.literal('owed_to_you')),
+    openingBalance: v.number(),
+    sortOrder: v.number(),
     archivedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
   settings: defineTable({
