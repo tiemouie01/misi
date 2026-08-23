@@ -1,6 +1,11 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Outlet, redirect, useNavigate } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 
@@ -39,9 +44,7 @@ export const Route = createFileRoute('/app')({
   component: AppLayout,
 })
 
-function closeAppTask(
-  navigate: ReturnType<typeof useNavigate>,
-) {
+function closeAppTask(navigate: ReturnType<typeof useNavigate>) {
   return navigate({
     to: '.',
     search: (prev) => ({ ...prev, task: undefined }),

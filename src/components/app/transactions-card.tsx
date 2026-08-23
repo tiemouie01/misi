@@ -146,7 +146,7 @@ export function TransactionsCard({
   return (
     <Card
       variant="island"
-      className="rise-in gap-0 rounded-3xl p-6"
+      className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -255,11 +255,11 @@ export function TransactionsCard({
                             ? 'Envelope moves can be deleted but not edited'
                             : 'Generated transactions cannot be edited'
                       }
-                      className="group h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-2.5 text-left disabled:opacity-100"
+                      className="group h-auto min-w-0 flex-1 justify-start gap-2.5 whitespace-normal rounded-xl px-1.5 py-2.5 text-left disabled:opacity-100 sm:gap-3 sm:px-2"
                       onClick={() => onEdit(transaction)}
                     >
                       <span
-                        className="grid size-9 shrink-0 place-items-center rounded-lg"
+                        className="grid size-8 shrink-0 place-items-center rounded-lg sm:size-9"
                         style={{
                           background: `color-mix(in oklab, ${color} 14%, transparent)`,
                           color,
@@ -271,7 +271,7 @@ export function TransactionsCard({
                         <span className="block truncate text-sm font-bold text-sea-ink">
                           {title}
                         </span>
-                        <span className="block text-[0.75rem] text-sea-ink-soft">
+                        <span className="block truncate text-[0.75rem] text-sea-ink-soft">
                           {subline}
                           {transaction.items && (
                             <>

@@ -215,8 +215,8 @@ function CategoriesPage() {
     <AppProviders>
       <div className="min-h-screen">
         <main className="page-wrap py-6 sm:py-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
+            <div className="min-w-0">
               <h1 className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
                 Categories
               </h1>
@@ -308,13 +308,17 @@ function CategoryRow({
       >
         <Icon className="size-4" />
       </span>
-      <p className="min-w-0 flex-1 truncate text-sm font-bold text-sea-ink">
-        {category.name}
-      </p>
-      <Badge variant="outline">
-        {CATEGORY_BUDGET_GROUP_LABELS[category.budgetGroup]}
-      </Badge>
-      {category.isSystem && <Badge variant="secondary">System</Badge>}
+      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+        <p className="truncate text-sm font-bold text-sea-ink">
+          {category.name}
+        </p>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <Badge variant="outline">
+            {CATEGORY_BUDGET_GROUP_LABELS[category.budgetGroup]}
+          </Badge>
+          {category.isSystem && <Badge variant="secondary">System</Badge>}
+        </div>
+      </div>
       {onEdit && (
         <Button
           type="button"

@@ -18,7 +18,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={isDark ? 'dark' : 'light'}
-      position="bottom-right"
+      position="top-center"
+      offset={{ top: '5.5rem' }}
+      mobileOffset={{ top: '5rem' }}
       closeButton
       className="toaster group"
       icons={{
@@ -39,7 +41,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
           '--error-bg':
             'color-mix(in oklab, var(--coral) 10%, var(--surface-strong))',
           '--error-text': 'var(--coral-deep)',
-          '--error-border': 'color-mix(in oklab, var(--coral) 25%, transparent)',
+          '--error-border':
+            'color-mix(in oklab, var(--coral) 25%, transparent)',
           '--border-radius': '1rem',
         } as CSSProperties
       }

@@ -1,167 +1,106 @@
-Welcome to your new TanStack Start app! 
+# Misi
 
-# Getting Started
+Misi is a cycle-based personal finance app built with TanStack Start, Convex,
+and Better Auth.
+
+## Development
 
 To run this application:
 
 ```bash
 pnpm install
+cp .env.example .env.local
 pnpm dev
 ```
 
-# Building For Production
+## Production builds
 
-To build this application for production:
+Build and run the Nitro server locally with:
 
 ```bash
 pnpm build
+node .output/server/index.mjs
 ```
 
-## Styling
+The production artifact is `.output/server/index.mjs`, not `dist/server`.
+The public Convex URL is baked into the server bundle during the build, while
+runtime values may still override it when explicitly configured.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+## Convex development
 
-### Removing Tailwind CSS
+Set `VITE_CONVEX_URL` in `.env.local` to the public `*.convex.cloud` URL for
+the Convex deployment you are using. `VITE_CONVEX_SITE_URL` is optional when
+that URL follows Convex's standard `*.convex.cloud`/`*.convex.site` naming.
 
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
-
-## Linting & Formatting
-
-
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
+For local Convex development, set `CONVEX_DEPLOYMENT` to the deployment
+selected by `pnpm dlx convex dev` and run:
 
 ```bash
+pnpm dlx convex dev
+```
+
+`CONVEX_DEPLOYMENT` is a local development setting. Do not use it as the
+Vercel deploy credential.
+
+## Authentication configuration
+
+Authentication is hosted by the Convex Better Auth component. Set these
+variables on the Convex deployment, not only in the web app's `.env.local`:
+
+```bash
+pnpm dlx convex env set SITE_URL http://localhost:3000
+pnpm dlx convex env set BETTER_AUTH_SECRET '<a long random secret>'
+```
+
+`SITE_URL` must be the public origin where Misi is served. For production,
+set it to the production HTTPS origin. Generate a different secret for each
+deployment and keep it out of source control.
+
+Google sign-in is optional. Configure both variables together, or leave both
+unset:
+
+```bash
+pnpm dlx convex env set GOOGLE_CLIENT_ID '<client id>'
+pnpm dlx convex env set GOOGLE_CLIENT_SECRET '<client secret>'
+```
+
+The Google OAuth redirect URI is
+`<SITE_URL>/api/auth/callback/google`. Set `VITE_GOOGLE_AUTH_ENABLED=true` in
+the web app only after both Google credentials are present on Convex.
+
+## PostHog (optional)
+
+Set `VITE_POSTHOG_KEY` in `.env.local` to enable analytics. The default host is
+`https://us.i.posthog.com`; set `VITE_POSTHOG_HOST` for another PostHog Cloud
+region or a self-hosted instance.
+
+## Vercel deployment
+
+`vercel.json` uses `pnpm run vercel-build`. That script deploys the Convex
+functions and then builds the app, so configure a Convex deploy key in Vercel:
+
+```text
+CONVEX_DEPLOY_KEY=prod:...    # production
+CONVEX_DEPLOY_KEY=preview:... # preview
+```
+
+The key must start with `prod:` or `preview:`. Development keys are rejected.
+Do not set `CONVEX_DEPLOYMENT` in Vercel; it selects user-token auth and is not
+the CI credential used by the build script. Configure Convex deployment
+variables such as `SITE_URL`, `BETTER_AUTH_SECRET`, and the optional Google
+credentials through the Convex dashboard or `convex env set`.
+
+## Verification
+
+Run the full local checks before shipping:
+
+```bash
+pnpm test
+pnpm typecheck
 pnpm lint
-pnpm format
 pnpm check
+pnpm build
 ```
-
-
-## Deploy with Nitro
-
-This project uses Nitro as a generic server adapter, so it can run on any Node-compatible host.
-
-```bash
-npm run build
-node dist/server/index.mjs
-```
-
-The build output is a self-contained Node server. To deploy, push the `dist/` directory to your host (Render, Fly.io, your own VPS, etc.) and run the server command above.
-
-For host-specific presets (Vercel, Netlify, Cloudflare, AWS Lambda, etc.) and tuning, see https://v3.nitro.build/deploy.
-
-
-## Setting up Convex
-
-- Set the `VITE_CONVEX_URL` and `CONVEX_DEPLOYMENT` environment variables in your `.env.local`. (Or run `pnpm dlx convex init` to set them automatically.)
-- Run `pnpm dlx convex dev` to start the Convex server.
-
-
-# PowerSync
-
-This project includes the PowerSync Web SDK and React hooks.
-
-## Environment
-
-Set these variables in `.env.local`:
-
-- `VITE_POWERSYNC_URL`
-- `VITE_POWERSYNC_TOKEN` for local development only
-
-## What The Add-on Includes
-
-- `src/lib/powersync/AppSchema.ts`
-- `src/lib/powersync/BackendConnector.ts`
-- `src/integrations/powersync/provider.tsx`
-- `src/routes/demo/powersync.tsx`
-
-## Next Steps
-
-1. Replace the development token flow in `src/lib/powersync/BackendConnector.ts` with your real auth flow.
-2. Update the sample schema in `src/lib/powersync/AppSchema.ts` to match your synced tables.
-3. Implement the upload logic in `uploadData()` so local mutations are written back to your backend.
-
-PowerSync setup guidance:
-https://docs.powersync.com/client-sdk-references/js-web
-
-
-## Shadcn
-
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
-
-```bash
-pnpm dlx shadcn@latest add button
-```
-
-
-## T3Env
-
-- You can use T3Env to add type safety to your environment variables.
-- Add Environment variables to the `src/env.mjs` file.
-- Use the environment variables in your code.
-
-### Usage
-
-```ts
-import { env } from "#/env";
-
-console.log(env.VITE_APP_TITLE);
-```
-
-
-
-
-
-## Setting up Better Auth
-
-1. Generate and set the `BETTER_AUTH_SECRET` environment variable in your `.env.local`:
-
-   ```bash
-   pnpm dlx @better-auth/cli secret
-   ```
-
-2. Visit the [Better Auth documentation](https://www.better-auth.com) to unlock the full potential of authentication in your app.
-
-### Adding a Database (Optional)
-
-Better Auth can work in stateless mode, but to persist user data, add a database:
-
-```typescript
-// src/lib/auth.ts
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-
-export const auth = betterAuth({
-  database: new Pool({
-    connectionString: process.env.DATABASE_URL,
-  }),
-  // ... rest of config
-});
-```
-
-Then run migrations:
-
-```bash
-pnpm dlx @better-auth/cli migrate
-```
-
-
-## Setting up PostHog
-
-1. Create a PostHog account at [posthog.com](https://posthog.com)
-2. Get your Project API Key from [Project Settings](https://app.posthog.com/project/settings)
-3. Set `VITE_POSTHOG_KEY` in your `.env.local`
-
-### Optional Configuration
-
-- `VITE_POSTHOG_HOST` - Set this if you're using PostHog Cloud EU (`https://eu.i.posthog.com`) or self-hosting
-
-
 
 ## Routing
 
@@ -180,7 +119,7 @@ Now that you have two routes you can use a `Link` component to navigate between 
 To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
 
 ```tsx
-import { Link } from "@tanstack/react-router";
+import { Link } from '@tanstack/react-router'
 ```
 
 Then anywhere in your JSX you can use it like so:
@@ -248,11 +187,11 @@ const getServerTime = createServerFn({
 // Use in a component
 function MyComponent() {
   const [time, setTime] = useState('')
-  
+
   useEffect(() => {
     getServerTime().then(setTime)
   }, [])
-  
+
   return <div>Server time: {time}</div>
 }
 ```
@@ -304,8 +243,6 @@ function PeopleComponent() {
 ```
 
 Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
 
 # Learn More
 

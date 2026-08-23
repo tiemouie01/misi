@@ -26,6 +26,11 @@ interface MyRouterContext {
   convexQueryClient: ConvexQueryClient
 }
 
+/** Keep font discovery in the document head so it can start alongside the
+ * stylesheet instead of waiting for CSS parsing on mobile connections. */
+const FONT_CSS_URL =
+  'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap'
+
 const getAuth = createServerFn({ method: 'GET' }).handler(
   async () => await getToken(),
 )
@@ -52,6 +57,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
     ],
     links: [
+      {
+        rel: 'preconnect',
+        href: 'https://fonts.googleapis.com',
+      },
+      {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossOrigin: 'anonymous',
+      },
+      {
+        rel: 'stylesheet',
+        href: FONT_CSS_URL,
+      },
       {
         rel: 'stylesheet',
         href: appCss,

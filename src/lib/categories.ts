@@ -37,7 +37,10 @@ import {
   SYSTEM_CATEGORY_KEY,
 } from '../../shared/category-defs'
 
-import type { CategoryColorId, CategoryIconId } from '../../shared/category-defs'
+import type {
+  CategoryColorId,
+  CategoryIconId,
+} from '../../shared/category-defs'
 import type { LucideIcon } from 'lucide-react'
 
 export { DEFAULT_CATEGORIES, SYSTEM_CATEGORY_KEY }

@@ -79,7 +79,7 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
               className="size-2 shrink-0 rounded-full"
               style={{ background: row.color }}
             />
-            <span className="w-24 shrink-0 truncate text-sm font-semibold text-sea-ink">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-sea-ink">
               {row.name}
               {row.hint && (
                 <span className="mt-0.5 block text-[0.65rem] font-semibold tracking-wide text-sea-ink-soft uppercase">
@@ -94,7 +94,7 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
               aria-valuemax={100}
               aria-valuenow={Math.round(Math.min(width, 100))}
               aria-valuetext={row.amountLabel}
-              className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--line)"
+              className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-(--line) sm:w-16"
             >
               <div
                 className="h-full rounded-full"
@@ -104,7 +104,7 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
                 }}
               />
             </div>
-            <span className="font-mono w-24 shrink-0 text-right text-[0.8rem] text-sea-ink-soft tabular-nums">
+            <span className="font-mono shrink-0 text-right text-[0.8rem] whitespace-nowrap text-sea-ink-soft tabular-nums">
               {row.amountLabel}
             </span>
           </div>
@@ -362,16 +362,16 @@ export function NetWorthCard({
   return (
     <Card
       variant="island"
-      className="rise-in gap-0 rounded-3xl p-6"
+      className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="island-kicker">Spendable</p>
-          <p className="font-display mt-1.5 text-4xl font-bold tracking-tight text-sea-ink tabular-nums">
+          <p className="font-display mt-1.5 text-3xl font-bold tracking-tight break-words text-sea-ink tabular-nums sm:text-4xl">
             {formatK(spendable)}
           </p>
-          <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-palm">
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-palm">
             <Droplets className="size-3.5" />
             <span className="font-mono tabular-nums">
               {cycleGain >= 0 ? '+' : ''}
