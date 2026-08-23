@@ -22,11 +22,7 @@ Vercel env vars if it is set.
   process.exit(1)
 }
 
-if (
-  !deployKey.startsWith('prod:') &&
-  !deployKey.startsWith('preview:') &&
-  !deployKey.startsWith('dev:')
-) {
+if (!deployKey.startsWith('prod:') && !deployKey.startsWith('preview:')) {
   console.error(`
 CONVEX_DEPLOY_KEY looks invalid.
 
@@ -34,7 +30,7 @@ Expected a deploy key like:
   prod:knowing-shrimp-222|eyJ...
   preview:team:project|eyJ...
 
-Got a value that does not start with prod:, preview:, or dev:.
+Got a value that does not start with prod: or preview:.
 If you pasted the key into CONVEX_DEPLOYMENT instead, move it to CONVEX_DEPLOY_KEY.
 `)
   process.exit(1)

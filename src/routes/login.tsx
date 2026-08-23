@@ -16,6 +16,8 @@ import { authClient } from '#/lib/auth-client'
 
 import type { FormEvent } from 'react'
 
+const googleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === 'true'
+
 export const Route = createFileRoute('/login')({
   beforeLoad: ({ context }) => {
     if (context.isAuthenticated) throw redirect({ to: '/app' })
@@ -92,6 +94,8 @@ function LoginPage() {
   }
 
   async function handleGoogleSignIn() {
+    if (!googleAuthEnabled) return
+
     setPending('google')
     setError(null)
 
@@ -148,26 +152,28 @@ function LoginPage() {
                 : 'Start tracking in under a minute.'}
             </p>
 
-            <div className="mt-6 space-y-4">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                disabled={isBusy}
-                onClick={() => void handleGoogleSignIn()}
-              >
-                <GoogleIcon className="size-4" />
-                {pending === 'google'
-                  ? 'Redirecting…'
-                  : 'Continue with Google'}
-              </Button>
+            {googleAuthEnabled && (
+              <div className="mt-6 space-y-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={isBusy}
+                  onClick={() => void handleGoogleSignIn()}
+                >
+                  <GoogleIcon className="size-4" />
+                  {pending === 'google'
+                    ? 'Redirecting…'
+                    : 'Continue with Google'}
+                </Button>
 
-              <div className="flex items-center gap-3 text-[0.75rem] font-semibold tracking-wide text-sea-ink-soft uppercase">
-                <span className="h-px flex-1 bg-(--chip-line)" />
-                or
-                <span className="h-px flex-1 bg-(--chip-line)" />
+                <div className="flex items-center gap-3 text-[0.75rem] font-semibold tracking-wide text-sea-ink-soft uppercase">
+                  <span className="h-px flex-1 bg-(--chip-line)" />
+                  or
+                  <span className="h-px flex-1 bg-(--chip-line)" />
+                </div>
               </div>
-            </div>
+            )}
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
               {!isSignIn && (
@@ -216,11 +222,7 @@ function LoginPage() {
                   {error}
                 </p>
               )}
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isBusy}
-              >
+              <Button type="submit" className="w-full" disabled={isBusy}>
                 {isSignIn
                   ? pending === 'email'
                     ? 'Signing in…'
