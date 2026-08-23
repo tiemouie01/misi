@@ -7,7 +7,6 @@ import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
-import powersyncVite from './powersync-vite-plugin.ts'
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
@@ -15,7 +14,6 @@ const config = defineConfig({
   plugins: [
     devtools(),
     nitro({ rollupConfig: { external: [/^@sentry\//] } }),
-    powersyncVite(),
     tailwindcss(),
     tanstackStart(),
     viteReact(),

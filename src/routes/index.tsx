@@ -8,7 +8,6 @@ import {
   PiggyBank,
   Scale,
   Sprout,
-  WifiOff,
   Zap,
 } from 'lucide-react'
 
@@ -62,11 +61,6 @@ const features = [
     icon: Layers,
     title: 'Allocation ≠ location',
     body: 'Where money sits (banks, mobile money, cash) and what it\u2019s for (wallets) are tracked independently — every account balance always computable.',
-  },
-  {
-    icon: WifiOff,
-    title: 'Offline-first',
-    body: 'Expenses happen everywhere — often without data. Everything logs locally and syncs when you\u2019re back online.',
   },
 ]
 
@@ -141,7 +135,7 @@ function HeroVisual() {
     <div className="relative">
       <div
         className="island-shell rise-in relative overflow-hidden rounded-3xl p-6 sm:p-7"
-        style={{ animationDelay: '200ms' }}
+        style={{ animationDelay: '80ms' }}
       >
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-30 overflow-hidden"
@@ -177,8 +171,8 @@ function HeroVisual() {
                 {formatK(netWorth)}
               </p>
               <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-palm">
-                <Droplets className="size-3.5" />
-                +{formatK(CYCLE.cycleGain)} this cycle
+                <Droplets className="size-3.5" />+{formatK(CYCLE.cycleGain)}{' '}
+                this cycle
               </p>
             </div>
             <Badge variant="secondary" className="px-3 uppercase">
@@ -349,9 +343,6 @@ function Home() {
             >
               <span className="flex items-center gap-2">
                 <Zap className="size-4 text-lagoon-deep" /> Under 10s to log
-              </span>
-              <span className="flex items-center gap-2">
-                <WifiOff className="size-4 text-lagoon-deep" /> Works offline
               </span>
               <span className="flex items-center gap-2">
                 <Scale className="size-4 text-lagoon-deep" /> Reconciles with

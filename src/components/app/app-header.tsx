@@ -1,12 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import {
-  ChartNoAxesCombined,
-  House,
-  LogOut,
-  Scale,
-  Tags,
-  Wifi,
-} from 'lucide-react'
+import { ChartNoAxesCombined, House, LogOut, Scale, Tags } from 'lucide-react'
 
 import { MisiMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
@@ -93,7 +86,7 @@ export function AppHeader({ cycle }: { cycle?: CycleBadgeSource | null }) {
         </div>
         <nav
           aria-label="App"
-          className="inline-flex h-9 max-w-[calc(100vw-10rem)] shrink-0 items-center overflow-x-auto rounded-full border border-(--chip-line) bg-(--chip-bg) p-0.5 sm:h-10 sm:max-w-none sm:p-1"
+          className="inline-flex h-9 min-w-0 items-center justify-start overflow-x-auto overscroll-x-contain rounded-full border border-(--chip-line) bg-(--chip-bg) p-0.5 [scrollbar-width:none] sm:h-10 sm:shrink-0 sm:p-1 [&::-webkit-scrollbar]:hidden"
         >
           {APP_NAV.map((item) => {
             const Icon = item.icon
@@ -116,18 +109,6 @@ export function AppHeader({ cycle }: { cycle?: CycleBadgeSource | null }) {
           })}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge
-                variant="success"
-                className="hidden px-3 uppercase md:flex"
-              >
-                <Wifi className="size-3.5" />
-                Synced
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>All changes are synced</TooltipContent>
-          </Tooltip>
           <ThemeToggle />
           <Tooltip>
             <TooltipTrigger asChild>
