@@ -52,6 +52,27 @@ export function claimAllowsFromSavings(action: ClaimAction) {
   return action === 'repay' || action === 'lend'
 }
 
+export function assertDebtClaimMutable(
+  archivedAt: number | undefined,
+  action: 'edited' | 'deleted',
+) {
+  if (archivedAt !== undefined) {
+    throw new Error(
+      `Archived debt movements cannot be ${action}; unarchive the debt first`,
+    )
+  }
+}
+
+export function assertDebtOpeningBalanceMutable(
+  archivedAt: number | undefined,
+) {
+  if (archivedAt !== undefined) {
+    throw new Error(
+      'Archived debts cannot change opening balance; unarchive the debt first',
+    )
+  }
+}
+
 export function claimRemainingDelta(movement: ClaimMovement) {
   if (movement.action === 'borrow' || movement.action === 'lend') {
     return movement.amount

@@ -1,32 +1,100 @@
+/**
+ * Public queries and mutations only. Business logic lives in `convex/model/`;
+ * keep handlers here thin so the `api.misi.*` paths stay stable while the
+ * implementation can move freely.
+ */
 import { v } from 'convex/values'
 
+import { spentByCategory, totalBudgetSpending } from '../shared/budget-rollover'
 import {
-  collectBudgetableSeeds,
-  seedCycleBudgetsFromPrevious,
-  spentByCategory,
-  totalBudgetSpending,
-} from '../shared/budget-rollover'
-import {
-  claimActionMatchesDirection,
-  claimAllowsFromSavings,
-  claimForbidsAccount,
-  claimRequiresAccount,
+  assertDebtOpeningBalanceMutable,
   computeClaimRemaining,
   sortDebtsByRemaining,
 } from '../shared/claim'
-import { accountBalanceImpacts, assertUsdRate, roundMoney } from '../shared/fx'
-
-import type { ClaimAction, AdjustPolarity } from '../shared/claim'
+import { currencyToMwk, roundMoney } from '../shared/fx'
+import { landedAmountForSource, totalActualIncome } from '../shared/income'
+import {
+  ONE_TAP_RECENTS_LIMIT,
+  ONE_TAP_RECENTS_WINDOW_MS,
+  oneTapRecentsFromLogs,
+} from '../shared/one-tap-recents'
 import { mutation, query } from './_generated/server'
 import { requireAuthUser } from './auth'
+import { DEFAULT_CATEGORIES } from './categories'
 import {
-  CATEGORY_COLOR_IDS,
-  CATEGORY_ICON_IDS,
-  DEFAULT_CATEGORIES,
-} from './categories'
+  assertUniqueCategoryName,
+  getCategories,
+  getCategoriesWithReferences,
+  isCategoryReferenced,
+  requireOwnedCategory,
+  seedDefaultCategoriesForUser,
+  validateCategoryColor,
+  validateCategoryIcon,
+  validateCategoryName,
+} from './model/categories'
+import {
+  insertTransaction,
+  invalidateAllCheckpoints,
+  latestCheckpoint,
+  patchTransaction,
+  removeTransaction,
+} from './model/checkpoints'
+import {
+  assertNonnegativeFinite,
+  assertPositiveAmount,
+  getSettings,
+  requireOwnedAccount,
+  requireSettings,
+  toClaimMovement,
+} from './model/core'
+import {
+  assertCategoryPlansFitLimit,
+  ensureCurrentCycle,
+  ensureCycleForDate,
+  getCycleIncomePlans,
+  getCyclePeriod,
+  getLatestCycle,
+  requireOwnedCycle,
+  syncCycleIncomePlans,
+  validateCategoryPlans,
+  validateCycleIncomePlans,
+} from './model/cycles'
+import {
+  assertRemainingNonNegative,
+  assertUniqueDebtName,
+  computeDebtRemaining,
+  getClaimMovements,
+  presentDebt,
+  requireOwnedDebt,
+  validateDebtName,
+} from './model/debts'
+import {
+  assertSavingsHasAmount,
+  computeSavingsBalance,
+  computeSpendableTotalMwk,
+} from './model/savings'
+import {
+  applyTransactionBalanceTransition,
+  assertMutableUserTransaction,
+  assertNoAutoSaveEvent,
+  requireOwnedIncomeTransaction,
+  requireOwnedTransaction,
+  resolveEnvelopeFields,
+  validateTransactionInput,
+  withCapturedFxRate,
+} from './model/transactions'
+import {
+  onboardingAccount,
+  reconcileAccounts,
+  reconcileIncomeSources,
+  seedData,
+  validateIncomeSources,
+  validateOnboardingArgs,
+} from './model/onboarding'
 
 import type { Doc, Id } from './_generated/dataModel'
-import type { MutationCtx, QueryCtx } from './_generated/server'
+import type { MutationCtx } from './_generated/server'
+import type { ReadCtx } from './model/core'
 
 const userTransactionType = v.union(
   v.literal('expense'),
@@ -66,1148 +134,104 @@ const allocationDirection = v.union(
   v.literal('toSpending'),
 )
 
-const monthLabels = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const
-
-type ReadCtx = QueryCtx | MutationCtx
-
-type TransactionInput = {
-  type: Doc<'transactions'>['type']
-  amount: number
-  categoryId?: string
-  accountId?: Id<'accounts'>
-  toAccountId?: Id<'accounts'>
-  sourceId?: Id<'incomeSources'>
-  debtId?: Id<'debts'>
-  claimAction?: ClaimAction
-  adjustPolarity?: AdjustPolarity
-  excludeFromBudget?: boolean
-  fxRate?: number
-}
-
-async function getCategories(ctx: ReadCtx, userId: string) {
-  const categories = await ctx.db
-    .query('categories')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-  return categories.sort((a, b) => a.sortOrder - b.sortOrder)
-}
-
-async function isCategoryReferenced(
+/**
+ * Every independent read runs in parallel. Convex round-trips are cheap
+ * individually, but `bootstrap` is on the critical path of every app route, so
+ * a chain of a dozen sequential awaits is latency the user feels on load.
+ */
+async function loadBootstrapData(
   ctx: ReadCtx,
   userId: string,
-  categoryKey: string,
-) {
-  const [transaction, budget] = await Promise.all([
-    ctx.db
-      .query('transactions')
-      .withIndex('by_user_and_category', (q) =>
-        q.eq('userId', userId).eq('categoryId', categoryKey),
-      )
-      .first(),
-    ctx.db
-      .query('budgets')
-      .withIndex('by_user_and_category', (q) =>
-        q.eq('userId', userId).eq('categoryId', categoryKey),
-      )
-      .first(),
-  ])
-  return transaction !== null || budget !== null
-}
-
-async function getCategoriesWithReferences(ctx: ReadCtx, userId: string) {
-  const categories = await getCategories(ctx, userId)
-  return await Promise.all(
-    categories.map(async (category) => ({
-      ...category,
-      referenced: await isCategoryReferenced(ctx, userId, category.key),
-    })),
-  )
-}
-
-async function seedDefaultCategoriesForUser(ctx: MutationCtx, userId: string) {
-  const existing = await ctx.db
-    .query('categories')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .first()
-  if (existing) return false
-
-  for (const [sortOrder, category] of DEFAULT_CATEGORIES.entries()) {
-    await ctx.db.insert('categories', {
-      userId,
-      ...category,
-      sortOrder,
-    })
-  }
-  return true
-}
-
-function validateCategoryName(name: string) {
-  const trimmed = name.trim()
-  if (!trimmed) throw new Error('Category name cannot be empty')
-  return trimmed
-}
-
-function validateCategoryIcon(icon: string) {
-  if (!(CATEGORY_ICON_IDS as readonly string[]).includes(icon)) {
-    throw new Error('Choose a valid category icon')
-  }
-}
-
-function validateCategoryColor(color: string) {
-  if (!(CATEGORY_COLOR_IDS as readonly string[]).includes(color)) {
-    throw new Error('Choose a valid category color')
-  }
-}
-
-async function assertUniqueCategoryName(
-  ctx: ReadCtx,
-  userId: string,
-  name: string,
-  excludeId?: Id<'categories'>,
-) {
-  const categories = await getCategories(ctx, userId)
-  const duplicate = categories.some(
-    (category) =>
-      category._id !== excludeId &&
-      category.archivedAt === undefined &&
-      category.name.toLowerCase() === name.toLowerCase(),
-  )
-  if (duplicate) throw new Error('A category with this name already exists')
-}
-
-async function requireOwnedCategory(
-  ctx: ReadCtx,
-  userId: string,
-  id: Id<'categories'>,
-) {
-  const category = await ctx.db.get(id)
-  if (!category || category.userId !== userId) {
-    throw new Error('Category not found')
-  }
-  return category
-}
-
-function assertPositiveAmount(amount: number) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('Amount must be a positive number')
-  }
-}
-
-const DEFAULT_PAYDAY_DAY = 20
-const BLANTYRE_UTC_OFFSET_MS = 2 * 60 * 60 * 1000
-
-function getCyclePeriod(now: number, paydayDay = DEFAULT_PAYDAY_DAY) {
-  const today = new Date(now + BLANTYRE_UTC_OFFSET_MS)
-  const year = today.getUTCFullYear()
-  const month = today.getUTCMonth()
-  const day = today.getUTCDate()
-  const startMonth = day >= paydayDay ? month : month - 1
-  const startsAt =
-    Date.UTC(year, startMonth, paydayDay) - BLANTYRE_UTC_OFFSET_MS
-  const endsAt =
-    Date.UTC(year, startMonth + 1, paydayDay) - BLANTYRE_UTC_OFFSET_MS - 1
-  const startDate = new Date(startsAt + BLANTYRE_UTC_OFFSET_MS)
-
-  return {
-    label: `${monthLabels[startDate.getUTCMonth()]} cycle`,
-    startsAt,
-    endsAt,
-  }
-}
-
-async function getLatestCycle(ctx: ReadCtx, userId: string) {
-  const cycles = await ctx.db
-    .query('cycles')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-  const now = Date.now()
-  const covering = cycles.find(
-    (cycle) => cycle.startsAt <= now && now <= cycle.endsAt,
-  )
-  if (covering) return covering
-  return (
-    cycles
-      .filter((cycle) => cycle.startsAt <= now)
-      .sort((a, b) => b.startsAt - a.startsAt)
-      .at(0) ?? null
-  )
-}
-
-async function getCycleIncomePlans(
-  ctx: ReadCtx,
-  userId: string,
-  cycleId: Id<'cycles'>,
-) {
-  return await ctx.db
-    .query('cycleIncomePlans')
-    .withIndex('by_user_and_cycle', (q) =>
-      q.eq('userId', userId).eq('cycleId', cycleId),
-    )
-    .collect()
-}
-
-async function getSettings(ctx: ReadCtx, userId: string) {
-  return await ctx.db
-    .query('settings')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .first()
-}
-
-async function syncCycleIncomePlans(
-  ctx: MutationCtx,
-  userId: string,
-  cycleId: Id<'cycles'>,
-) {
-  const [existingPlans, allIncomeSources] = await Promise.all([
-    getCycleIncomePlans(ctx, userId, cycleId),
-    ctx.db
-      .query('incomeSources')
-      .withIndex('by_user', (q) => q.eq('userId', userId))
-      .collect(),
-  ])
-  const incomeSources = allIncomeSources.filter(
-    (source) => source.archivedAt === undefined,
-  )
-  const existingSourceIds = new Set(existingPlans.map((plan) => plan.sourceId))
-  for (const source of incomeSources) {
-    if (existingSourceIds.has(source._id)) continue
-    await ctx.db.insert('cycleIncomePlans', {
-      userId,
-      cycleId,
-      sourceId: source._id,
-      sourceName: source.name,
-      expectedDayStart: source.expectedDayStart,
-      expectedDayEnd: source.expectedDayEnd,
-      expectedAmount: source.expectedAmount,
-      expectedAmountMax: source.expectedAmountMax,
-      savingsRate: source.savingsRate,
-      isAnchor: source.isAnchor,
-    })
-  }
-}
-
-async function copyCyclePlans(
-  ctx: MutationCtx,
-  userId: string,
-  fromCycleId: Id<'cycles'>,
-  toCycleId: Id<'cycles'>,
+  currentCycle: Doc<'cycles'> | null,
 ) {
   const [
-    previousBudgets,
-    previousIncomePlans,
-    previousTransactions,
-    categories,
-    previousCycle,
-  ] = await Promise.all([
-    ctx.db
-      .query('budgets')
-      .withIndex('by_user_and_cycle', (q) =>
-        q.eq('userId', userId).eq('cycleId', fromCycleId),
-      )
-      .collect(),
-    getCycleIncomePlans(ctx, userId, fromCycleId),
-    ctx.db
-      .query('transactions')
-      .withIndex('by_user_and_cycle', (q) =>
-        q.eq('userId', userId).eq('cycleId', fromCycleId),
-      )
-      .collect(),
-    getCategories(ctx, userId),
-    ctx.db.get(fromCycleId),
-  ])
-
-  const seededInput = collectBudgetableSeeds({
-    categories: categories.map((category) => ({
-      key: category.key,
-      isSystem: category.isSystem,
-      archived: category.archivedAt !== undefined,
-    })),
-    previousBudgets,
-    spentByCategory: spentByCategory(previousTransactions),
-  })
-  const seeded = seedCycleBudgetsFromPrevious({
-    ...seededInput,
-    previousSpendingLimit: previousCycle?.spendingLimit ?? 0,
-  })
-
-  for (const plan of seeded.categoryPlans) {
-    await ctx.db.insert('budgets', {
-      userId,
-      cycleId: toCycleId,
-      categoryId: plan.categoryId,
-      plannedAmount: plan.plannedAmount,
-    })
-  }
-  await ctx.db.patch(toCycleId, { spendingLimit: seeded.spendingLimit })
-
-  for (const plan of previousIncomePlans) {
-    const source = await ctx.db.get(plan.sourceId)
-    if (
-      !source ||
-      source.userId !== userId ||
-      source.archivedAt !== undefined
-    ) {
-      continue
-    }
-    await ctx.db.insert('cycleIncomePlans', {
-      userId,
-      cycleId: toCycleId,
-      sourceId: plan.sourceId,
-      sourceName: source.name,
-      expectedDayStart: source.expectedDayStart,
-      expectedDayEnd: source.expectedDayEnd,
-      expectedAmount: plan.expectedAmount,
-      expectedAmountMax: plan.expectedAmountMax,
-      savingsRate: plan.savingsRate,
-      isAnchor: source.isAnchor,
-    })
-  }
-}
-
-async function ensureCycleForDate(
-  ctx: MutationCtx,
-  userId: string,
-  occurredAt: number,
-) {
-  if (!Number.isFinite(occurredAt)) {
-    throw new Error('Transaction date must be a finite number')
-  }
-  const settings = await getSettings(ctx, userId)
-  const period = getCyclePeriod(
-    occurredAt,
-    settings?.paydayDay ?? DEFAULT_PAYDAY_DAY,
-  )
-  const cycles = await ctx.db
-    .query('cycles')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-
-  const matchingPeriod = cycles.find(
-    (cycle) => cycle.startsAt === period.startsAt,
-  )
-  if (matchingPeriod) {
-    return matchingPeriod
-  }
-
-  const covering = cycles.find(
-    (cycle) => cycle.startsAt <= occurredAt && occurredAt <= cycle.endsAt,
-  )
-  if (covering) {
-    return covering
-  }
-
-  const previousCycle =
-    cycles
-      .filter((cycle) => cycle.startsAt < period.startsAt)
-      .sort((a, b) => b.startsAt - a.startsAt)
-      .at(0) ?? null
-  const cycleId = await ctx.db.insert('cycles', {
-    userId,
-    ...period,
-    spendingLimit: previousCycle?.spendingLimit ?? 0,
-  })
-
-  if (previousCycle) {
-    await copyCyclePlans(ctx, userId, previousCycle._id, cycleId)
-  }
-
-  const cycle = await ctx.db.get(cycleId)
-
-  if (!cycle) {
-    throw new Error('Failed to create cycle')
-  }
-
-  await syncCycleIncomePlans(ctx, userId, cycle._id)
-  return cycle
-}
-
-async function ensureCurrentCycle(ctx: MutationCtx, userId: string) {
-  return await ensureCycleForDate(ctx, userId, Date.now())
-}
-
-async function requireSettings(ctx: ReadCtx, userId: string) {
-  const settings = await getSettings(ctx, userId)
-
-  if (!settings) {
-    throw new Error('Settings not found; run ensureSeedData first')
-  }
-
-  return settings
-}
-
-async function requireOwnedAccount(
-  ctx: ReadCtx,
-  userId: string,
-  accountId: Id<'accounts'>,
-) {
-  const account = await ctx.db.get(accountId)
-
-  if (!account || account.userId !== userId) {
-    throw new Error('Account not found')
-  }
-
-  return account
-}
-
-function validateDebtName(name: string) {
-  const trimmed = name.trim()
-  if (!trimmed) throw new Error('Every debt needs a name')
-  return trimmed
-}
-
-async function assertUniqueDebtName(
-  ctx: ReadCtx,
-  userId: string,
-  name: string,
-  excludeId?: Id<'debts'>,
-) {
-  const debts = await ctx.db
-    .query('debts')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-  const duplicate = debts.some(
-    (debt) =>
-      debt._id !== excludeId &&
-      debt.archivedAt === undefined &&
-      debt.name.toLowerCase() === name.toLowerCase(),
-  )
-  if (duplicate) throw new Error(`A debt named ${name} already exists`)
-}
-
-async function requireOwnedDebt(
-  ctx: ReadCtx,
-  userId: string,
-  debtId: Id<'debts'>,
-) {
-  const debt = await ctx.db.get(debtId)
-  if (!debt || debt.userId !== userId) {
-    throw new Error('Debt not found')
-  }
-  return debt
-}
-
-async function getClaimMovements(
-  ctx: ReadCtx,
-  userId: string,
-  debtId: Id<'debts'>,
-) {
-  const movements = await ctx.db
-    .query('transactions')
-    .withIndex('by_user_and_debt', (q) =>
-      q.eq('userId', userId).eq('debtId', debtId),
-    )
-    .collect()
-  return movements.filter((transaction) => transaction.type === 'claim')
-}
-
-function toClaimMovement(transaction: Doc<'transactions'>) {
-  if (!transaction.claimAction) {
-    throw new Error('Claim transaction is missing an action')
-  }
-  return {
-    id: transaction._id,
-    action: transaction.claimAction,
-    amount: transaction.amount,
-    adjustPolarity: transaction.adjustPolarity,
-  }
-}
-
-async function computeDebtRemaining(
-  ctx: ReadCtx,
-  userId: string,
-  debt: Doc<'debts'>,
-  excludeTransactionId?: Id<'transactions'>,
-  replacement?: {
-    action: ClaimAction
-    amount: number
-    adjustPolarity?: AdjustPolarity
-  },
-) {
-  const movements = (await getClaimMovements(ctx, userId, debt._id)).map(
-    toClaimMovement,
-  )
-  const remaining = computeClaimRemaining(
-    debt.openingBalance,
-    movements,
-    excludeTransactionId,
-  )
-  if (!replacement) return remaining
-  return (
-    Math.round(
-      (remaining +
-        computeClaimRemaining(0, [
-          {
-            action: replacement.action,
-            amount: replacement.amount,
-            adjustPolarity: replacement.adjustPolarity,
-          },
-        ])) *
-        100,
-    ) / 100
-  )
-}
-
-function assertRemainingNonNegative(remaining: number) {
-  if (remaining < 0) {
-    throw new Error('This would take the remaining below zero')
-  }
-}
-
-async function presentDebt(ctx: ReadCtx, userId: string, debt: Doc<'debts'>) {
-  const remaining = await computeDebtRemaining(ctx, userId, debt)
-  return {
-    _id: debt._id,
-    name: debt.name,
-    direction: debt.direction,
-    openingBalance: debt.openingBalance,
-    remaining,
-    archivedAt: debt.archivedAt,
-    sortOrder: debt.sortOrder,
-  }
-}
-
-function isSpendableAccount(account: Doc<'accounts'>) {
-  return account.includeInSpendable ?? account.kind !== 'investment'
-}
-
-function computeSpendableTotalMwk(
-  accounts: Array<Doc<'accounts'>>,
-  usdRate: number,
-) {
-  return accounts.reduce((total, account) => {
-    if (!isSpendableAccount(account)) return total
-    return (
-      total +
-      (account.currency === 'USD' ? account.balance * usdRate : account.balance)
-    )
-  }, 0)
-}
-
-function savingsEnvelopeContribution(transaction: Doc<'transactions'>) {
-  if (transaction.type === 'allocation') {
-    if (transaction.direction === 'toSavings') return transaction.amount
-    if (transaction.direction === 'toSpending') return -transaction.amount
-    return 0
-  }
-  if (
-    transaction.type === 'transfer' ||
-    transaction.type === 'expense' ||
-    transaction.type === 'claim'
-  ) {
-    return -transaction.amount
-  }
-  return 0
-}
-
-async function computeSavingsBalance(
-  ctx: ReadCtx,
-  userId: string,
-  settings: Doc<'settings'>,
-  excludeTransactionId?: Id<'transactions'>,
-) {
-  const savingsTransactions = await ctx.db
-    .query('transactions')
-    .withIndex('by_user_and_wallet', (q) =>
-      q.eq('userId', userId).eq('walletId', 'savings'),
-    )
-    .collect()
-  return savingsTransactions.reduce((sum, transaction) => {
-    if (transaction._id === excludeTransactionId) return sum
-    return sum + savingsEnvelopeContribution(transaction)
-  }, settings.savingsOpeningBalance)
-}
-
-function assertFromSavingsType(
-  type: Doc<'transactions'>['type'],
-  fromSavings: boolean | undefined,
-  claimAction?: ClaimAction,
-) {
-  if (!fromSavings) return
-  if (type === 'expense' || type === 'transfer') return
-  if (type === 'claim' && claimAction && claimAllowsFromSavings(claimAction)) {
-    return
-  }
-  throw new Error(
-    'Savings spending is only valid for expenses, transfers, and debt repayments or loans',
-  )
-}
-
-async function assertSavingsHasAmount(
-  ctx: ReadCtx,
-  userId: string,
-  amount: number,
-  excludeTransactionId?: Id<'transactions'>,
-) {
-  const settings = await requireSettings(ctx, userId)
-  const savingsBalance = await computeSavingsBalance(
-    ctx,
-    userId,
     settings,
-    excludeTransactionId,
-  )
-  if (amount > savingsBalance) {
-    throw new Error('Not enough in savings')
-  }
-}
-
-function resolveEnvelopeFields(
-  type: Doc<'transactions'>['type'],
-  fromSavings: boolean | undefined,
-  excludeFromBudget: boolean | undefined,
-  claimAction?: ClaimAction,
-) {
-  assertFromSavingsType(type, fromSavings, claimAction)
-  return {
-    walletId: fromSavings ? 'savings' : 'spending',
-    excludeFromBudget:
-      fromSavings && type === 'expense' ? true : (excludeFromBudget ?? false),
-  }
-}
-
-async function requireOwnedTransaction(
-  ctx: ReadCtx,
-  userId: string,
-  transactionId: Id<'transactions'>,
-) {
-  const transaction = await ctx.db.get(transactionId)
-
-  if (!transaction || transaction.userId !== userId) {
-    throw new Error('Transaction not found')
-  }
-
-  return transaction
-}
-
-async function assertMutableUserTransaction(
-  ctx: ReadCtx,
-  transaction: Doc<'transactions'>,
-  action: 'edited' | 'deleted',
-) {
-  if (transaction.adjustment) {
-    throw new Error(`Generated transactions cannot be ${action}`)
-  }
-  if (transaction.type === 'allocation') {
-    throw new Error(`Generated transactions cannot be ${action}`)
-  }
-
-  if (transaction.type !== 'income') return
-
-  const autoSaveEvent = await ctx.db
-    .query('autoSaveEvents')
-    .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
-    .first()
-  if (autoSaveEvent) {
-    throw new Error(
-      `Income with a handled savings proposal cannot be ${action}`,
-    )
-  }
-}
-
-async function requireOwnedCycle(
-  ctx: ReadCtx,
-  userId: string,
-  cycleId: Id<'cycles'>,
-) {
-  const cycle = await ctx.db.get(cycleId)
-  if (!cycle || cycle.userId !== userId) {
-    throw new Error('Cycle not found')
-  }
-  return cycle
-}
-
-async function validateClaimInput(
-  ctx: ReadCtx,
-  userId: string,
-  input: TransactionInput,
-  options?: { allowArchived?: boolean },
-) {
-  if (!input.debtId) {
-    throw new Error('A debt is required')
-  }
-  if (!input.claimAction) {
-    throw new Error('A claim action is required')
-  }
-  if (input.categoryId) {
-    throw new Error('A category is only valid for expenses')
-  }
-  if (input.sourceId) {
-    throw new Error('sourceId is only valid for income transactions')
-  }
-  if (input.toAccountId) {
-    throw new Error('A destination account is only valid for transfers')
-  }
-  if (input.claimAction === 'adjust') {
-    if (!input.adjustPolarity) {
-      throw new Error(
-        'Choose whether this adjust increases or decreases the remaining',
-      )
-    }
-  } else if (input.adjustPolarity) {
-    throw new Error('Adjust polarity is only valid for adjustments')
-  }
-
-  const debt = await requireOwnedDebt(ctx, userId, input.debtId)
-  if (debt.archivedAt !== undefined && !options?.allowArchived) {
-    throw new Error('Unarchive this debt before logging a movement')
-  }
-  if (!claimActionMatchesDirection(input.claimAction, debt.direction)) {
-    throw new Error('That action does not match this debt')
-  }
-
-  if (claimForbidsAccount(input.claimAction) && input.accountId) {
-    throw new Error('Adjustments cannot be tied to an account')
-  }
-  if (claimRequiresAccount(input.claimAction) && !input.accountId) {
-    throw new Error('An account is required')
-  }
-  if (input.accountId) {
-    const account = await requireOwnedAccount(ctx, userId, input.accountId)
-    if (account.currency !== 'MWK') {
-      throw new Error('Debt cash movements can only use MWK accounts')
-    }
-  }
-}
-
-async function validateTransactionInput(
-  ctx: ReadCtx,
-  userId: string,
-  input: TransactionInput,
-  options?: { allowArchivedDebt?: boolean },
-) {
-  assertPositiveAmount(input.amount)
-
-  if (input.type === 'allocation') {
-    if (input.accountId) {
-      throw new Error('Allocations cannot be tied to an account')
-    }
-    if (input.toAccountId) {
-      throw new Error('A destination account is only valid for transfers')
-    }
-    if (input.categoryId) {
-      throw new Error('A category is only valid for expenses')
-    }
-    if (input.sourceId) {
-      throw new Error('sourceId is only valid for income transactions')
-    }
-    if (input.debtId || input.claimAction) {
-      throw new Error('Allocations cannot be tied to a debt')
-    }
-    return
-  }
-
-  if (input.type === 'claim') {
-    await validateClaimInput(ctx, userId, input, {
-      allowArchived: options?.allowArchivedDebt,
-    })
-    return
-  }
-
-  if (input.debtId || input.claimAction || input.adjustPolarity) {
-    throw new Error('Debt fields are only valid for claim transactions')
-  }
-
-  if (!input.accountId) {
-    throw new Error('An account is required')
-  }
-  await requireOwnedAccount(ctx, userId, input.accountId)
-
-  if (input.type === 'expense') {
-    if (!input.categoryId) {
-      throw new Error('A category is required for expenses')
-    }
-    const category = (await getCategories(ctx, userId)).find(
-      (candidate) => candidate.key === input.categoryId,
-    )
-    if (!category || category.archivedAt !== undefined) {
-      throw new Error('Expense category not found')
-    }
-  } else if (input.categoryId) {
-    throw new Error('A category is only valid for expenses')
-  }
-
-  if (input.excludeFromBudget && input.type !== 'expense') {
-    throw new Error('Only expenses can be excluded from the spending plan')
-  }
-
-  if (input.sourceId) {
-    if (input.type !== 'income') {
-      throw new Error('sourceId is only valid for income transactions')
-    }
-    const source = await ctx.db.get(input.sourceId)
-    if (
-      !source ||
-      source.userId !== userId ||
-      source.archivedAt !== undefined
-    ) {
-      throw new Error('Income source not found')
-    }
-  }
-
-  if (input.type === 'transfer') {
-    if (!input.toAccountId) {
-      throw new Error('A destination account is required for transfers')
-    }
-    if (input.toAccountId === input.accountId) {
-      throw new Error('Transfer accounts must be different')
-    }
-    await requireOwnedAccount(ctx, userId, input.toAccountId)
-  } else if (input.toAccountId) {
-    throw new Error('A destination account is only valid for transfers')
-  }
-}
-
-async function loadAccountCurrencies(
-  ctx: MutationCtx,
-  userId: string,
-  input: TransactionInput | null,
-  currencyByAccountId: Map<string, Doc<'accounts'>['currency']>,
-) {
-  if (!input) return
-  for (const accountId of [input.accountId, input.toAccountId]) {
-    if (!accountId || currencyByAccountId.has(accountId)) continue
-    const account = await requireOwnedAccount(ctx, userId, accountId)
-    currencyByAccountId.set(account._id, account.currency)
-  }
-}
-
-async function withCapturedFxRate(
-  ctx: ReadCtx,
-  userId: string,
-  input: TransactionInput,
-): Promise<TransactionInput> {
-  if (input.fxRate !== undefined) {
-    assertUsdRate(input.fxRate)
-    return input
-  }
-
-  for (const accountId of [input.accountId, input.toAccountId]) {
-    if (!accountId) continue
-    const account = await requireOwnedAccount(ctx, userId, accountId)
-    if (account.currency === 'USD') {
-      const settings = await requireSettings(ctx, userId)
-      assertUsdRate(settings.usdRate)
-      return { ...input, fxRate: settings.usdRate }
-    }
-  }
-
-  return input
-}
-
-function getAccountBalanceImpacts(
-  input: TransactionInput,
-  currencyByAccountId: Map<string, Doc<'accounts'>['currency']>,
-) {
-  const impacts = accountBalanceImpacts({
-    type: input.type,
-    amount: input.amount,
-    accountId: input.accountId,
-    toAccountId: input.toAccountId,
-    claimAction: input.claimAction,
-    currencyByAccountId,
-    usdRate: input.fxRate,
-  })
-  const typed = new Map<Id<'accounts'>, number>()
-  for (const [accountId, amount] of impacts) {
-    typed.set(accountId as Id<'accounts'>, amount)
-  }
-  return typed
-}
-
-async function applyTransactionBalanceTransition(
-  ctx: MutationCtx,
-  userId: string,
-  previous: TransactionInput | null,
-  next: TransactionInput | null,
-) {
-  const currencyByAccountId = new Map<string, Doc<'accounts'>['currency']>()
-  await loadAccountCurrencies(ctx, userId, previous, currencyByAccountId)
-  const nextInput = next ? await withCapturedFxRate(ctx, userId, next) : null
-  await loadAccountCurrencies(ctx, userId, nextInput, currencyByAccountId)
-
-  if (previous && previous.fxRate === undefined) {
-    const previousTouchesUsd = [previous.accountId, previous.toAccountId].some(
-      (accountId) =>
-        accountId !== undefined && currencyByAccountId.get(accountId) === 'USD',
-    )
-    if (previousTouchesUsd) {
-      throw new Error(
-        'This USD transfer is missing a stored exchange rate. Run the FX repair before editing or deleting it.',
-      )
-    }
-  }
-
-  const changes = new Map<Id<'accounts'>, number>()
-  const addChange = (accountId: Id<'accounts'>, amount: number) => {
-    changes.set(accountId, (changes.get(accountId) ?? 0) + amount)
-  }
-
-  if (previous) {
-    for (const [accountId, amount] of getAccountBalanceImpacts(
-      previous,
-      currencyByAccountId,
-    )) {
-      addChange(accountId, -amount)
-    }
-  }
-  if (nextInput) {
-    for (const [accountId, amount] of getAccountBalanceImpacts(
-      nextInput,
-      currencyByAccountId,
-    )) {
-      addChange(accountId, amount)
-    }
-  }
-
-  for (const [accountId, change] of changes) {
-    if (change === 0) continue
-    const account = await requireOwnedAccount(ctx, userId, accountId)
-    await ctx.db.patch(account._id, {
-      balance: roundMoney(account.balance + change),
-    })
-  }
-}
-
-async function requireOwnedIncomeTransaction(
-  ctx: ReadCtx,
-  userId: string,
-  transactionId: Id<'transactions'>,
-) {
-  const transaction = await ctx.db.get(transactionId)
-
-  if (
-    !transaction ||
-    transaction.userId !== userId ||
-    transaction.type !== 'income'
-  ) {
-    throw new Error('Income transaction not found')
-  }
-
-  return transaction
-}
-
-async function assertNoAutoSaveEvent(
-  ctx: ReadCtx,
-  transactionId: Id<'transactions'>,
-) {
-  const existing = await ctx.db
-    .query('autoSaveEvents')
-    .withIndex('by_transaction', (q) => q.eq('transactionId', transactionId))
-    .first()
-
-  if (existing) {
-    throw new Error('Auto-save proposal has already been handled')
-  }
-}
-
-async function seedData(ctx: MutationCtx, userId: string) {
-  const existingAccount = await ctx.db
-    .query('accounts')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .first()
-
-  if (existingAccount) {
-    return false
-  }
-
-  const nbsAccountId = await ctx.db.insert('accounts', {
-    userId,
-    name: 'NBS Bank',
-    kind: 'bank',
-    currency: 'MWK',
-    balance: 842100,
-    sortOrder: 0,
-  })
-  await ctx.db.insert('accounts', {
-    userId,
-    name: 'FDH Bank',
-    kind: 'bank',
-    currency: 'MWK',
-    balance: 210450,
-    sortOrder: 1,
-  })
-  const airtelAccountId = await ctx.db.insert('accounts', {
-    userId,
-    name: 'Airtel Money',
-    kind: 'mobile',
-    currency: 'MWK',
-    balance: 96300,
-    sortOrder: 2,
-  })
-  const cashAccountId = await ctx.db.insert('accounts', {
-    userId,
-    name: 'Cash',
-    kind: 'cash',
-    currency: 'MWK',
-    balance: 38500,
-    sortOrder: 3,
-  })
-  await ctx.db.insert('accounts', {
-    userId,
-    name: 'Unit Trust',
-    kind: 'investment',
-    currency: 'MWK',
-    balance: 1412000,
-    sortOrder: 4,
-  })
-  await ctx.db.insert('accounts', {
-    userId,
-    name: 'USD Account',
-    kind: 'investment',
-    currency: 'USD',
-    balance: 420,
-    sortOrder: 5,
-  })
-
-  const period = getCyclePeriod(Date.now())
-  const cycleId = await ctx.db.insert('cycles', {
-    userId,
-    ...period,
-    spendingLimit: 650000,
-  })
-
-  const budgets = [
-    ['groceries', 220000],
-    ['transport', 90000],
-    ['eating-out', 60000],
-    ['airtime', 30000],
-    ['utilities', 80000],
-  ] as const
-
-  for (const [categoryId, plannedAmount] of budgets) {
-    await ctx.db.insert('budgets', {
-      userId,
-      cycleId,
-      categoryId,
-      plannedAmount,
-    })
-  }
-
-  const incomeSources = [
-    {
-      name: 'Salary',
-      expectedDayStart: 20,
-      expectedDayEnd: 20,
-      expectedAmount: 1850000,
-      savingsRate: 0.2,
-      isAnchor: true,
-    },
-    {
-      name: 'Allowance',
-      expectedDayStart: 10,
-      expectedDayEnd: 10,
-      expectedAmount: 150000,
-      savingsRate: 0.5,
-      isAnchor: false,
-    },
-    {
-      name: 'Secondary income',
-      expectedDayStart: 24,
-      expectedDayEnd: 30,
-      expectedAmount: 300000,
-      expectedAmountMax: 450000,
-      savingsRate: 0.2,
-      isAnchor: false,
-    },
-  ] as const
-
-  for (const [sortOrder, source] of incomeSources.entries()) {
-    const sourceId = await ctx.db.insert('incomeSources', {
-      userId,
-      ...source,
-      sortOrder,
-    })
-    await ctx.db.insert('cycleIncomePlans', {
-      userId,
-      cycleId,
-      sourceId,
-      sourceName: source.name,
-      expectedDayStart: source.expectedDayStart,
-      expectedDayEnd: source.expectedDayEnd,
-      expectedAmount: source.expectedAmount,
-      expectedAmountMax:
-        'expectedAmountMax' in source ? source.expectedAmountMax : undefined,
-      savingsRate: source.savingsRate,
-      isAnchor: source.isAnchor,
-    })
-  }
-
-  await ctx.db.insert('settings', {
-    userId,
-    usdRate: 1735,
-    defaultSavingsRate: 0.2,
-    autoSaveSourceAccountId: nbsAccountId,
-    defaultExpenseAccountId: airtelAccountId,
-    defaultTransferFromAccountId: nbsAccountId,
-    defaultTransferToAccountId: cashAccountId,
-    savingsOpeningBalance: 315000,
-  })
-
-  return true
-}
-
-async function loadBootstrapData(ctx: ReadCtx, userId: string) {
-  const settings = await getSettings(ctx, userId)
-  const accounts = await ctx.db
-    .query('accounts')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-  const currentCycle = await getLatestCycle(ctx, userId)
-  const incomeSources = (
-    await ctx.db
+    accounts,
+    incomeSourceDocs,
+    debtDocs,
+    categories,
+    checkpoint,
+    autoSaveEventDocs,
+    recentLogDocs,
+  ] = await Promise.all([
+    getSettings(ctx, userId),
+    ctx.db
+      .query('accounts')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect(),
+    ctx.db
       .query('incomeSources')
       .withIndex('by_user', (q) => q.eq('userId', userId))
-      .collect()
-  ).filter((source) => source.archivedAt === undefined)
-  const debtDocs = await ctx.db
-    .query('debts')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-  const debts = sortDebtsByRemaining(
-    await Promise.all(debtDocs.map((debt) => presentDebt(ctx, userId, debt))),
+      .collect(),
+    ctx.db
+      .query('debts')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect(),
+    getCategories(ctx, userId),
+    latestCheckpoint(ctx, userId),
+    ctx.db
+      .query('autoSaveEvents')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect(),
+    // One-tap recents only ever come from expenses, so bound this hot-path
+    // read to them instead of every transaction in the window.
+    ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_type_and_time', (q) =>
+        q
+          .eq('userId', userId)
+          .eq('type', 'expense')
+          .gte('occurredAt', Date.now() - ONE_TAP_RECENTS_WINDOW_MS),
+      )
+      .collect(),
+  ])
+
+  const incomeSources = incomeSourceDocs.filter(
+    (source) => source.archivedAt === undefined,
   )
-  const categories = await getCategories(ctx, userId)
+
+  const [debts, cycleData, savingsBalance] = await Promise.all([
+    Promise.all(
+      debtDocs.map((debt) => presentDebt(ctx, userId, debt, checkpoint)),
+    ).then(sortDebtsByRemaining),
+    currentCycle
+      ? Promise.all([
+          ctx.db
+            .query('transactions')
+            .withIndex('by_user_and_cycle', (q) =>
+              q.eq('userId', userId).eq('cycleId', currentCycle._id),
+            )
+            .collect(),
+          ctx.db
+            .query('budgets')
+            .withIndex('by_user_and_cycle', (q) =>
+              q.eq('userId', userId).eq('cycleId', currentCycle._id),
+            )
+            .collect(),
+          getCycleIncomePlans(ctx, userId, currentCycle._id),
+        ])
+      : Promise.resolve([[], [], []] as [
+          Array<Doc<'transactions'>>,
+          Array<Doc<'budgets'>>,
+          Array<Doc<'cycleIncomePlans'>>,
+        ]),
+    settings
+      ? computeSavingsBalance(ctx, userId, settings, undefined, checkpoint)
+      : null,
+  ])
+
+  const [transactions, budgets, cycleIncomePlans] = cycleData
 
   accounts.sort((a, b) => a.sortOrder - b.sortOrder)
   incomeSources.sort((a, b) => a.sortOrder - b.sortOrder)
-
-  let transactions: Array<Doc<'transactions'>> = []
-  let budgets: Array<Doc<'budgets'>> = []
-  let cycleIncomePlans: Array<Doc<'cycleIncomePlans'>> = []
-
-  if (currentCycle) {
-    transactions = await ctx.db
-      .query('transactions')
-      .withIndex('by_user_and_cycle', (q) =>
-        q.eq('userId', userId).eq('cycleId', currentCycle._id),
-      )
-      .collect()
-    budgets = await ctx.db
-      .query('budgets')
-      .withIndex('by_user_and_cycle', (q) =>
-        q.eq('userId', userId).eq('cycleId', currentCycle._id),
-      )
-      .collect()
-    cycleIncomePlans = await getCycleIncomePlans(ctx, userId, currentCycle._id)
-  }
-
   transactions.sort((a, b) => b.occurredAt - a.occurredAt)
-
-  const savingsBalance = settings
-    ? await computeSavingsBalance(ctx, userId, settings)
-    : null
+  const oneTapRecents = oneTapRecentsFromLogs(recentLogDocs, {
+    limit: ONE_TAP_RECENTS_LIMIT,
+    sinceOccurredAt: Date.now() - ONE_TAP_RECENTS_WINDOW_MS,
+  })
+  const handledTransactionIds = new Set(
+    autoSaveEventDocs.map((event) => event.transactionId),
+  )
 
   let pendingAutoSave: {
     transactionId: Id<'transactions'>
@@ -1219,22 +243,15 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
   } | null = null
 
   if (settings) {
-    const autoSaveEvents = await ctx.db
-      .query('autoSaveEvents')
-      .withIndex('by_user', (q) => q.eq('userId', userId))
-      .collect()
-    const handledTransactionIds = new Set(
-      autoSaveEvents.map((event) => event.transactionId),
-    )
-    const unhandledIncome = transactions.filter(
-      (transaction) =>
-        transaction.type === 'income' &&
-        !handledTransactionIds.has(transaction._id),
-    )
+    for (const pendingIncome of transactions) {
+      if (pendingIncome.type !== 'income') continue
+      if (pendingIncome.adjustment) continue
+      if (handledTransactionIds.has(pendingIncome._id)) continue
 
-    for (const pendingIncome of unhandledIncome) {
       const linkedSource = pendingIncome.sourceId
-        ? incomeSources.find((source) => source._id === pendingIncome.sourceId)
+        ? incomeSourceDocs.find(
+            (source) => source._id === pendingIncome.sourceId,
+          )
         : undefined
       const cyclePlan = pendingIncome.sourceId
         ? cycleIncomePlans.find(
@@ -1273,6 +290,7 @@ async function loadBootstrapData(ctx: ReadCtx, userId: string) {
     categories,
     savingsBalance,
     pendingAutoSave,
+    oneTapRecents,
   }
 }
 
@@ -1286,10 +304,9 @@ export const bootstrap = query({
       return null
     }
 
-    return await loadBootstrapData(ctx, user._id)
+    return await loadBootstrapData(ctx, user._id, cycle)
   },
 })
-
 export const listCategories = query({
   args: {},
   handler: async (ctx) => {
@@ -1459,382 +476,6 @@ export const onboardingData = query({
   },
 })
 
-const onboardingAccount = v.object({
-  name: v.string(),
-  kind: v.union(
-    v.literal('bank'),
-    v.literal('mobile'),
-    v.literal('cash'),
-    v.literal('investment'),
-  ),
-  currency: v.union(v.literal('MWK'), v.literal('USD')),
-  balance: v.number(),
-  includeInSpendable: v.optional(v.boolean()),
-})
-
-type OnboardingAccountInput = {
-  name: string
-  kind: 'bank' | 'mobile' | 'cash' | 'investment'
-  currency: 'MWK' | 'USD'
-  balance: number
-  includeInSpendable?: boolean
-}
-
-type OnboardingIncomeSourceInput = {
-  name: string
-  expectedDayStart: number
-  expectedDayEnd: number
-  expectedAmount: number
-  expectedAmountMax?: number
-  savingsRate: number
-  isAnchor: boolean
-}
-
-type CompleteOnboardingArgs = {
-  usdRate: number
-  defaultSavingsRate: number
-  paydayDay: number
-  savingsOpeningBalance: number
-  spendingLimit: number
-  accounts: Array<OnboardingAccountInput>
-  incomeSources: Array<OnboardingIncomeSourceInput>
-  budgets: Array<{ categoryId: string; plannedAmount: number }>
-}
-
-type CategoryPlanInput = {
-  categoryId: string
-  plannedAmount: number
-}
-
-type CycleIncomePlanInput = {
-  sourceId: Id<'incomeSources'>
-  expectedAmount: number
-  expectedAmountMax?: number
-  savingsRate: number
-}
-
-function assertNonnegativeFinite(value: number, label: string) {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`${label} must be zero or more`)
-  }
-}
-
-async function validateCategoryPlans(
-  ctx: ReadCtx,
-  userId: string,
-  plans: Array<CategoryPlanInput>,
-) {
-  const categories = await getCategories(ctx, userId)
-  const categoriesByKey = new Map(
-    categories.map((category) => [category.key, category]),
-  )
-  const seen = new Set<string>()
-  for (const plan of plans) {
-    assertNonnegativeFinite(plan.plannedAmount, 'Planned amount')
-    if (seen.has(plan.categoryId)) {
-      throw new Error(`Duplicate category plan: ${plan.categoryId}`)
-    }
-    seen.add(plan.categoryId)
-    if (!categoriesByKey.has(plan.categoryId)) {
-      throw new Error(`Category not found: ${plan.categoryId}`)
-    }
-  }
-}
-
-function assertCategoryPlansFitLimit(
-  plans: Array<CategoryPlanInput>,
-  spendingLimit: number,
-) {
-  const total = plans.reduce((sum, plan) => sum + plan.plannedAmount, 0)
-  if (total > spendingLimit) {
-    throw new Error('Category plans cannot exceed the spending limit')
-  }
-}
-
-async function validateCycleIncomePlans(
-  ctx: ReadCtx,
-  userId: string,
-  plans: Array<CycleIncomePlanInput>,
-) {
-  const seen = new Set<Id<'incomeSources'>>()
-  for (const plan of plans) {
-    assertNonnegativeFinite(plan.expectedAmount, 'Expected income amount')
-    if (
-      plan.expectedAmountMax !== undefined &&
-      (!Number.isFinite(plan.expectedAmountMax) ||
-        plan.expectedAmountMax < plan.expectedAmount)
-    ) {
-      throw new Error(
-        'Maximum expected income must be at least the expected amount',
-      )
-    }
-    if (
-      !Number.isFinite(plan.savingsRate) ||
-      plan.savingsRate < 0 ||
-      plan.savingsRate > 1
-    ) {
-      throw new Error('Savings rate must be between 0% and 100%')
-    }
-    if (seen.has(plan.sourceId)) {
-      throw new Error(`Duplicate income plan: ${plan.sourceId}`)
-    }
-    seen.add(plan.sourceId)
-    const source = await ctx.db.get(plan.sourceId)
-    if (!source || source.userId !== userId) {
-      throw new Error('Income source not found')
-    }
-  }
-}
-
-function validateIncomeSources(
-  incomeSources: Array<OnboardingIncomeSourceInput>,
-) {
-  const seenNames = new Set<string>()
-  for (const source of incomeSources) {
-    const sourceName = source.name.trim()
-    if (!sourceName) throw new Error('Income source names cannot be empty')
-    const sourceKey = sourceName.toLowerCase()
-    if (seenNames.has(sourceKey)) {
-      throw new Error(`Duplicate income source: ${sourceName}`)
-    }
-    seenNames.add(sourceKey)
-    if (
-      !Number.isInteger(source.expectedDayStart) ||
-      source.expectedDayStart < 1 ||
-      source.expectedDayStart > 31 ||
-      !Number.isInteger(source.expectedDayEnd) ||
-      source.expectedDayEnd < source.expectedDayStart ||
-      source.expectedDayEnd > 31
-    ) {
-      throw new Error('Income landing days must be between 1 and 31')
-    }
-    if (
-      !Number.isFinite(source.expectedAmount) ||
-      source.expectedAmount < 0 ||
-      (source.expectedAmountMax !== undefined &&
-        (!Number.isFinite(source.expectedAmountMax) ||
-          source.expectedAmountMax < source.expectedAmount))
-    ) {
-      throw new Error('Expected income amounts must be valid and nonnegative')
-    }
-    if (
-      !Number.isFinite(source.savingsRate) ||
-      source.savingsRate < 0 ||
-      source.savingsRate > 1
-    ) {
-      throw new Error('Income savings rates must be between 0% and 100%')
-    }
-  }
-}
-
-function validateOnboardingArgs(args: CompleteOnboardingArgs) {
-  if (args.accounts.length === 0) {
-    throw new Error('Add at least one account')
-  }
-  const seenNames = new Set<string>()
-  for (const account of args.accounts) {
-    const name = account.name.trim()
-    if (!name) throw new Error('Account names cannot be empty')
-    const key = name.toLowerCase()
-    if (seenNames.has(key)) throw new Error(`Duplicate account: ${name}`)
-    seenNames.add(key)
-    if (!Number.isFinite(account.balance) || account.balance < 0) {
-      throw new Error('Account balances must be zero or more')
-    }
-  }
-  if (
-    !Number.isInteger(args.paydayDay) ||
-    args.paydayDay < 1 ||
-    args.paydayDay > 28
-  ) {
-    throw new Error('Payday must be a day of the month between 1 and 28')
-  }
-  if (!Number.isFinite(args.usdRate) || args.usdRate <= 0) {
-    throw new Error('USD rate must be a positive number')
-  }
-  if (
-    !Number.isFinite(args.defaultSavingsRate) ||
-    args.defaultSavingsRate < 0 ||
-    args.defaultSavingsRate > 1
-  ) {
-    throw new Error('Default savings rate must be between 0% and 100%')
-  }
-  if (
-    !Number.isFinite(args.savingsOpeningBalance) ||
-    args.savingsOpeningBalance < 0
-  ) {
-    throw new Error('Savings balance must be zero or more')
-  }
-  if (!Number.isFinite(args.spendingLimit) || args.spendingLimit < 0) {
-    throw new Error('Spending limit must be zero or more')
-  }
-  validateIncomeSources(args.incomeSources)
-  for (const budget of args.budgets) {
-    if (!Number.isFinite(budget.plannedAmount) || budget.plannedAmount < 0) {
-      throw new Error('Planned amounts must be zero or more')
-    }
-  }
-  assertCategoryPlansFitLimit(args.budgets, args.spendingLimit)
-}
-
-async function reconcileAccounts(
-  ctx: MutationCtx,
-  userId: string,
-  accounts: Array<OnboardingAccountInput>,
-) {
-  const existingAccounts = await ctx.db
-    .query('accounts')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-
-  const keptAccountIds = new Set<Id<'accounts'>>()
-  const accountIds: Array<Id<'accounts'>> = []
-  for (const [index, input] of accounts.entries()) {
-    const match = existingAccounts.find(
-      (account) =>
-        account.name.toLowerCase() === input.name.trim().toLowerCase() &&
-        !keptAccountIds.has(account._id),
-    )
-    if (match) {
-      await ctx.db.patch(match._id, {
-        name: input.name.trim(),
-        kind: input.kind,
-        currency: input.currency,
-        balance: input.balance,
-        sortOrder: index,
-        includeInSpendable: input.includeInSpendable,
-      })
-      keptAccountIds.add(match._id)
-      accountIds.push(match._id)
-    } else {
-      const accountId = await ctx.db.insert('accounts', {
-        userId,
-        name: input.name.trim(),
-        kind: input.kind,
-        currency: input.currency,
-        balance: input.balance,
-        sortOrder: index,
-        ...(input.includeInSpendable !== undefined
-          ? { includeInSpendable: input.includeInSpendable }
-          : {}),
-      })
-      accountIds.push(accountId)
-    }
-  }
-
-  const removedAccounts = existingAccounts.filter(
-    (account) => !keptAccountIds.has(account._id),
-  )
-  if (removedAccounts.length > 0) {
-    const userTransactions = await ctx.db
-      .query('transactions')
-      .withIndex('by_user', (q) => q.eq('userId', userId))
-      .collect()
-    const referencedIds = new Set(
-      userTransactions.flatMap((transaction) => {
-        const ids: Array<Id<'accounts'>> = []
-        if (transaction.accountId) ids.push(transaction.accountId)
-        if (transaction.toAccountId) ids.push(transaction.toAccountId)
-        return ids
-      }),
-    )
-    let nextSortOrder = accounts.length
-    for (const account of removedAccounts) {
-      if (referencedIds.has(account._id)) {
-        await ctx.db.patch(account._id, { sortOrder: nextSortOrder })
-        nextSortOrder++
-      } else {
-        await ctx.db.delete(account._id)
-      }
-    }
-  }
-
-  return { accountIds, keptAccountIds }
-}
-
-async function reconcileIncomeSources(
-  ctx: MutationCtx,
-  userId: string,
-  incomeSources: Array<OnboardingIncomeSourceInput>,
-) {
-  const existingSources = await ctx.db
-    .query('incomeSources')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-
-  const keptSourceIds = new Set<Id<'incomeSources'>>()
-  for (const [sortOrder, input] of incomeSources.entries()) {
-    const match = existingSources.find(
-      (source) =>
-        source.name.toLowerCase() === input.name.trim().toLowerCase() &&
-        !keptSourceIds.has(source._id),
-    )
-    if (match) {
-      await ctx.db.patch(match._id, {
-        name: input.name.trim(),
-        expectedDayStart: input.expectedDayStart,
-        expectedDayEnd: input.expectedDayEnd,
-        expectedAmount: input.expectedAmount,
-        expectedAmountMax: input.expectedAmountMax,
-        savingsRate: input.savingsRate,
-        isAnchor: input.isAnchor,
-        sortOrder,
-        archivedAt: undefined,
-      })
-      keptSourceIds.add(match._id)
-    } else {
-      const sourceId = await ctx.db.insert('incomeSources', {
-        userId,
-        name: input.name.trim(),
-        expectedDayStart: input.expectedDayStart,
-        expectedDayEnd: input.expectedDayEnd,
-        expectedAmount: input.expectedAmount,
-        expectedAmountMax: input.expectedAmountMax,
-        savingsRate: input.savingsRate,
-        isAnchor: input.isAnchor,
-        sortOrder,
-      })
-      keptSourceIds.add(sourceId)
-    }
-  }
-
-  const removedSources = existingSources.filter(
-    (source) => !keptSourceIds.has(source._id),
-  )
-  if (removedSources.length > 0) {
-    const userTransactions = await ctx.db
-      .query('transactions')
-      .withIndex('by_user', (q) => q.eq('userId', userId))
-      .collect()
-    const cycleIncomePlans = await ctx.db
-      .query('cycleIncomePlans')
-      .withIndex('by_user_and_source', (q) => q.eq('userId', userId))
-      .collect()
-    const referencedSourceIds = new Set(
-      userTransactions
-        .map((transaction) => transaction.sourceId)
-        .filter(
-          (sourceId): sourceId is Id<'incomeSources'> => sourceId !== undefined,
-        ),
-    )
-    for (const plan of cycleIncomePlans) {
-      referencedSourceIds.add(plan.sourceId)
-    }
-    let nextSortOrder = incomeSources.length
-    for (const source of removedSources) {
-      if (referencedSourceIds.has(source._id)) {
-        await ctx.db.patch(source._id, {
-          sortOrder: nextSortOrder,
-          archivedAt: Date.now(),
-        })
-        nextSortOrder++
-      } else {
-        await ctx.db.delete(source._id)
-      }
-    }
-  }
-}
-
 export const completeOnboarding = mutation({
   args: {
     usdRate: v.number(),
@@ -1863,6 +504,10 @@ export const completeOnboarding = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
+    const existingSettings = await getSettings(ctx, user._id)
+    if (existingSettings?.onboardedAt !== undefined) {
+      throw new Error('Onboarding has already been completed')
+    }
 
     validateOnboardingArgs(args)
     await seedDefaultCategoriesForUser(ctx, user._id)
@@ -1883,7 +528,6 @@ export const completeOnboarding = mutation({
       accountIds.find((id) => id !== defaultTransferFromAccountId) ??
       defaultTransferFromAccountId
 
-    const settings = await getSettings(ctx, user._id)
     const settingsValue = {
       usdRate: args.usdRate,
       defaultSavingsRate: args.defaultSavingsRate,
@@ -1894,30 +538,34 @@ export const completeOnboarding = mutation({
       paydayDay: args.paydayDay,
       onboardedAt: Date.now(),
     }
-    if (settings) {
-      await ctx.db.patch(settings._id, settingsValue)
+    if (existingSettings) {
+      await ctx.db.patch(existingSettings._id, settingsValue)
     } else {
       await ctx.db.insert('settings', { userId: user._id, ...settingsValue })
     }
+    await invalidateAllCheckpoints(ctx, user._id)
 
     const now = Date.now()
-    const cycles = await ctx.db
-      .query('cycles')
-      .withIndex('by_user', (q) => q.eq('userId', user._id))
-      .collect()
-    const latestCycle =
-      cycles.sort((a, b) => b.startsAt - a.startsAt).at(0) ?? null
+    const [latestCycle, startedCycle] = await Promise.all([
+      ctx.db
+        .query('cycles')
+        .withIndex('by_user_and_start', (q) => q.eq('userId', user._id))
+        .order('desc')
+        .first(),
+      getLatestCycle(ctx, user._id),
+    ])
     if (latestCycle) {
       const coveringCycle =
-        cycles.find((cycle) => cycle.startsAt <= now && now <= cycle.endsAt) ??
-        latestCycle
-      const cycleTransactions = await ctx.db
+        startedCycle && now <= startedCycle.endsAt ? startedCycle : latestCycle
+      // Only the existence of a transaction matters, so stop at the first one
+      // rather than pulling the whole cycle into memory.
+      const firstTransaction = await ctx.db
         .query('transactions')
         .withIndex('by_user_and_cycle', (q) =>
           q.eq('userId', user._id).eq('cycleId', coveringCycle._id),
         )
-        .collect()
-      if (cycleTransactions.length === 0) {
+        .first()
+      if (firstTransaction === null) {
         const period = getCyclePeriod(now, args.paydayDay)
         await ctx.db.patch(coveringCycle._id, period)
       }
@@ -2177,7 +825,11 @@ export const saveCyclePlan = mutation({
       }
       for (const plan of args.incomePlans) {
         const source = await ctx.db.get(plan.sourceId)
-        if (!source || source.userId !== user._id) {
+        if (
+          !source ||
+          source.userId !== user._id ||
+          source.archivedAt !== undefined
+        ) {
           throw new Error('Income source not found')
         }
         await ctx.db.insert('cycleIncomePlans', {
@@ -2215,12 +867,11 @@ export const budgetOverview = query({
     const [cycles, categories] = await Promise.all([
       ctx.db
         .query('cycles')
-        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .withIndex('by_user_and_start', (q) => q.eq('userId', user._id))
+        .order('desc')
         .collect(),
       getCategories(ctx, user._id),
     ])
-
-    cycles.sort((a, b) => b.startsAt - a.startsAt)
 
     const cycleViews = await Promise.all(
       cycles.map(async (cycle) => {
@@ -2261,17 +912,11 @@ export const budgetOverview = query({
             }
           })
 
-        const actualIncomeBySource = new Map<Id<'incomeSources'>, number>()
-        for (const transaction of transactions) {
-          if (transaction.type !== 'income' || !transaction.sourceId) continue
-          actualIncomeBySource.set(
-            transaction.sourceId,
-            (actualIncomeBySource.get(transaction.sourceId) ?? 0) +
-              transaction.amount,
-          )
-        }
         const incomePlanRows = plans.map((plan) => {
-          const actualAmount = actualIncomeBySource.get(plan.sourceId) ?? 0
+          const actualAmount = landedAmountForSource(
+            transactions,
+            plan.sourceId,
+          )
           return {
             sourceId: plan.sourceId,
             sourceName: plan.sourceName,
@@ -2290,9 +935,11 @@ export const budgetOverview = query({
           (sum, budget) => sum + budget.plannedAmount,
           0,
         )
-        const actualIncome = transactions
-          .filter((transaction) => transaction.type === 'income')
-          .reduce((sum, transaction) => sum + transaction.amount, 0)
+        const actualIncome = totalActualIncome(transactions)
+        const assignedIncome = incomePlanRows.reduce(
+          (sum, plan) => sum + plan.actualAmount,
+          0,
+        )
         const actualSpending = totalBudgetSpending(transactions)
         const actualSavings = transactions.reduce((sum, transaction) => {
           if (transaction.type !== 'allocation') return sum
@@ -2321,6 +968,7 @@ export const budgetOverview = query({
           unallocatedAmount: cycle.spendingLimit - totalPlanned,
           plannedIncome,
           actualIncome,
+          unassignedIncome: actualIncome - assignedIncome,
           actualSpending,
           actualSavings,
           savingsTarget,
@@ -2418,7 +1066,7 @@ export const addTransaction = mutation({
         ? (await requireOwnedDebt(ctx, user._id, args.debtId)).name
         : args.payee
 
-    const transactionId = await ctx.db.insert('transactions', {
+    const transactionId = await insertTransaction(ctx, user._id, {
       userId: user._id,
       cycleId: cycle._id,
       type: args.type,
@@ -2517,6 +1165,7 @@ export const updateTransaction = mutation({
     })
     await validateTransactionInput(ctx, user._id, nextInput, {
       allowArchivedDebt: type === 'claim',
+      allowArchivedSourceId: transaction.sourceId,
     })
     if (type === 'claim' && debtId && claimAction) {
       const debt = await requireOwnedDebt(ctx, user._id, debtId)
@@ -2544,7 +1193,7 @@ export const updateTransaction = mutation({
       nextInput,
     )
     const payee = type === 'claim' ? transaction.payee : args.payee
-    await ctx.db.patch(transaction._id, {
+    await patchTransaction(ctx, user._id, transaction, {
       type,
       amount: args.amount,
       payee,
@@ -2581,8 +1230,7 @@ export const deleteTransaction = mutation({
     )
 
     if (transaction.type === 'allocation') {
-      await ctx.db.delete(transaction._id)
-      return transaction._id
+      return await removeTransaction(ctx, user._id, transaction)
     }
 
     await assertMutableUserTransaction(ctx, transaction, 'deleted')
@@ -2597,9 +1245,7 @@ export const deleteTransaction = mutation({
       assertRemainingNonNegative(remaining)
     }
     await applyTransactionBalanceTransition(ctx, user._id, transaction, null)
-    await ctx.db.delete(transaction._id)
-
-    return transaction._id
+    return await removeTransaction(ctx, user._id, transaction)
   },
 })
 
@@ -2607,12 +1253,17 @@ export const listDebts = query({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuthUser(ctx)
-    const debts = await ctx.db
-      .query('debts')
-      .withIndex('by_user', (q) => q.eq('userId', user._id))
-      .collect()
+    const [debts, checkpoint] = await Promise.all([
+      ctx.db
+        .query('debts')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect(),
+      latestCheckpoint(ctx, user._id),
+    ])
     return sortDebtsByRemaining(
-      await Promise.all(debts.map((debt) => presentDebt(ctx, user._id, debt))),
+      await Promise.all(
+        debts.map((debt) => presentDebt(ctx, user._id, debt, checkpoint)),
+      ),
     )
   },
 })
@@ -2621,8 +1272,11 @@ export const getDebt = query({
   args: { debtId: v.id('debts') },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
-    const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
-    const presented = await presentDebt(ctx, user._id, debt)
+    const [debt, checkpoint] = await Promise.all([
+      requireOwnedDebt(ctx, user._id, args.debtId),
+      latestCheckpoint(ctx, user._id),
+    ])
+    const presented = await presentDebt(ctx, user._id, debt, checkpoint)
     const movements = (await getClaimMovements(ctx, user._id, debt._id)).sort(
       (left, right) => right.occurredAt - left.occurredAt,
     )
@@ -2665,6 +1319,9 @@ export const updateDebt = mutation({
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
     const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
+    if (args.openingBalance !== undefined) {
+      assertDebtOpeningBalanceMutable(debt.archivedAt)
+    }
     const patch: {
       name?: string
       openingBalance?: number
@@ -2682,6 +1339,7 @@ export const updateDebt = mutation({
       )
       assertRemainingNonNegative(remaining)
       patch.openingBalance = args.openingBalance
+      await invalidateAllCheckpoints(ctx, user._id)
     }
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(debt._id, patch)
@@ -2748,7 +1406,7 @@ async function updateAutoSaveTransaction(
   assertPositiveAmount(args.amount)
   const cycle = await ensureCycleForDate(ctx, userId, args.occurredAt)
 
-  await ctx.db.patch(transaction._id, {
+  await patchTransaction(ctx, userId, transaction, {
     amount: args.amount,
     items: args.items,
     note: args.note,
@@ -2799,7 +1457,7 @@ export const confirmAutoSave = mutation({
       source?.savingsRate ??
       settings.defaultSavingsRate
 
-    const transactionId = await ctx.db.insert('transactions', {
+    const transactionId = await insertTransaction(ctx, user._id, {
       userId: user._id,
       cycleId: incomeTransaction.cycleId,
       type: 'allocation',
@@ -2882,7 +1540,7 @@ export const moveSavings = mutation({
     }
 
     const cycle = await ensureCurrentCycle(ctx, user._id)
-    return await ctx.db.insert('transactions', {
+    return await insertTransaction(ctx, user._id, {
       userId: user._id,
       cycleId: cycle._id,
       type: 'allocation',
@@ -2929,13 +1587,19 @@ export const absorbAdjustment = mutation({
       return null
     }
 
+    let fxRate: number | undefined
+    let canonicalAmount = roundMoney(Math.abs(delta))
+    if (account.currency === 'USD') {
+      fxRate = (await requireSettings(ctx, user._id)).usdRate
+      canonicalAmount = currencyToMwk(Math.abs(delta), 'USD', fxRate)
+    }
     const cycle = await ensureCurrentCycle(ctx, user._id)
     const type = delta < 0 ? 'expense' : 'income'
-    const transactionId = await ctx.db.insert('transactions', {
+    const transactionId = await insertTransaction(ctx, user._id, {
       userId: user._id,
       cycleId: cycle._id,
       type,
-      amount: Math.abs(delta),
+      amount: canonicalAmount,
       payee: 'Balance adjustment',
       categoryId: type === 'expense' ? 'adjustment' : undefined,
       accountId: account._id,
@@ -2944,6 +1608,7 @@ export const absorbAdjustment = mutation({
       adjustment: true,
       excludeFromBudget: true,
       occurredAt: Date.now(),
+      ...(fxRate !== undefined ? { fxRate } : {}),
     })
 
     await ctx.db.patch(account._id, { balance: args.actual })

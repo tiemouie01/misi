@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  assertDebtClaimMutable,
+  assertDebtOpeningBalanceMutable,
   claimActionLabel,
   claimActionMatchesDirection,
   claimCashKind,
@@ -12,6 +14,26 @@ import {
   remainingAfterReplacement,
   sortDebtsByRemaining,
 } from './claim.ts'
+
+test('archived debt movements must be unarchived before editing or deleting', () => {
+  assert.doesNotThrow(() => assertDebtClaimMutable(undefined, 'edited'))
+  assert.throws(
+    () => assertDebtClaimMutable(Date.now(), 'edited'),
+    /Archived debt movements cannot be edited; unarchive the debt first/,
+  )
+  assert.throws(
+    () => assertDebtClaimMutable(Date.now(), 'deleted'),
+    /Archived debt movements cannot be deleted; unarchive the debt first/,
+  )
+})
+
+test('archived debts must be unarchived before changing opening balance', () => {
+  assert.doesNotThrow(() => assertDebtOpeningBalanceMutable(undefined))
+  assert.throws(
+    () => assertDebtOpeningBalanceMutable(Date.now()),
+    /Archived debts cannot change opening balance; unarchive the debt first/,
+  )
+})
 
 test('remaining is opening plus signed movements', () => {
   assert.equal(

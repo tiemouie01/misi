@@ -33,7 +33,9 @@ export default defineSchema({
     startsAt: v.number(),
     endsAt: v.number(),
     spendingLimit: v.number(),
-  }).index('by_user', ['userId']),
+  })
+    .index('by_user', ['userId'])
+    .index('by_user_and_start', ['userId', 'startsAt']),
   transactions: defineTable({
     userId: v.string(),
     cycleId: v.id('cycles'),
@@ -77,9 +79,11 @@ export default defineSchema({
   })
     .index('by_user_and_cycle', ['userId', 'cycleId'])
     .index('by_user', ['userId'])
-    .index('by_user_and_wallet', ['userId', 'walletId'])
+    .index('by_user_and_time', ['userId', 'occurredAt'])
+    .index('by_user_and_type_and_time', ['userId', 'type', 'occurredAt'])
+    .index('by_user_and_wallet_and_time', ['userId', 'walletId', 'occurredAt'])
     .index('by_user_and_category', ['userId', 'categoryId'])
-    .index('by_user_and_debt', ['userId', 'debtId']),
+    .index('by_user_and_debt_and_time', ['userId', 'debtId', 'occurredAt']),
   budgets: defineTable({
     userId: v.string(),
     cycleId: v.id('cycles'),
@@ -135,6 +139,20 @@ export default defineSchema({
     paydayDay: v.optional(v.number()),
     onboardedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
+  cycleCheckpoints: defineTable({
+    userId: v.string(),
+    cycleId: v.id('cycles'),
+    asOf: v.number(),
+    savingsBalance: v.number(),
+    debtRemaining: v.array(
+      v.object({
+        debtId: v.id('debts'),
+        remaining: v.number(),
+      }),
+    ),
+  })
+    .index('by_user_and_as_of', ['userId', 'asOf'])
+    .index('by_user_and_cycle', ['userId', 'cycleId']),
   autoSaveEvents: defineTable({
     userId: v.string(),
     transactionId: v.id('transactions'),
