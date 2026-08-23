@@ -9,8 +9,7 @@ import type { Account, QuickAddInitial, QuickAddPayload } from '#/lib/app-data'
 
 interface QuickAddSheetOptions {
   accounts: Account[]
-  incomeSources: { id: string; name: string }[]
-  incomePlans: { sourceName: string; savingsRate: number }[]
+  incomePlans: { sourceId: string; sourceName: string; savingsRate: number }[]
   defaultSavingsRate: number
   defaultExpenseAccountId: string
 }
@@ -22,7 +21,6 @@ export function mutationErrorMessage(error: unknown, fallback: string) {
 
 export function useQuickAddSheet({
   accounts,
-  incomeSources,
   incomePlans,
   defaultSavingsRate,
   defaultExpenseAccountId,
@@ -54,39 +52,23 @@ export function useQuickAddSheet({
     [accounts, defaultExpenseAccountId],
   )
 
-  const autoSaveRateForPayee = useCallback(
-    (payee: string) => {
-      const normalizedPayee = payee.trim().toLowerCase()
-      if (!normalizedPayee) return defaultSavingsRate
-      const plan = incomePlans.find((candidate) => {
-        const sourceName = candidate.sourceName.toLowerCase()
-        return (
-          normalizedPayee === sourceName ||
-          normalizedPayee.includes(sourceName) ||
-          sourceName.includes(normalizedPayee)
-        )
-      })
-      return plan?.savingsRate ?? defaultSavingsRate
+  const autoSaveRateForSource = useCallback(
+    (sourceId?: string) => {
+      if (!sourceId) return defaultSavingsRate
+      return (
+        incomePlans.find((candidate) => candidate.sourceId === sourceId)
+          ?.savingsRate ?? defaultSavingsRate
+      )
     },
     [incomePlans, defaultSavingsRate],
   )
 
   const resolveIncomeSourceId = useCallback(
     (payload: QuickAddPayload): Id<'incomeSources'> | undefined => {
-      if (payload.sourceId) return payload.sourceId as Id<'incomeSources'>
-      if (payload.type !== 'income') return undefined
-
-      const payee = payload.payee.trim().toLowerCase()
-      if (!payee) return undefined
-
-      const match = incomeSources.find((source) => {
-        const name = source.name.toLowerCase()
-        return payee === name || payee.includes(name) || name.includes(payee)
-      })
-
-      return match?.id as Id<'incomeSources'> | undefined
+      if (payload.type !== 'income' || !payload.sourceId) return undefined
+      return payload.sourceId as Id<'incomeSources'>
     },
-    [incomeSources],
+    [],
   )
 
   function openSheet(initial: QuickAddInitial) {
@@ -218,6 +200,6 @@ export function useQuickAddSheet({
     saveTransaction,
     deleteTransaction,
     resolveAccountId,
-    autoSaveRateForPayee,
+    autoSaveRateForSource,
   }
 }

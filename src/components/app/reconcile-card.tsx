@@ -5,7 +5,12 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
-import { formatK, isSpendableAccount } from '#/lib/app-data'
+import {
+  currencyToMwk,
+  formatK,
+  formatUsd,
+  isSpendableAccount,
+} from '#/lib/app-data'
 import { firstExpenseCategoryKey } from '#/lib/categories'
 
 import type { Account, QuickAddInitial, ReconcileBalance } from '#/lib/app-data'
@@ -21,10 +26,21 @@ interface ReconcileCardProps {
   onAbsorb: (accountId: string) => void
   onLogMissing: (initial: QuickAddInitial) => void
   animationDelay: string
+  usdRate: number
   startExpanded?: boolean
 }
 
-function DriftChip({ drift }: { drift: number }) {
+function formatNativeAmount(amount: number, currency: Account['currency']) {
+  return currency === 'USD' ? formatUsd(amount) : formatK(amount)
+}
+
+function DriftChip({
+  drift,
+  currency,
+}: {
+  drift: number
+  currency: Account['currency']
+}) {
   if (drift === 0) {
     return (
       <Badge variant="success">
@@ -35,7 +51,7 @@ function DriftChip({ drift }: { drift: number }) {
   }
   return (
     <Badge variant="destructive" className="font-mono tabular-nums">
-      {formatK(drift)}
+      {formatNativeAmount(drift, currency)}
     </Badge>
   )
 }
@@ -50,6 +66,7 @@ export function ReconcileCard({
   onAbsorb,
   onLogMissing,
   animationDelay,
+  usdRate,
   startExpanded = false,
 }: ReconcileCardProps) {
   const [expanded, setExpanded] = useState(startExpanded)
@@ -60,15 +77,23 @@ export function ReconcileCard({
   const gaps = visibleBalances.filter(
     (balance) => balance.actual !== balance.expected,
   )
-  const gapTotal = gaps.reduce(
-    (sum, balance) => sum + Math.abs(balance.actual - balance.expected),
-    0,
-  )
+  const gapTotalMwk = gaps.reduce((sum, balance) => {
+    const account = accounts.find((item) => item.id === balance.accountId)
+    if (!account) return sum
+    return (
+      sum +
+      currencyToMwk(
+        Math.abs(balance.actual - balance.expected),
+        account.currency,
+        usdRate,
+      )
+    )
+  }, 0)
 
   return (
     <Card
       variant="island"
-      className="rise-in gap-0 rounded-3xl p-6"
+      className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
       style={{ animationDelay }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -110,6 +135,7 @@ export function ReconcileCard({
               const account = accounts.find(
                 (item) => item.id === balance.accountId,
               )
+              if (!account) return null
               const drift = balance.actual - balance.expected
               return (
                 <div
@@ -118,17 +144,19 @@ export function ReconcileCard({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-bold text-sea-ink">
-                      {account?.name}
+                      {account.name}
                     </span>
-                    <DriftChip drift={drift} />
+                    <DriftChip drift={drift} currency={account.currency} />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
-                      Expected {formatK(balance.expected)}
+                      Expected{' '}
+                      {formatNativeAmount(balance.expected, account.currency)}
                     </span>
                     <Input
                       type="number"
-                      aria-label={`${account?.name} actual balance`}
+                      step={account.currency === 'USD' ? '0.01' : '1'}
+                      aria-label={`${account.name} actual balance`}
                       className="font-mono h-9 w-28 rounded-lg px-2.5 py-1.5 text-right tabular-nums"
                       value={balance.actual}
                       onChange={(event) =>
@@ -147,15 +175,23 @@ export function ReconcileCard({
                         size="sm"
                         onClick={() =>
                           onLogMissing({
-                            mode: 'expense',
+                            mode: drift > 0 ? 'income' : 'expense',
                             amount: Math.abs(drift),
+                            amountCurrency: account.currency,
+                            fxRate:
+                              account.currency === 'USD' ? usdRate : undefined,
                             accountId: balance.accountId,
-                            categoryId: firstExpenseCategoryKey(categories),
+                            categoryId:
+                              drift < 0
+                                ? firstExpenseCategoryKey(categories)
+                                : undefined,
                             reconcile: true,
                           })
                         }
                       >
-                        Log missing expense
+                        {drift > 0
+                          ? 'Log missing income'
+                          : 'Log missing expense'}
                       </Button>
                       <Button
                         type="button"
@@ -176,9 +212,9 @@ export function ReconcileCard({
               <p className="text-sm font-bold text-sea-ink">
                 {gaps.length} {gaps.length === 1 ? 'gap' : 'gaps'} —{' '}
                 <span className="font-mono tabular-nums">
-                  {formatK(gapTotal)}
+                  {formatK(gapTotalMwk)}
                 </span>{' '}
-                total. Fix each account above.
+                MWK equivalent. Fix each account above.
               </p>
             </div>
           )}
@@ -198,6 +234,7 @@ export function ReconcileCard({
               const account = accounts.find(
                 (item) => item.id === balance.accountId,
               )
+              if (!account) return null
               const drift = balance.actual - balance.expected
               return (
                 <div
@@ -210,13 +247,13 @@ export function ReconcileCard({
                       background: drift ? 'var(--coral)' : 'var(--palm)',
                     }}
                   />
-                  <span className="w-24 shrink-0 text-sm font-bold text-sea-ink">
-                    {account?.name}
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-sea-ink">
+                    {account.name}
                   </span>
-                  <span className="font-mono flex-1 text-right text-[0.8rem] text-sea-ink-soft tabular-nums">
-                    {formatK(balance.expected)}
+                  <span className="font-mono shrink-0 text-right text-[0.8rem] whitespace-nowrap text-sea-ink-soft tabular-nums">
+                    {formatNativeAmount(balance.expected, account.currency)}
                   </span>
-                  <DriftChip drift={drift} />
+                  <DriftChip drift={drift} currency={account.currency} />
                 </div>
               )
             })}

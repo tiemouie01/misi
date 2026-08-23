@@ -43,6 +43,13 @@ import type { Category } from '#/lib/categories'
 
 const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
 
+const transactionDayFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Africa/Blantyre',
+})
+
 export const Route = createFileRoute('/app/debts/$debtId')({
   loader: async ({ context, params }) => {
     const data = await context.queryClient.ensureQueryData(bootstrapQuery)
@@ -63,12 +70,7 @@ export const Route = createFileRoute('/app/debts/$debtId')({
 })
 
 function transactionDayLabel(occurredAt: number) {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Africa/Blantyre',
-  }).format(new Date(occurredAt))
+  return transactionDayFormat.format(new Date(occurredAt))
 }
 
 function DebtDetailPage() {
@@ -118,6 +120,7 @@ function DebtDetailPage() {
     [data?.categories],
   )
   const debts = (data?.debts ?? []).map(mapDebt)
+  const recents = data?.oneTapRecents ?? []
   const transactions = useMemo<Txn[]>(
     () =>
       detail.movements.map((transaction) => ({
@@ -150,13 +153,9 @@ function DebtDetailPage() {
     saveTransaction,
     deleteTransaction,
     resolveAccountId,
-    autoSaveRateForPayee,
+    autoSaveRateForSource,
   } = useQuickAddSheet({
     accounts,
-    incomeSources: (data?.incomeSources ?? []).map((source) => ({
-      id: source._id,
-      name: source.name,
-    })),
     incomePlans: data?.cycleIncomePlans ?? [],
     defaultSavingsRate: data?.settings?.defaultSavingsRate ?? 0,
     defaultExpenseAccountId,
@@ -462,12 +461,19 @@ function DebtDetailPage() {
           categories={categories}
           accounts={accounts}
           debts={debts}
+          incomeSources={data.incomeSources.map((source) => ({
+            id: source._id,
+            name: source.name,
+            savingsRate: source.savingsRate,
+            isAnchor: source.isAnchor,
+          }))}
+          recents={recents}
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultExpenseAccountId}
           defaultTransferToAccountId={defaultExpenseAccountId}
           usdRate={data.settings.usdRate}
           reconcileNote="Reconcile"
-          autoSaveRateForPayee={autoSaveRateForPayee}
+          autoSaveRateForSource={autoSaveRateForSource}
           resolveAccountId={resolveAccountId}
           error={quickAddError}
           onClose={closeSheet}

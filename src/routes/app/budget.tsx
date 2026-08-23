@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
+import { incomeSourceStatus } from '../../../shared/income'
 import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
@@ -35,13 +36,15 @@ export const Route = createFileRoute('/app/budget')({
   component: BudgetRoute,
 })
 
+const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Africa/Blantyre',
+})
+
 function shortDate(timestamp: number) {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Africa/Blantyre',
-  }).format(new Date(timestamp))
+  return shortDateFormat.format(new Date(timestamp))
 }
 
 function expectedWindow(start: number, end: number) {
@@ -117,6 +120,7 @@ function BudgetRoute() {
           rangeLabel: `${shortDate(view.cycle.startsAt)} – ${shortDate(view.cycle.endsAt)}`,
           expectedIncome: view.plannedIncome,
           actualIncome: view.actualIncome,
+          unassignedIncome: view.unassignedIncome,
           actualSavings: view.actualSavings,
           actualSpending: view.actualSpending,
           isClosed: view.cycle.endsAt < now,
@@ -148,12 +152,10 @@ function BudgetRoute() {
             expectedAmountMax: source.expectedAmountMax,
             actualAmount: source.actualAmount,
             savingsRate: source.savingsRate,
-            status:
-              source.actualAmount >= source.expectedAmount
-                ? 'landed'
-                : source.actualAmount > 0
-                  ? 'partial'
-                  : 'pending',
+            status: incomeSourceStatus(
+              source.actualAmount,
+              source.expectedAmount,
+            ),
             note: expectedWindow(
               source.expectedDayStart,
               source.expectedDayEnd,

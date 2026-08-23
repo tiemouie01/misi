@@ -30,7 +30,6 @@ import {
   formatK,
   formatUsd,
   mwkToCurrency,
-  oneTapRecents,
 } from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
 import {
@@ -41,6 +40,7 @@ import {
   defaultClaimAction,
   remainingAfterReplacement,
 } from '../../../shared/claim'
+import { oneTapRecentKey } from '../../../shared/one-tap-recents'
 
 import type {
   Account,
@@ -56,8 +56,18 @@ import type { Category } from '#/lib/categories'
 
 interface QuickAddCardProps {
   categories: Category[]
+  recents: RecentTransaction[]
+  accounts: Account[]
+  usdRate: number
   onOpen: (initial: QuickAddInitial) => void
   animationDelay: string
+}
+
+interface QuickAddIncomeSource {
+  id: string
+  name: string
+  savingsRate?: number
+  isAnchor?: boolean
 }
 
 interface QuickAddSheetProps {
@@ -65,12 +75,14 @@ interface QuickAddSheetProps {
   categories: Category[]
   accounts: Account[]
   debts?: Debt[]
+  incomeSources?: QuickAddIncomeSource[]
+  recents?: RecentTransaction[]
   defaultExpenseAccountId: string
   defaultTransferFromAccountId: string
   defaultTransferToAccountId: string
   usdRate: number
   reconcileNote: string
-  autoSaveRateForPayee: (payee: string) => number
+  autoSaveRateForSource: (sourceId?: string) => number
   resolveAccountId: (accountId: string) => string
   error?: string | null
   onClose: () => void
@@ -82,18 +94,26 @@ interface QuickAddFabProps {
   onOpen: (initial: QuickAddInitial) => void
 }
 
+function defaultIncomeSourceId(sources: readonly QuickAddIncomeSource[]) {
+  const anchor = sources.find((source) => source.isAnchor)
+  if (anchor) return anchor.id
+  return sources.length > 0 ? sources[0].id : ''
+}
+
 function occurredAtFromDate(date: Date) {
   const next = new Date(date)
   next.setHours(12, 0, 0, 0)
   return next.getTime()
 }
 
+const transactionDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
 function formatTransactionDate(occurredAt: number) {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(occurredAt))
+  return transactionDateFormat.format(new Date(occurredAt))
 }
 
 const MAX_AMOUNT_WHOLE_DIGITS = 9
@@ -211,22 +231,65 @@ function TransactionDatePicker({
   )
 }
 
+function visibleRecents(recents: RecentTransaction[], categories: Category[]) {
+  return recents.filter((recent) => {
+    const category = resolveCategory(categories, recent.categoryId)
+    return Boolean(category && !category.archived && !category.isSystem)
+  })
+}
+
+/**
+ * Recents store MWK amounts; show the account's native amount when the account
+ * is a USD one. Falls back to the stored MWK amount if the rate is unusable.
+ */
+function recentDisplayAmount(
+  recent: RecentTransaction,
+  account: Account | undefined,
+  usdRate: number,
+): { amount: number; currency: Account['currency'] } {
+  if (account?.currency === 'USD' && usdRate > 0) {
+    try {
+      return {
+        amount: mwkToCurrency(recent.amount, 'USD', usdRate),
+        currency: 'USD',
+      }
+    } catch {
+      // Treat an unusable rate as if the account were MWK.
+    }
+  }
+  return { amount: recent.amount, currency: 'MWK' }
+}
+
 function RecentChips({
+  recents,
   categories,
+  accounts,
+  usdRate,
   onSelect,
 }: {
+  recents: RecentTransaction[]
   categories: Category[]
+  accounts: Account[]
+  usdRate: number
   onSelect: (recent: RecentTransaction) => void
 }) {
   return (
     <div className="flex min-w-0 flex-wrap gap-2">
-      {oneTapRecents.map((recent) => {
+      {recents.map((recent) => {
         const category = resolveCategory(categories, recent.categoryId)
-        if (!category || category.archived || category.isSystem) return null
+        if (!category) return null
         const Icon = category.icon
+        const account = accounts.find(
+          (candidate) => candidate.id === recent.accountId,
+        )
+        const display = recentDisplayAmount(recent, account, usdRate)
+        const amount =
+          display.currency === 'USD'
+            ? formatUsd(display.amount)
+            : formatK(display.amount)
         return (
           <Button
-            key={recent.payee}
+            key={oneTapRecentKey(recent)}
             type="button"
             variant="secondary"
             className="h-auto max-w-full px-3.5 py-2 font-semibold"
@@ -235,7 +298,7 @@ function RecentChips({
             <Icon className="size-4" style={{ color: category.color }} />
             <span className="truncate">{recent.payee}</span>
             <span className="font-mono text-sea-ink-soft tabular-nums">
-              {formatK(recent.amount)}
+              {amount}
             </span>
           </Button>
         )
@@ -246,9 +309,14 @@ function RecentChips({
 
 export function QuickAddCard({
   categories,
+  recents,
+  accounts,
+  usdRate,
   onOpen,
   animationDelay,
 }: QuickAddCardProps) {
+  const visible = visibleRecents(recents, categories)
+
   return (
     <Card
       variant="island"
@@ -275,23 +343,28 @@ export function QuickAddCard({
           </p>
         </div>
       </div>
-      <div className="mt-5 border-t border-dashed border-(--line) pt-4">
-        <p className="field-label">One-tap recents</p>
-        <div className="mt-2.5">
-          <RecentChips
-            categories={categories}
-            onSelect={(recent) =>
-              onOpen({
-                mode: 'expense',
-                amount: recent.amount,
-                categoryId: recent.categoryId,
-                accountId: recent.accountId,
-                payee: recent.payee,
-              })
-            }
-          />
+      {visible.length > 0 && (
+        <div className="mt-5 border-t border-dashed border-(--line) pt-4">
+          <p className="field-label">One-tap recents</p>
+          <div className="mt-2.5">
+            <RecentChips
+              recents={visible}
+              categories={categories}
+              accounts={accounts}
+              usdRate={usdRate}
+              onSelect={(recent) =>
+                onOpen({
+                  mode: 'expense',
+                  amount: recent.amount,
+                  categoryId: recent.categoryId,
+                  accountId: recent.accountId,
+                  payee: recent.payee,
+                })
+              }
+            />
+          </div>
         </div>
-      </div>
+      )}
     </Card>
   )
 }
@@ -503,12 +576,14 @@ export function QuickAddSheet({
   categories,
   accounts,
   debts = [],
+  incomeSources = [],
+  recents = [],
   defaultExpenseAccountId,
   defaultTransferFromAccountId,
   defaultTransferToAccountId,
   usdRate,
   reconcileNote,
-  autoSaveRateForPayee,
+  autoSaveRateForSource,
   resolveAccountId,
   error,
   onClose,
@@ -535,16 +610,23 @@ export function QuickAddSheet({
   const initialAmountCurrency =
     initial.autoSave === true || initial.mode === 'claim'
       ? 'MWK'
-      : (accounts.find((account) => account.id === initialAccountId)
-          ?.currency ?? 'MWK')
+      : (initial.amountCurrency ??
+        accounts.find((account) => account.id === initialAccountId)?.currency ??
+        'MWK')
   const initialUsdRate = initial.fxRate ?? usdRate
+  const initialAmountIsNative =
+    initial.amountCurrency !== undefined &&
+    initial.autoSave !== true &&
+    initial.mode !== 'claim'
   const [mode, setMode] = useState<TxnType>(initial.mode)
   const [digits, setDigits] = useState(() =>
     initial.amount
       ? amountToDigits(
-          initialAmountCurrency === 'USD'
-            ? mwkToCurrency(initial.amount, 'USD', initialUsdRate)
-            : initial.amount,
+          initialAmountIsNative
+            ? initial.amount
+            : initialAmountCurrency === 'USD'
+              ? mwkToCurrency(initial.amount, 'USD', initialUsdRate)
+              : initial.amount,
         )
       : '',
   )
@@ -555,7 +637,26 @@ export function QuickAddSheet({
   const [toAccountId, setToAccountId] = useState(
     initial.toAccountId ?? defaultTransferToAccountId,
   )
-  const [payee, setPayee] = useState(initial.payee ?? '')
+  const initialIncomeSourceId =
+    initial.sourceId ||
+    (!isEditing && initial.mode === 'income'
+      ? defaultIncomeSourceId(incomeSources)
+      : '')
+  const archivedIncomeSourceId =
+    initial.mode === 'income' &&
+    initial.sourceId &&
+    !incomeSources.some((source) => source.id === initial.sourceId)
+      ? initial.sourceId
+      : undefined
+  const [sourceId, setSourceId] = useState(initialIncomeSourceId)
+  const [payee, setPayee] = useState(() => {
+    if (initial.payee) return initial.payee
+    if (initial.mode !== 'income') return ''
+    return (
+      incomeSources.find((source) => source.id === initialIncomeSourceId)
+        ?.name ?? ''
+    )
+  })
   const [items, setItems] = useState(initial.items ?? '')
   const [note, setNote] = useState(initial.note ?? '')
   const [excludeFromBudget, setExcludeFromBudget] = useState(
@@ -592,7 +693,10 @@ export function QuickAddSheet({
       amountMwk = 0
     }
   }
-  const autoSaveRate = autoSaveRateForPayee(payee)
+  const autoSaveRate = autoSaveRateForSource(
+    mode === 'income' ? sourceId || undefined : undefined,
+  )
+  const sheetRecents = visibleRecents(recents, categories)
   const selectedDebt = debts.find((debt) => debt.id === debtId)
   const pickerDebts = debts.filter(
     (debt) => !debt.archived || debt.id === (initial.debtId ?? debtId),
@@ -692,7 +796,7 @@ export function QuickAddSheet({
               (mode === 'income'
                 ? 'Income'
                 : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
-      sourceId: mode === 'income' ? initial.sourceId : undefined,
+      sourceId: mode === 'income' ? sourceId || undefined : undefined,
       items: mode === 'expense' && items.trim() ? items.trim() : undefined,
       note: note.trim() || undefined,
       occurredAt,
@@ -762,9 +866,12 @@ export function QuickAddSheet({
           : `Move${amount ? ` ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
 
   function selectRecent(recent: RecentTransaction) {
-    setDigits(amountToDigits(recent.amount))
+    const nextAccountId = resolveAccountId(recent.accountId)
+    const nextAccount = accounts.find((account) => account.id === nextAccountId)
+    const display = recentDisplayAmount(recent, nextAccount, conversionRate)
+    setDigits(amountToDigits(display.amount))
     setCategoryId(recent.categoryId)
-    setAccountId(resolveAccountId(recent.accountId))
+    setAccountId(nextAccountId)
     setPayee(recent.payee)
   }
 
@@ -788,6 +895,9 @@ export function QuickAddSheet({
     if (nextMode === 'claim' && !debtId && activeDebts[0]) {
       setDebtId(activeDebts[0].id)
       setClaimAction(defaultClaimAction(activeDebts[0].direction))
+    }
+    if (nextMode === 'income' && !sourceId && !isEditing) {
+      setSourceId(defaultIncomeSourceId(incomeSources))
     }
   }
 
@@ -907,10 +1017,16 @@ export function QuickAddSheet({
         </div>
         {!isAutoSave && mode === 'expense' && (
           <>
-            {!isEditing && (
+            {!isEditing && sheetRecents.length > 0 && (
               <div className="mt-5 min-w-0">
                 <p className="field-label mb-2">One-tap recents</p>
-                <RecentChips categories={categories} onSelect={selectRecent} />
+                <RecentChips
+                  recents={sheetRecents}
+                  categories={categories}
+                  accounts={accounts}
+                  usdRate={usdRate}
+                  onSelect={selectRecent}
+                />
               </div>
             )}
             <div className="mt-5 min-w-0">
@@ -1014,15 +1130,77 @@ export function QuickAddSheet({
             onFromSavings={setFromSavings}
           />
         )}
+        {!isAutoSave &&
+          mode === 'income' &&
+          (incomeSources.length > 0 || archivedIncomeSourceId) && (
+            <fieldset className="mt-5">
+              <legend className="field-label mb-2">Income source</legend>
+              <div className="flex min-w-0 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  aria-pressed={!sourceId}
+                  className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                  onClick={() => {
+                    // Start an unassigned income without retaining the source
+                    // description that was selected before this action.
+                    setPayee('')
+                    setSourceId('')
+                  }}
+                >
+                  Unassigned
+                </Button>
+                {archivedIncomeSourceId && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled
+                    aria-pressed={sourceId === archivedIncomeSourceId}
+                    title="This source is archived and will remain linked unless you choose another source."
+                    className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                  >
+                    <span className="truncate">Archived source</span>
+                  </Button>
+                )}
+                {incomeSources.map((source) => (
+                  <Button
+                    key={source.id}
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    aria-pressed={sourceId === source.id}
+                    className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                    onClick={() => {
+                      const previous = incomeSources.find(
+                        (item) => item.id === sourceId,
+                      )
+                      setSourceId(source.id)
+                      if (
+                        !payee.trim() ||
+                        payee.trim().toLowerCase() ===
+                          previous?.name.toLowerCase()
+                      ) {
+                        setPayee(source.name)
+                      }
+                    }}
+                  >
+                    <span className="truncate">{source.name}</span>
+                  </Button>
+                ))}
+              </div>
+            </fieldset>
+          )}
         {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
           <div className="mt-5">
             <Label htmlFor="quick-add-payee" className="mb-2">
-              Payee
+              {mode === 'income' ? 'From' : 'Payee'}
             </Label>
             <Input
               id="quick-add-payee"
               className="px-4 py-2.5 font-semibold placeholder:font-normal"
-              placeholder="e.g. Chipiku"
+              placeholder={mode === 'income' ? 'e.g. Salary' : 'e.g. Chipiku'}
               value={payee}
               onChange={(event) => setPayee(event.target.value)}
             />
@@ -1099,7 +1277,7 @@ export function QuickAddSheet({
             <p className="text-[0.82rem] font-semibold text-sea-ink">
               Auto-save {Math.round(autoSaveRate * 100)}% — Misi will propose{' '}
               <span className="font-mono tabular-nums">
-                {formatK(Math.round(amount * autoSaveRate))}
+                {formatK(Math.round(amountMwk * autoSaveRate))}
               </span>{' '}
               → Savings.
             </p>

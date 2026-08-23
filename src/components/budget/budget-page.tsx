@@ -52,6 +52,7 @@ import {
   seedCycleBudgetsFromPrevious,
   spendingLimitForPlans,
 } from '../../../shared/budget-rollover'
+import { incomeSourceStatus } from '../../../shared/income'
 
 import type { ChangeEvent, FormEvent } from 'react'
 import type {
@@ -103,10 +104,12 @@ const TONE_CLASSES: Record<NonNullable<SummaryCardProps['tone']>, string> = {
   sun: 'bg-sun/14 text-sun',
 }
 
+const wholeNumberFormat = new Intl.NumberFormat('en-US')
+
 export function formatBudgetMoney(value: number, currency = 'K') {
   const amount = Number.isFinite(value) ? value : 0
   const sign = amount < 0 ? '−' : ''
-  return `${sign}${currency}${Math.round(Math.abs(amount)).toLocaleString('en-US')}`
+  return `${sign}${currency}${wholeNumberFormat.format(Math.round(Math.abs(amount)))}`
 }
 
 export function formatBudgetPercent(value: number, digits = 0) {
@@ -700,9 +703,9 @@ function CategoryPlanCard({
 function getIncomeSourceStatus(source: BudgetIncomeSourcePlan) {
   const planned = positiveAmount(source.expectedAmount)
   const actual = positiveAmount(source.actualAmount)
-  if (source.status === 'landed' || (planned > 0 && actual >= planned))
-    return 'Landed'
-  if (source.status === 'partial' || actual > 0) return 'Part landed'
+  const status = incomeSourceStatus(actual, planned)
+  if (status === 'landed') return 'Landed'
+  if (status === 'partial') return 'Part landed'
   return 'Pending'
 }
 
@@ -724,7 +727,28 @@ function IncomeSourcesCard({
     (total, source) => total + positiveAmount(source.actualAmount),
     0,
   )
-  const actualPercent = planned > 0 ? clampPercent((actual / planned) * 100) : 0
+  const totalActual = positiveAmount(cycle.actualIncome)
+  const unassigned = Math.max(
+    0,
+    positiveAmount(cycle.unassignedIncome ?? totalActual - actual),
+  )
+  const actualTotal = Math.max(totalActual, actual + unassigned)
+  const actualPercent =
+    planned > 0 ? clampPercent((actualTotal / planned) * 100) : 0
+  const unassignedNotice =
+    unassigned > 0 ? (
+      <div className="rounded-2xl border border-dashed border-sun/40 bg-sun/8 px-3.5 py-3 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-semibold text-sea-ink">Unassigned income</span>
+          <span className="font-mono font-bold text-sea-ink tabular-nums">
+            {formatBudgetMoney(unassigned, currency)}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-sea-ink-soft">
+          Included in the cycle total, but not attributed to a planned source.
+        </p>
+      </div>
+    ) : null
 
   return (
     <Card variant="island" className="min-w-0 gap-5 rounded-3xl p-6">
@@ -762,7 +786,9 @@ function IncomeSourcesCard({
           <>
             <div className="rounded-2xl border border-(--line) bg-(--chip-bg) p-4">
               <div className="flex items-center justify-between gap-3 text-xs font-semibold text-sea-ink-soft">
-                <span>{formatBudgetMoney(actual, currency)} landed</span>
+                <span>
+                  {formatBudgetMoney(actualTotal, currency)} landed total
+                </span>
                 <span>{formatBudgetMoney(planned, currency)} planned</span>
               </div>
               <Progress
@@ -839,11 +865,15 @@ function IncomeSourcesCard({
                 )
               })}
             </div>
+            {unassignedNotice}
           </>
         ) : (
-          <div className="rounded-2xl border border-dashed border-(--line) px-4 py-5 text-sm text-sea-ink-soft">
-            No income sources have been added to this cycle yet.
-          </div>
+          <>
+            {unassignedNotice}
+            <div className="rounded-2xl border border-dashed border-(--line) px-4 py-5 text-sm text-sea-ink-soft">
+              No income sources have been added to this cycle yet.
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

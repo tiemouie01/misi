@@ -7,6 +7,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
+import {
+  incomeSourceStatus,
+  landedAmountForSource,
+  totalActualIncome,
+} from '../../../shared/income'
 import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
 import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
@@ -44,10 +49,31 @@ import type { Category } from '#/lib/categories'
 
 const DAY_MS = 86_400_000
 
+/** Reuse date formatters across the transaction feed instead of constructing
+ * a new Intl.DateTimeFormat for every rendered row. */
+const dayLabelFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+})
+
+const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'Africa/Blantyre',
+})
+
+const greetingDateFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+})
+
 type BootstrapData = NonNullable<FunctionReturnType<typeof api.misi.bootstrap>>
-type ReadyBootstrapData = BootstrapData & {
+type ReadyBootstrapData = Omit<BootstrapData, 'oneTapRecents'> & {
   settings: NonNullable<BootstrapData['settings']>
   currentCycle: NonNullable<BootstrapData['currentCycle']>
+  oneTapRecents?: BootstrapData['oneTapRecents']
 }
 
 interface AutoSaveUiState {
@@ -89,21 +115,11 @@ function transactionDayLabel(occurredAt: number, now: number) {
   yesterday.setDate(today.getDate() - 1)
   if (sameCalendarDay(date, yesterday)) return 'Yesterday'
 
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  })
-    .format(date)
-    .replace(',', '')
+  return dayLabelFormat.format(date).replace(',', '')
 }
 
 function shortDate(timestamp: number) {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'Africa/Blantyre',
-  }).format(new Date(timestamp))
+  return shortDateFormat.format(new Date(timestamp))
 }
 
 function LoadingState({ children }: { children: string }) {
@@ -185,6 +201,7 @@ function AppDashboard({
       })),
     [data.accounts],
   )
+  const recents = data.oneTapRecents ?? []
 
   const categories = useMemo<Category[]>(
     () =>
@@ -250,11 +267,7 @@ function AppDashboard({
       daysRemaining,
       dayOf: `day ${dayNumber} of ${totalDays}`,
       headerBadge: `${cycle.label} · day ${dayNumber}`,
-      greetingDate: new Intl.DateTimeFormat('en-GB', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-      }).format(today),
+      greetingDate: greetingDateFormat.format(today),
       endsOn: shortDate(cycle.endsAt),
       reconcileNote: `Reconcile ${todayShort}`,
       cycleGain: data.transactions.reduce((sum, transaction) => {
@@ -299,17 +312,9 @@ function AppDashboard({
   const incomeSources = useMemo<PulseIncomeSource[]>(
     () =>
       data.cycleIncomePlans.map((plan) => {
-        const incomeTransactions = data.transactions.filter(
-          (transaction) =>
-            transaction.type === 'income' &&
-            (transaction.sourceId === plan.sourceId ||
-              transaction.payee
-                .toLowerCase()
-                .includes(plan.sourceName.toLowerCase())),
-        )
-        const landedAmount = incomeTransactions.reduce(
-          (sum, transaction) => sum + transaction.amount,
-          0,
+        const landedAmount = landedAmountForSource(
+          data.transactions,
+          plan.sourceId,
         )
         return {
           id: plan.sourceId,
@@ -317,16 +322,12 @@ function AppDashboard({
           expectedAmount: plan.expectedAmount,
           expectedAmountMax: plan.expectedAmountMax,
           landedAmount,
-          status:
-            landedAmount >= plan.expectedAmount
-              ? 'landed'
-              : landedAmount > 0
-                ? 'partial'
-                : 'pending',
+          status: incomeSourceStatus(landedAmount, plan.expectedAmount),
         }
       }),
     [data.cycleIncomePlans, data.transactions],
   )
+  const incomeLanded = totalActualIncome(data.transactions)
 
   const envelopes: Wallet[] = [
     {
@@ -378,13 +379,9 @@ function AppDashboard({
     saveTransaction,
     deleteTransaction,
     resolveAccountId,
-    autoSaveRateForPayee,
+    autoSaveRateForSource,
   } = useQuickAddSheet({
     accounts,
-    incomeSources: data.incomeSources.map((source) => ({
-      id: source._id,
-      name: source.name,
-    })),
     incomePlans: data.cycleIncomePlans,
     defaultSavingsRate: data.settings.defaultSavingsRate,
     defaultExpenseAccountId,
@@ -538,8 +535,11 @@ function AppDashboard({
             </section>
             <QuickAddCard
               categories={categories}
+              recents={recents}
+              accounts={accounts}
+              usdRate={data.settings.usdRate}
               onOpen={openSheet}
-              animationDelay="60ms"
+              animationDelay="30ms"
             />
             {autoSaveUi && (
               <AutoSaveCard
@@ -553,7 +553,7 @@ function AppDashboard({
                 }
                 onConfirm={() => void confirmAutoSave()}
                 onDismiss={() => void dismissAutoSave()}
-                animationDelay="120ms"
+                animationDelay="60ms"
               />
             )}
             <TransactionsCard
@@ -561,7 +561,7 @@ function AppDashboard({
               accounts={accounts}
               categories={categories}
               cycleLabel={cycleInfo.label}
-              animationDelay="180ms"
+              animationDelay="90ms"
               onEdit={editTransaction}
               onDelete={requestDelete}
             />
@@ -578,7 +578,7 @@ function AppDashboard({
               savingsBalance={savingsBalance}
               cycleGain={cycleInfo.cycleGain}
               usdRate={data.settings.usdRate}
-              animationDelay="240ms"
+              animationDelay="120ms"
               onMoveSavings={moveSavings}
               onSetAccountSpendable={setAccountSpendable}
             />
@@ -590,8 +590,9 @@ function AppDashboard({
               perDay={perDay}
               dayNumber={cycleInfo.dayNumber}
               totalDays={cycleInfo.totalDays}
+              incomeLanded={incomeLanded}
               incomeSources={incomeSources}
-              animationDelay="300ms"
+              animationDelay="150ms"
             />
           </div>
         </div>
@@ -600,7 +601,6 @@ function AppDashboard({
             <Waves className="size-4 text-lagoon-deep" />
             <span className="font-display font-bold text-sea-ink">Misi</span>
           </span>
-          <p>Your data syncs securely across devices.</p>
           <Link to="/" className="font-bold text-lagoon-deep no-underline">
             ← Back to site
           </Link>
@@ -613,12 +613,19 @@ function AppDashboard({
           categories={categories}
           accounts={accounts}
           debts={debts}
+          incomeSources={data.incomeSources.map((source) => ({
+            id: source._id,
+            name: source.name,
+            savingsRate: source.savingsRate,
+            isAnchor: source.isAnchor,
+          }))}
+          recents={recents}
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}
           usdRate={data.settings.usdRate}
           reconcileNote={cycleInfo.reconcileNote}
-          autoSaveRateForPayee={autoSaveRateForPayee}
+          autoSaveRateForSource={autoSaveRateForSource}
           resolveAccountId={resolveAccountId}
           error={quickAddError}
           onClose={closeSheet}

@@ -20,12 +20,14 @@ import type { Category } from '#/lib/categories'
 
 const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
 
+const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'Africa/Blantyre',
+})
+
 function shortDate(timestamp: number) {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'Africa/Blantyre',
-  }).format(new Date(timestamp))
+  return shortDateFormat.format(new Date(timestamp))
 }
 
 export function ReconcileTask() {
@@ -110,13 +112,9 @@ export function ReconcileTask() {
     closeSheet,
     saveTransaction,
     resolveAccountId,
-    autoSaveRateForPayee,
+    autoSaveRateForSource,
   } = useQuickAddSheet({
     accounts,
-    incomeSources: (data?.incomeSources ?? []).map((source) => ({
-      id: source._id,
-      name: source.name,
-    })),
     incomePlans: data?.cycleIncomePlans ?? [],
     defaultSavingsRate: data?.settings?.defaultSavingsRate ?? 0.2,
     defaultExpenseAccountId,
@@ -172,18 +170,26 @@ export function ReconcileTask() {
         onAbsorb={(accountId) => void absorbAdjustment(accountId)}
         onLogMissing={openSheet}
         animationDelay="60ms"
+        usdRate={data?.settings?.usdRate ?? USD_RATE}
       />
       {sheet.open && (
         <QuickAddSheet
           initial={sheet.initial}
           categories={categories}
           accounts={accounts}
+          incomeSources={(data?.incomeSources ?? []).map((source) => ({
+            id: source._id,
+            name: source.name,
+            savingsRate: source.savingsRate,
+            isAnchor: source.isAnchor,
+          }))}
+          recents={data?.oneTapRecents ?? []}
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}
           usdRate={data?.settings?.usdRate ?? USD_RATE}
           reconcileNote={reconcileNote}
-          autoSaveRateForPayee={autoSaveRateForPayee}
+          autoSaveRateForSource={autoSaveRateForSource}
           resolveAccountId={resolveAccountId}
           error={quickAddError}
           onClose={closeSheet}

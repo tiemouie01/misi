@@ -83,6 +83,8 @@ export interface QuickAddInitial {
   transactionId?: string
   mode: TxnType
   amount?: number
+  /** Amount currency when opening a new sheet with a native amount. */
+  amountCurrency?: Account['currency']
   fxRate?: number
   categoryId?: string
   accountId?: string
@@ -121,12 +123,7 @@ export interface QuickAddPayload {
   adjustPolarity?: AdjustPolarity
 }
 
-export interface RecentTransaction {
-  payee: string
-  amount: number
-  categoryId: string
-  accountId: string
-}
+export type { OneTapRecent as RecentTransaction } from '../../shared/one-tap-recents'
 
 export const USD_RATE = 1735
 
@@ -225,27 +222,6 @@ export const seedAccounts: Account[] = [
   },
 ]
 
-export const oneTapRecents: RecentTransaction[] = [
-  {
-    payee: 'Minibus',
-    amount: 3500,
-    categoryId: 'transport',
-    accountId: 'airtel',
-  },
-  {
-    payee: 'Airtime',
-    amount: 5000,
-    categoryId: 'airtime',
-    accountId: 'airtel',
-  },
-  {
-    payee: 'Chipiku',
-    amount: 42000,
-    categoryId: 'groceries',
-    accountId: 'nbs',
-  },
-]
-
 export const seedReconcile: ReconcileBalance[] = [
   { accountId: 'nbs', expected: 842100, actual: 842100 },
   { accountId: 'fdh', expected: 210450, actual: 210450 },
@@ -253,18 +229,22 @@ export const seedReconcile: ReconcileBalance[] = [
   { accountId: 'cash', expected: 38500, actual: 38500 },
 ]
 
+const kwachaFormat = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 2,
+})
+
+const usdFormat = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
 export function formatK(value: number) {
-  const absolute = Math.abs(value).toLocaleString('en-US', {
-    maximumFractionDigits: 2,
-  })
+  const absolute = kwachaFormat.format(Math.abs(value))
   return `${value < 0 ? '-' : ''}K${absolute}`
 }
 
 export function formatUsd(value: number) {
-  const absolute = Math.abs(value).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
+  const absolute = usdFormat.format(Math.abs(value))
   return `${value < 0 ? '-' : ''}$${absolute}`
 }
 

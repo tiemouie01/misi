@@ -36,6 +36,7 @@ export interface BudgetCycle {
   rangeLabel?: string
   expectedIncome: number
   actualIncome?: number
+  unassignedIncome?: number
   actualSavings?: number
   actualSpending?: number
   isClosed?: boolean

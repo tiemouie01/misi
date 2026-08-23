@@ -21,6 +21,7 @@ interface CyclePulseCardProps {
   perDay: number
   dayNumber: number
   totalDays: number
+  incomeLanded: number
   incomeSources: PulseIncomeSource[]
   animationDelay: string
 }
@@ -70,6 +71,7 @@ export function CyclePulseCard({
   perDay,
   dayNumber,
   totalDays,
+  incomeLanded,
   incomeSources,
   animationDelay,
 }: CyclePulseCardProps) {
@@ -77,7 +79,9 @@ export function CyclePulseCard({
   const safeTotalDays = Math.max(1, totalDays)
   const spentPct =
     safeLimit > 0 ? Math.round((Math.max(0, totalSpent) / safeLimit) * 100) : 0
-  const pacePct = Math.round((clamp(dayNumber, 0, safeTotalDays) / safeTotalDays) * 100)
+  const pacePct = Math.round(
+    (clamp(dayNumber, 0, safeTotalDays) / safeTotalDays) * 100,
+  )
   const paceStatus =
     safeLimit <= 0
       ? 'No spending limit set'
@@ -89,10 +93,6 @@ export function CyclePulseCard({
             ? 'Spending slower than plan'
             : 'On pace'
 
-  const incomeLanded = incomeSources.reduce(
-    (sum, source) => sum + Math.max(0, source.landedAmount),
-    0,
-  )
   const incomeExpected = incomeSources.reduce(
     (sum, source) => sum + Math.max(0, source.expectedAmount),
     0,
