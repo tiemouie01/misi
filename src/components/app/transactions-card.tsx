@@ -227,6 +227,13 @@ export function TransactionsCard({
                       : transaction.type === 'income'
                         ? `Income · ${account?.name ?? 'Account'}`
                         : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
+                const sublineText = [
+                  subline,
+                  transaction.items ? `items: ${transaction.items}` : null,
+                  transaction.adjustment ? 'Reconcile' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
                 const amountLabel = transactionAmountLabel(transaction)
                 const canEdit = canMutateTransaction(transaction)
                 const canDelete = canDeleteTransaction(transaction)
@@ -255,7 +262,7 @@ export function TransactionsCard({
                             ? 'Envelope moves can be deleted but not edited'
                             : 'Generated transactions cannot be edited'
                       }
-                      className="group h-auto min-w-0 flex-1 justify-start gap-2.5 whitespace-normal rounded-xl px-1.5 py-2.5 text-left disabled:opacity-100 sm:gap-3 sm:px-2"
+                      className="group h-auto min-w-0 flex-1 justify-start gap-2.5 rounded-xl px-1.5 py-2.5 text-left disabled:opacity-100 sm:gap-3 sm:px-2"
                       onClick={() => onEdit(transaction)}
                     >
                       <span
@@ -268,10 +275,16 @@ export function TransactionsCard({
                         <Icon className="size-4" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold text-sea-ink">
+                        <span
+                          className="block truncate text-sm font-bold text-sea-ink"
+                          title={title}
+                        >
                           {title}
                         </span>
-                        <span className="block truncate text-[0.75rem] text-sea-ink-soft">
+                        <span
+                          className="block truncate text-[0.75rem] text-sea-ink-soft"
+                          title={sublineText}
+                        >
                           {subline}
                           {transaction.items && (
                             <>
@@ -285,7 +298,7 @@ export function TransactionsCard({
                         </span>
                       </span>
                       <span
-                        className={`font-mono shrink-0 text-sm font-semibold tabular-nums ${
+                        className={`font-mono shrink-0 self-center text-sm font-semibold whitespace-nowrap tabular-nums ${
                           transaction.type === 'income'
                             ? 'text-palm'
                             : transaction.type === 'transfer' || isAllocation
