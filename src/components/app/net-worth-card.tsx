@@ -18,6 +18,10 @@ import { Label } from '#/components/ui/label'
 import { Switch } from '#/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import {
+  canConfirmEnvelopeMove,
+  spendingEnvelopeBalance,
+} from '../../../shared/savings'
+import {
   accountKindColor,
   accountMwkValue,
   formatK,
@@ -67,9 +71,14 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
   return (
     <div className="space-y-3">
       {rows.map((row) => {
+        const overdrawn = row.amount < 0
+        const magnitude = overdrawn
+          ? Math.abs(row.amount)
+          : Math.max(row.amount, 0)
         const width = row.ratioBase
-          ? (Math.max(row.amount, 0) / Math.max(row.ratioBase, 1)) * 100
+          ? (magnitude / Math.max(row.ratioBase, 1)) * 100
           : (Math.abs(row.amount) / largest) * 100
+        const barColor = overdrawn ? 'var(--coral-deep)' : row.color
         return (
           <div
             key={row.id}
@@ -77,12 +86,19 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
           >
             <span
               className="size-2 shrink-0 rounded-full"
-              style={{ background: row.color }}
+              style={{
+                background: overdrawn ? 'var(--coral-deep)' : row.color,
+              }}
             />
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-sea-ink">
               {row.name}
               {row.hint && (
-                <span className="mt-0.5 block text-[0.65rem] font-semibold tracking-wide text-sea-ink-soft uppercase">
+                <span
+                  className={cn(
+                    'mt-0.5 block text-[0.65rem] font-semibold tracking-wide uppercase',
+                    overdrawn ? 'text-coral-deep' : 'text-sea-ink-soft',
+                  )}
+                >
                   {row.hint}
                 </span>
               )}
@@ -100,11 +116,20 @@ function BalanceRows({ rows }: { rows: DisplayRow[] }) {
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.max(8, Math.min(width, 100))}%`,
-                  background: `linear-gradient(90deg, ${row.color}, var(--lagoon))`,
+                  background: overdrawn
+                    ? barColor
+                    : `linear-gradient(90deg, ${row.color}, var(--lagoon))`,
                 }}
               />
             </div>
-            <span className="font-mono shrink-0 text-right text-[0.8rem] whitespace-nowrap text-sea-ink-soft tabular-nums">
+            <span
+              className={cn(
+                'font-mono shrink-0 text-right text-[0.8rem] whitespace-nowrap tabular-nums',
+                overdrawn
+                  ? 'font-semibold text-coral-deep'
+                  : 'text-sea-ink-soft',
+              )}
+            >
               {row.amountLabel}
             </span>
           </div>
@@ -135,11 +160,14 @@ function MoveMoneyDialog({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const amount = Number(digits)
-  const spendingEnvelope = spendable - savingsBalance
-  const available =
-    direction === 'toSavings' ? spendingEnvelope : savingsBalance
+  const spendingEnvelope = spendingEnvelopeBalance(spendable, savingsBalance)
+  const nextSpending =
+    direction === 'toSavings'
+      ? spendingEnvelope - (Number.isFinite(amount) && amount > 0 ? amount : 0)
+      : spendingEnvelope
+  const cutsIntoSavings = direction === 'toSavings' && nextSpending < 0
   const canConfirm =
-    Number.isFinite(amount) && amount > 0 && amount <= available && !busy
+    canConfirmEnvelopeMove(amount, direction, savingsBalance) && !busy
 
   function reset() {
     setDirection('toSavings')
@@ -176,6 +204,7 @@ function MoveMoneyDialog({
           <DialogTitle>Move money</DialogTitle>
           <DialogDescription>
             Shift how spendable money is earmarked. Account balances stay put.
+            Moving more than spending overdraws it and cuts into savings.
           </DialogDescription>
         </DialogHeader>
         <Tabs
@@ -201,11 +230,46 @@ function MoveMoneyDialog({
               setDigits(event.target.value.replace(/[^\d.]/g, ''))
             }
           />
-          <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-            Available:{' '}
-            <span className="font-mono font-semibold text-sea-ink tabular-nums">
-              {formatK(Math.max(0, available))}
-            </span>
+          <p
+            className={cn(
+              'mt-1.5 text-[0.8rem]',
+              cutsIntoSavings ||
+                (direction === 'toSavings' && spendingEnvelope < 0)
+                ? 'font-semibold text-coral-deep'
+                : 'text-sea-ink-soft',
+            )}
+          >
+            {direction === 'toSpending' ? (
+              <>
+                Available:{' '}
+                <span className="font-mono font-semibold text-sea-ink tabular-nums">
+                  {formatK(Math.max(0, savingsBalance))}
+                </span>
+              </>
+            ) : cutsIntoSavings && amount > 0 ? (
+              <>
+                Spending will be{' '}
+                <span className="font-mono tabular-nums">
+                  {formatK(nextSpending)}
+                </span>{' '}
+                — cutting into savings.
+              </>
+            ) : spendingEnvelope < 0 ? (
+              <>
+                Spending is{' '}
+                <span className="font-mono tabular-nums">
+                  {formatK(spendingEnvelope)}
+                </span>{' '}
+                — already cutting into savings.
+              </>
+            ) : (
+              <>
+                In spending:{' '}
+                <span className="font-mono font-semibold text-sea-ink tabular-nums">
+                  {formatK(spendingEnvelope)}
+                </span>
+              </>
+            )}
           </p>
         </div>
         {error && (
@@ -334,14 +398,22 @@ export function NetWorthCard({
       hint: spendableAccount ? undefined : 'not spendable',
     }
   })
-  const envelopeRows: DisplayRow[] = envelopes.map((envelope) => ({
-    id: envelope.id,
-    name: envelope.name,
-    amount: envelope.balance,
-    amountLabel: formatK(envelope.balance),
-    color: envelope.id === 'spending' ? 'var(--lagoon)' : 'var(--palm)',
-    ratioBase: spendable,
-  }))
+  const envelopeRows: DisplayRow[] = envelopes.map((envelope) => {
+    const overdrawn = envelope.id === 'spending' && envelope.balance < 0
+    return {
+      id: envelope.id,
+      name: envelope.name,
+      amount: envelope.balance,
+      amountLabel: formatK(envelope.balance),
+      color: overdrawn
+        ? 'var(--coral-deep)'
+        : envelope.id === 'spending'
+          ? 'var(--lagoon)'
+          : 'var(--palm)',
+      ratioBase: spendable,
+      hint: overdrawn ? 'cutting into savings' : undefined,
+    }
+  })
   const claimSummaryRows: DisplayRow[] = [
     {
       id: 'you-owe',

@@ -12,6 +12,7 @@ import {
   landedAmountForSource,
   totalActualIncome,
 } from '../../../shared/income'
+import { spendingEnvelopeBalance } from '../../../shared/savings'
 import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
 import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
@@ -307,7 +308,7 @@ function AppDashboard({
   const spendable = spendableTotalMwk(accounts, data.settings.usdRate)
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
-  const spendingEnvelope = spendable - savingsBalance
+  const spendingEnvelope = spendingEnvelopeBalance(spendable, savingsBalance)
 
   const incomeSources = useMemo<PulseIncomeSource[]>(
     () =>
@@ -335,7 +336,10 @@ function AppDashboard({
       name: 'Spending',
       balance: spendingEnvelope,
       currency: 'MWK',
-      detail: 'Unallocated spendable money',
+      detail:
+        spendingEnvelope < 0
+          ? 'Cutting into savings'
+          : 'Unallocated spendable money',
     },
     {
       id: 'savings',

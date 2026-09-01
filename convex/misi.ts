@@ -68,11 +68,7 @@ import {
   requireOwnedDebt,
   validateDebtName,
 } from './model/debts'
-import {
-  assertSavingsHasAmount,
-  computeSavingsBalance,
-  computeSpendableTotalMwk,
-} from './model/savings'
+import { assertSavingsHasAmount, computeSavingsBalance } from './model/savings'
 import {
   applyTransactionBalanceTransition,
   assertMutableUserTransaction,
@@ -1522,21 +1518,11 @@ export const moveSavings = mutation({
 
     const settings = await requireSettings(ctx, user._id)
     const savingsBalance = await computeSavingsBalance(ctx, user._id, settings)
-    const accounts = await ctx.db
-      .query('accounts')
-      .withIndex('by_user', (q) => q.eq('userId', user._id))
-      .collect()
-    const spendableTotalMwk = computeSpendableTotalMwk(
-      accounts,
-      settings.usdRate,
-    )
 
-    if (args.direction === 'toSpending') {
-      if (args.amount > savingsBalance) {
-        throw new Error('Not enough in savings')
-      }
-    } else if (args.amount > spendableTotalMwk - savingsBalance) {
-      throw new Error('Not enough unallocated spending money')
+    // Spending may go negative when moving to savings. That means the savings
+    // earmark is larger than spendable cash — cutting into tangible savings.
+    if (args.direction === 'toSpending' && args.amount > savingsBalance) {
+      throw new Error('Not enough in savings')
     }
 
     const cycle = await ensureCurrentCycle(ctx, user._id)

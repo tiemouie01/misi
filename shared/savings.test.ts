@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { foldSavingsBalance, savingsEnvelopeContribution } from './savings.ts'
+import {
+  canConfirmEnvelopeMove,
+  foldSavingsBalance,
+  savingsEnvelopeContribution,
+  spendingEnvelopeBalance,
+} from './savings.ts'
 
 test('folds savings allocations and spending from the opening balance', () => {
   assert.equal(
@@ -43,4 +48,20 @@ test('can resume a fold at a checkpoint and exclude a transaction', () => {
 
 test('does not treat income as a savings-envelope movement', () => {
   assert.equal(savingsEnvelopeContribution({ type: 'income', amount: 100 }), 0)
+})
+
+test('spending envelope may go negative when savings exceeds spendable', () => {
+  const spendable = 100
+  const savings = foldSavingsBalance(0, [
+    { type: 'allocation', direction: 'toSavings', amount: 150 },
+  ])
+  assert.equal(savings, 150)
+  assert.equal(spendingEnvelopeBalance(spendable, savings), -50)
+})
+
+test('moving to savings is allowed even when it overdraws spending', () => {
+  assert.equal(canConfirmEnvelopeMove(150, 'toSavings', 40), true)
+  assert.equal(canConfirmEnvelopeMove(50, 'toSpending', 40), false)
+  assert.equal(canConfirmEnvelopeMove(40, 'toSpending', 40), true)
+  assert.equal(canConfirmEnvelopeMove(0, 'toSavings', 40), false)
 })

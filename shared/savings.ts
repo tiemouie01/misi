@@ -38,3 +38,18 @@ export function foldSavingsBalance(
     return balance + savingsEnvelopeContribution(movement)
   }, openingBalance)
 }
+
+/** Spendable cash minus the savings earmark. May be negative. */
+export function spendingEnvelopeBalance(spendable: number, savings: number) {
+  return spendable - savings
+}
+
+export function canConfirmEnvelopeMove(
+  amount: number,
+  direction: 'toSavings' | 'toSpending',
+  savingsBalance: number,
+) {
+  if (!Number.isFinite(amount) || amount <= 0) return false
+  if (direction === 'toSpending' && amount > savingsBalance) return false
+  return true
+}
