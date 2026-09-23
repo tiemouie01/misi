@@ -1,10 +1,16 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useMutation, usePaginatedQuery } from 'convex/react'
-import { Waves } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { ReceiptText, WalletCards, Waves } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 
 import { api } from '../../../convex/_generated/api'
 import {
@@ -26,6 +32,7 @@ import {
   TransactionsCard,
   TransactionDeleteDialog,
 } from '#/components/app/transactions-card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import {
   accountMwkValue,
   canDeleteTransaction,
@@ -67,6 +74,12 @@ const dayLabelWithYearFormat = new Intl.DateTimeFormat('en-GB', {
 
 const FEED_PAGE_SIZE = 50
 
+const HOME_TABS = ['activity', 'balances'] as const
+
+/** Below `lg` only one tab shows at a time; wide layouts show both columns. */
+const tabPanelClassName =
+  'min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:block'
+
 const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
@@ -96,6 +109,9 @@ interface AutoSaveUiState {
 }
 
 export const Route = createFileRoute('/app/')({
+  validateSearch: z.object({
+    tab: z.enum(HOME_TABS).optional().catch(undefined),
+  }),
   loader: async ({ context }) => {
     const data = await context.queryClient.ensureQueryData(
       convexQuery(api.misi.bootstrap, {}),
@@ -156,6 +172,19 @@ function toTxn(transaction: Doc<'transactions'>, now: number): Txn {
     adjustment: transaction.adjustment ? true : undefined,
     autoSave: transaction.autoSave ? true : undefined,
   }
+}
+
+/** Distance from the bottom of the (sticky) tab bar to the top of the active
+ * panel; negative once the panel has scrolled underneath the bar. */
+function activePanelOffset(
+  tabs: HTMLElement | null,
+  tabList: HTMLElement | null,
+) {
+  const panel = tabs?.querySelector('[role="tabpanel"][data-state="active"]')
+  if (!panel || !tabList) return null
+  return (
+    panel.getBoundingClientRect().top - tabList.getBoundingClientRect().bottom
+  )
 }
 
 function shortDate(timestamp: number) {
@@ -228,6 +257,35 @@ function AppDashboard({
     useState<AutoSaveUiState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const { tab = 'activity' } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const tabListRef = useRef<HTMLDivElement>(null)
+  const pinTabPanel = useRef(false)
+
+  // When switching tabs while scrolled under the pinned tab bar, start the new
+  // tab at its top instead of wherever the old tab's scroll position lands.
+  useLayoutEffect(() => {
+    if (!pinTabPanel.current) return
+    pinTabPanel.current = false
+    const offset = activePanelOffset(tabsRef.current, tabListRef.current)
+    if (offset !== null) window.scrollBy({ top: offset - 12 })
+  }, [tab])
+
+  function selectTab(value: string) {
+    const next = HOME_TABS.find((item) => item === value)
+    if (!next || next === tab) return
+    const offset = activePanelOffset(tabsRef.current, tabListRef.current)
+    pinTabPanel.current = offset !== null && offset < 0
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        tab: next === 'activity' ? undefined : next,
+      }),
+      replace: true,
+      resetScroll: false,
+    })
+  }
 
   const accounts = useMemo<Account[]>(
     () =>
@@ -549,8 +607,16 @@ function AppDashboard({
   return (
     <div className="min-h-screen">
       <main className="page-wrap pb-28 py-6 sm:py-8">
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="space-y-5">
+        {/* Phones and tablets get Activity / Balances tabs under a sticky bar;
+            from `lg` both panels sit side by side as two columns. Flex (not
+            grid) below `lg` so the sticky bar can pin across either panel. */}
+        <Tabs
+          ref={tabsRef}
+          value={tab}
+          onValueChange={selectTab}
+          className="gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:items-start"
+        >
+          <div className="min-w-0 space-y-5">
             <section>
               <p className="island-kicker">
                 {cycleInfo.greetingDate} · {cycleInfo.label} · {cycleInfo.dayOf}
@@ -592,6 +658,26 @@ function AppDashboard({
                 animationDelay="60ms"
               />
             )}
+          </div>
+          <TabsList
+            ref={tabListRef}
+            aria-label="Home sections"
+            className="sticky top-[calc(4.3125rem+env(safe-area-inset-top))] z-10 h-11 w-full bg-(--surface-strong) shadow-sm backdrop-blur-md lg:hidden"
+          >
+            <TabsTrigger value="activity">
+              <ReceiptText />
+              Activity
+            </TabsTrigger>
+            <TabsTrigger value="balances">
+              <WalletCards />
+              Balances
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="activity"
+            forceMount
+            className={`${tabPanelClassName} lg:col-start-1`}
+          >
             <TransactionsCard
               transactions={feedTransactions}
               accounts={accounts}
@@ -602,8 +688,12 @@ function AppDashboard({
               onEdit={editTransaction}
               onDelete={requestDelete}
             />
-          </div>
-          <div className="space-y-5">
+          </TabsContent>
+          <TabsContent
+            value="balances"
+            forceMount
+            className={`${tabPanelClassName} space-y-5 lg:col-start-2 lg:row-span-2 lg:row-start-1`}
+          >
             <NetWorthCard
               accounts={accounts}
               envelopes={envelopes}
@@ -631,8 +721,8 @@ function AppDashboard({
               incomeSources={incomeSources}
               animationDelay="150ms"
             />
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
         <footer className="mt-10 flex flex-col items-start justify-between gap-2 border-t border-(--line) pt-5 text-[0.8rem] text-sea-ink-soft sm:flex-row sm:items-center">
           <span className="flex items-center gap-2">
             <Waves className="size-4 text-lagoon-deep" />
