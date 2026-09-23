@@ -7,10 +7,12 @@ import { toast } from 'sonner'
 import { api } from '../../../convex/_generated/api'
 import { IncomeStep } from '#/components/onboarding/onboarding-steps'
 import { Button } from '#/components/ui/button'
+import { DialogFooter } from '#/components/ui/dialog'
 import {
   defaultDraft,
   formatAmountInput,
   parseAmount,
+  validateIncomeSources,
   validateStep,
 } from '#/lib/onboarding-data'
 
@@ -111,13 +113,15 @@ export function IncomeSourcesTask({ onClose }: { onClose: () => void }) {
         setDraft={updateDraft}
         goToStep={() => undefined}
         error={error}
+        showIntro={false}
       />
-      {error && (
+      {/* Field-level errors are already shown next to the field by IncomeStep. */}
+      {error && error !== validateIncomeSources(draft)?.message && (
         <p role="alert" className="mt-4 text-sm font-semibold text-coral-deep">
           {error}
         </p>
       )}
-      <div className="mt-6 flex justify-end gap-3">
+      <DialogFooter sticky className="mt-6 flex-row justify-end gap-3">
         <Button
           type="button"
           variant="ghost"
@@ -129,7 +133,7 @@ export function IncomeSourcesTask({ onClose }: { onClose: () => void }) {
         <Button type="button" disabled={saving} onClick={() => void save()}>
           {saving ? 'Saving…' : 'Save income sources'}
         </Button>
-      </div>
+      </DialogFooter>
     </>
   )
 }

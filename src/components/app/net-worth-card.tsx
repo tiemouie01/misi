@@ -199,7 +199,10 @@ function MoveMoneyDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="rounded-3xl sm:max-w-md">
+      <DialogContent
+        sheet
+        className="rounded-3xl border-(--line) bg-(--surface-strong) sm:max-w-md"
+      >
         <DialogHeader>
           <DialogTitle>Move money</DialogTitle>
           <DialogDescription>
@@ -213,7 +216,7 @@ function MoveMoneyDialog({
             setDirection(value === 'toSpending' ? 'toSpending' : 'toSavings')
           }
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid h-13 w-full grid-cols-2 sm:h-10">
             <TabsTrigger value="toSavings">To savings</TabsTrigger>
             <TabsTrigger value="toSpending">To spending</TabsTrigger>
           </TabsList>
@@ -280,7 +283,7 @@ function MoveMoneyDialog({
             {error}
           </p>
         )}
-        <DialogFooter>
+        <DialogFooter sticky>
           <Button
             type="button"
             variant="secondary"
@@ -320,7 +323,7 @@ function ManageAccountsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl sm:max-w-md">
+      <DialogContent sheet className="rounded-3xl sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manage accounts</DialogTitle>
           <DialogDescription>
@@ -462,7 +465,8 @@ export function NetWorthCard({
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon"
+            className="sm:size-8"
             aria-label="Manage accounts"
             onClick={() => setManageOpen(true)}
           >
@@ -480,7 +484,7 @@ export function NetWorthCard({
         }
         className="mt-5 gap-4"
       >
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid h-13 w-full grid-cols-2 sm:h-10">
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="wallets">Envelopes</TabsTrigger>
         </TabsList>

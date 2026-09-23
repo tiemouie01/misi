@@ -303,7 +303,7 @@ export function TransactionsCard({
                         size="icon-sm"
                         aria-label={`Delete ${title} transaction`}
                         title="Delete transaction"
-                        className="size-9 shrink-0 text-sea-ink-soft hover:bg-coral/10 hover:text-coral-deep"
+                        className="size-10 shrink-0 text-sea-ink-soft hover:bg-coral/10 hover:text-coral-deep sm:size-9"
                         onClick={() => onDelete(transaction)}
                       >
                         <Trash2 className="size-4" />

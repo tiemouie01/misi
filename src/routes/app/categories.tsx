@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
@@ -117,7 +118,7 @@ function CategoriesPage() {
     })
   }
 
-  function openEdit(category: ManagedCategory, confirmDelete = false) {
+  function openEdit(category: ManagedCategory) {
     setError(null)
     setEditor({
       category,
@@ -125,7 +126,7 @@ function CategoriesPage() {
       iconId: category.iconId,
       colorId: category.colorId,
       budgetGroup: category.budgetGroup,
-      confirmDelete,
+      confirmDelete: false,
     })
   }
 
@@ -237,7 +238,6 @@ function CategoriesPage() {
                 category={category}
                 divided={index > 0}
                 onEdit={() => openEdit(category)}
-                onDelete={() => openEdit(category, true)}
               />
             ))}
           </Card>
@@ -284,21 +284,17 @@ function CategoryRow({
   divided,
   archived,
   onEdit,
-  onDelete,
   onRestore,
 }: {
   category: ManagedCategory
   divided: boolean
   archived?: boolean
   onEdit?: () => void
-  onDelete?: () => void
   onRestore?: () => void
 }) {
   const Icon = category.icon
-  return (
-    <div
-      className={`flex items-center gap-3 px-2 py-3 sm:px-3 ${divided ? 'border-t border-(--line)' : ''} ${archived ? 'opacity-50' : ''}`}
-    >
+  const content = (
+    <>
       <span
         className="grid size-10 shrink-0 place-items-center rounded-full"
         style={{
@@ -319,38 +315,39 @@ function CategoryRow({
           {category.isSystem && <Badge variant="secondary">System</Badge>}
         </div>
       </div>
-      {onEdit && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-sm"
-          aria-label={`Edit ${category.name}`}
-          onClick={onEdit}
-        >
-          <Pencil className="size-4" />
-        </Button>
-      )}
-      {onDelete && !category.isSystem && (
+    </>
+  )
+  return (
+    <div
+      className={`${divided ? 'border-t border-(--line)' : ''} ${archived ? 'opacity-50' : ''}`}
+    >
+      {onEdit ? (
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
-          aria-label={`Delete ${category.name}`}
-          onClick={onDelete}
+          aria-label={`Edit ${category.name}`}
+          className="my-1 h-auto min-h-14 w-full justify-start gap-3 whitespace-normal rounded-2xl px-2 py-2 text-left sm:px-3"
+          onClick={onEdit}
         >
-          <Trash2 className="size-4" />
+          {content}
+          <Pencil className="size-4 text-sea-ink-soft" aria-hidden />
         </Button>
-      )}
-      {onRestore && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-sm"
-          aria-label={`Restore ${category.name}`}
-          onClick={onRestore}
-        >
-          <ArchiveRestore className="size-4" />
-        </Button>
+      ) : (
+        <div className="flex items-center gap-3 px-2 py-3 sm:px-3">
+          {content}
+          {onRestore && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              className="sm:size-8"
+              aria-label={`Restore ${category.name}`}
+              onClick={onRestore}
+            >
+              <ArchiveRestore className="size-4" />
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )
@@ -382,7 +379,10 @@ function CategoryDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
+      <DialogContent
+        sheet
+        className="gap-0 rounded-3xl border-(--line) bg-(--surface-strong) shadow-2xl backdrop-blur-md sm:max-w-md"
+      >
         <DialogTitle className="font-display text-xl font-bold text-sea-ink">
           {editor.category ? 'Edit category' : 'Add category'}
         </DialogTitle>
@@ -424,7 +424,7 @@ function CategoryDialog({
                   size="icon-sm"
                   aria-label={categoryIcon.label}
                   aria-pressed={editor.iconId === categoryIcon.id}
-                  className="w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                  className="h-10 w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                   onClick={() =>
                     onChange({ ...editor, iconId: categoryIcon.id })
                   }
@@ -438,7 +438,7 @@ function CategoryDialog({
 
         <fieldset className="mt-5">
           <legend className="field-label mb-2">Color</legend>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-8 gap-1.5 sm:flex sm:flex-wrap sm:gap-3">
             {CATEGORY_COLORS.map((color) => (
               <Button
                 key={color.id}
@@ -447,7 +447,7 @@ function CategoryDialog({
                 size="icon-sm"
                 aria-label={color.label}
                 aria-pressed={editor.colorId === color.id}
-                className="size-8 rounded-full hover:opacity-90 hover:bg-transparent aria-pressed:ring-2 aria-pressed:ring-sea-ink aria-pressed:ring-offset-2 aria-pressed:ring-offset-(--surface-strong)"
+                className="aspect-square h-auto w-full max-w-10 justify-self-center rounded-full hover:opacity-90 sm:size-8 hover:bg-transparent aria-pressed:ring-2 aria-pressed:ring-sea-ink aria-pressed:ring-offset-2 aria-pressed:ring-offset-(--surface-strong)"
                 style={{ background: `var(--${color.id})` }}
                 onClick={() => onChange({ ...editor, colorId: color.id })}
               />
@@ -493,63 +493,64 @@ function CategoryDialog({
           </p>
         )}
 
-        <Button
-          type="button"
-          size="lg"
-          disabled={saving}
-          className="mt-6 h-auto w-full py-3.5 shadow-lg"
-          onClick={onSave}
-        >
-          {saving ? 'Saving…' : 'Save category'}
-        </Button>
-
-        {editor.category && !isSystem && (
-          <div className="mt-5 border-t border-dashed border-(--line) pt-5">
-            {editor.confirmDelete ? (
-              <div className="rounded-xl bg-coral/8 px-4 py-3">
-                <p className="text-sm font-semibold text-coral-deep">
+        <DialogFooter sticky className="mt-6 flex-row items-center gap-3">
+          {editor.category && editor.confirmDelete ? (
+            <div className="w-full rounded-xl bg-coral/8 px-4 py-3">
+              <p className="text-sm font-semibold text-coral-deep">
+                {editor.category.referenced
+                  ? 'Used by existing transactions or budgets — it will be archived and hidden from pickers.'
+                  : 'This category is unused and will be permanently deleted.'}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-10 sm:h-8"
+                  disabled={saving}
+                  onClick={onDelete}
+                >
                   {editor.category.referenced
-                    ? 'Used by existing transactions or budgets — it will be archived and hidden from pickers.'
-                    : 'This category is unused and will be permanently deleted.'}
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={saving}
-                    onClick={onDelete}
-                  >
-                    {editor.category.referenced
-                      ? 'Archive instead'
-                      : 'Confirm delete'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      onChange({ ...editor, confirmDelete: false })
-                    }
-                  >
-                    Cancel
-                  </Button>
-                </div>
+                    ? 'Archive instead'
+                    : 'Confirm delete'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 sm:h-8"
+                  onClick={() => onChange({ ...editor, confirmDelete: false })}
+                >
+                  Cancel
+                </Button>
               </div>
-            ) : (
+            </div>
+          ) : (
+            <>
+              {editor.category && !isSystem && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="lg"
+                  className="px-4 text-coral-deep hover:text-coral-deep"
+                  onClick={() => onChange({ ...editor, confirmDelete: true })}
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              )}
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="text-coral-deep"
-                onClick={() => onChange({ ...editor, confirmDelete: true })}
+                size="lg"
+                disabled={saving}
+                className="flex-1 shadow-lg"
+                onClick={onSave}
               >
-                <Trash2 className="size-4" />
-                Delete category
+                {saving ? 'Saving…' : 'Save category'}
               </Button>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

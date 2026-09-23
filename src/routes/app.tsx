@@ -10,7 +10,7 @@ import { useMutation } from 'convex/react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
-import { AppHeader } from '#/components/app/app-header'
+import { AppBottomNav, AppHeader } from '#/components/app/app-header'
 import { IncomeSourcesTask } from '#/components/app/income-sources-task'
 import { ReconcileTask } from '#/components/app/reconcile-task'
 import {
@@ -75,7 +75,10 @@ function AppTaskOverlays({
           if (!open) onClose()
         }}
       >
-        <DialogContent className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong) p-5 sm:p-7">
+        <DialogContent
+          sheet
+          className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong)"
+        >
           <DialogHeader className="sr-only">
             <DialogTitle>Reconcile</DialogTitle>
             <DialogDescription>
@@ -93,7 +96,10 @@ function AppTaskOverlays({
           if (!open) onClose()
         }}
       >
-        <DialogContent className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong) p-5 sm:p-7">
+        <DialogContent
+          sheet
+          className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong)"
+        >
           <DialogHeader className="pr-8 text-left">
             <DialogTitle className="font-display text-2xl font-bold text-sea-ink">
               Income sources
@@ -160,6 +166,13 @@ function AppLayout() {
         </p>
       )}
       <Outlet />
+      {/* Keeps the end of the page clear of the bottom tab bar and the
+          quick-add FAB above it on mobile. */}
+      <div
+        aria-hidden
+        className="h-[calc(var(--app-bottom-nav-h)+5rem)] sm:hidden"
+      />
+      <AppBottomNav />
       <AppTaskOverlays
         task={task}
         onClose={() => void closeAppTask(navigate)}

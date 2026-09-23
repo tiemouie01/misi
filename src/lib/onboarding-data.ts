@@ -134,6 +134,90 @@ export function isValidAmount(value: string): boolean {
   return Number.isFinite(parsed) && parsed >= 0
 }
 
+export interface IncomeSourceIssue {
+  message: string
+  sourceKey: string
+  field: 'name' | 'window' | 'amount' | 'amount-max' | 'savings-rate'
+}
+
+export function validateIncomeSources(
+  draft: OnboardingDraft,
+): IncomeSourceIssue | null {
+  const names = new Set<string>()
+  for (const source of draft.incomeSources) {
+    const name = source.name.trim()
+    if (!name) {
+      return {
+        message: 'Every income source needs a name',
+        sourceKey: source.key,
+        field: 'name',
+      }
+    }
+    const key = name.toLowerCase()
+    if (names.has(key)) {
+      return {
+        message: `Duplicate income source: ${name}`,
+        sourceKey: source.key,
+        field: 'name',
+      }
+    }
+    names.add(key)
+    const dayStart = Number(source.expectedDayStart)
+    const dayEnd = Number(source.expectedDayEnd)
+    if (
+      !Number.isInteger(dayStart) ||
+      dayStart < 1 ||
+      dayStart > 31 ||
+      !Number.isInteger(dayEnd) ||
+      dayEnd < dayStart ||
+      dayEnd > 31
+    ) {
+      return {
+        message: `Choose a valid landing window for ${source.name}`,
+        sourceKey: source.key,
+        field: 'window',
+      }
+    }
+    if (
+      source.expectedAmount.trim() === '' ||
+      !isValidAmount(source.expectedAmount) ||
+      parseAmount(source.expectedAmount) <= 0
+    ) {
+      return {
+        message: `Enter an expected amount for ${source.name}`,
+        sourceKey: source.key,
+        field: 'amount',
+      }
+    }
+    if (
+      !isValidAmount(source.expectedAmountMax) ||
+      (source.expectedAmountMax.trim() !== '' &&
+        parseAmount(source.expectedAmountMax) <
+          parseAmount(source.expectedAmount))
+    ) {
+      return {
+        message: `The high end for ${source.name} must be at least its expected amount`,
+        sourceKey: source.key,
+        field: 'amount-max',
+      }
+    }
+    const savingsRate = Number(source.savingsRate) / 100
+    if (
+      !Number.isFinite(savingsRate) ||
+      savingsRate < 0 ||
+      savingsRate > 1 ||
+      source.savingsRate.trim() === ''
+    ) {
+      return {
+        message: `Savings rate for ${source.name} must be between 0% and 100%`,
+        sourceKey: source.key,
+        field: 'savings-rate',
+      }
+    }
+  }
+  return null
+}
+
 export function validateStep(
   step: OnboardingStep,
   draft: OnboardingDraft,
@@ -170,50 +254,8 @@ export function validateStep(
     }
   }
   if (step === 'income') {
-    const names = new Set<string>()
-    for (const source of draft.incomeSources) {
-      const name = source.name.trim()
-      if (!name) return 'Every income source needs a name'
-      const key = name.toLowerCase()
-      if (names.has(key)) return `Duplicate income source: ${name}`
-      names.add(key)
-      const dayStart = Number(source.expectedDayStart)
-      const dayEnd = Number(source.expectedDayEnd)
-      if (
-        !Number.isInteger(dayStart) ||
-        dayStart < 1 ||
-        dayStart > 31 ||
-        !Number.isInteger(dayEnd) ||
-        dayEnd < dayStart ||
-        dayEnd > 31
-      ) {
-        return `Choose a valid landing window for ${source.name}`
-      }
-      if (
-        source.expectedAmount.trim() === '' ||
-        !isValidAmount(source.expectedAmount) ||
-        parseAmount(source.expectedAmount) <= 0
-      ) {
-        return `Enter an expected amount for ${source.name}`
-      }
-      if (
-        !isValidAmount(source.expectedAmountMax) ||
-        (source.expectedAmountMax.trim() !== '' &&
-          parseAmount(source.expectedAmountMax) <
-            parseAmount(source.expectedAmount))
-      ) {
-        return `The high end for ${source.name} must be at least its expected amount`
-      }
-      const savingsRate = Number(source.savingsRate) / 100
-      if (
-        !Number.isFinite(savingsRate) ||
-        savingsRate < 0 ||
-        savingsRate > 1 ||
-        source.savingsRate.trim() === ''
-      ) {
-        return `Savings rate for ${source.name} must be between 0% and 100%`
-      }
-    }
+    const issue = validateIncomeSources(draft)
+    if (issue) return issue.message
   }
   if (step === 'budgets') {
     if (

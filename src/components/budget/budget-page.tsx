@@ -86,6 +86,8 @@ interface SummaryCardProps {
   label: string
   value: string
   detail: string
+  /** Shorter detail shown below `sm`; omitted means no detail on mobile. */
+  compactDetail?: string
   icon: typeof WalletCards
   tone?: 'lagoon' | 'palm' | 'coral' | 'sun'
 }
@@ -330,16 +332,20 @@ function SummaryCard({
   label,
   value,
   detail,
+  compactDetail,
   icon: Icon,
   tone = 'lagoon',
 }: SummaryCardProps) {
   return (
-    <Card variant="island" className="gap-3 rounded-3xl p-5">
+    <Card
+      variant="island"
+      className="min-w-0 gap-1 rounded-2xl p-3.5 sm:gap-3 sm:rounded-3xl sm:p-5"
+    >
       <div className="flex items-start justify-between gap-3">
-        <p className="island-kicker">{label}</p>
+        <p className="island-kicker leading-snug">{label}</p>
         <span
           className={cn(
-            'grid size-9 place-items-center rounded-xl',
+            'grid size-9 place-items-center rounded-xl max-sm:hidden',
             TONE_CLASSES[tone],
           )}
           aria-hidden="true"
@@ -347,10 +353,17 @@ function SummaryCard({
           <Icon className="size-4" />
         </span>
       </div>
-      <p className="font-display text-2xl font-bold tracking-tight text-sea-ink tabular-nums sm:text-3xl">
+      <p className="font-display text-lg font-bold tracking-tight wrap-anywhere text-sea-ink tabular-nums sm:text-3xl">
         {value}
       </p>
-      <p className="text-xs leading-relaxed text-sea-ink-soft">{detail}</p>
+      <p className="text-xs leading-relaxed text-sea-ink-soft max-sm:hidden">
+        {detail}
+      </p>
+      {compactDetail ? (
+        <p className="text-xs leading-snug text-sea-ink-soft sm:hidden">
+          {compactDetail}
+        </p>
+      ) : null}
     </Card>
   )
 }
@@ -387,11 +400,11 @@ function AllocationBar({
   ]
 
   return (
-    <Card variant="island" className="gap-5 rounded-3xl p-6">
+    <Card variant="island" className="gap-4 rounded-3xl p-4 sm:gap-5 sm:p-6">
       <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-start">
         <div>
           <p className="island-kicker">Allocation map</p>
-          <h2 className="font-display mt-1.5 text-xl font-bold tracking-tight text-sea-ink">
+          <h2 className="font-display mt-1.5 text-lg font-bold sm:text-xl tracking-tight text-sea-ink">
             Give every kwacha a job
           </h2>
         </div>
@@ -435,7 +448,7 @@ function AllocationBar({
         )}
       </div>
 
-      <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-5 gap-y-3 xl:grid-cols-4">
         {segments.map((segment) => {
           const percent =
             expectedIncome > 0 ? (segment.amount / expectedIncome) * 100 : 0
@@ -497,10 +510,10 @@ function CategoryRow({
     )
 
   return (
-    <article className="rounded-2xl border border-(--line) bg-(--chip-bg) p-4 transition-colors hover:border-lagoon-deep/35">
+    <article className="rounded-2xl border border-(--line) bg-(--chip-bg) p-3 transition-colors sm:p-4 hover:border-lagoon-deep/35">
       <div className="flex items-start gap-3">
         <span
-          className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl"
+          className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl sm:size-9"
           style={{
             color,
             background: `color-mix(in oklab, ${color} 14%, transparent)`,
@@ -510,13 +523,14 @@ function CategoryRow({
           <Icon className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex items-center justify-between gap-x-2 gap-y-1 sm:flex-wrap sm:gap-x-3">
             <h4 className="truncate text-sm font-bold text-sea-ink">
               {category.name}
             </h4>
             <Badge
               variant={statusBadgeVariant(insight.status)}
               className={cn(
+                'shrink-0',
                 insight.status === 'watch' &&
                   'border-sun/35 bg-sun/12 text-sun',
               )}
@@ -527,7 +541,7 @@ function CategoryRow({
             </Badge>
           </div>
           <div
-            className="mt-3 h-2 overflow-hidden rounded-full bg-(--line)"
+            className="mt-2 h-2 overflow-hidden rounded-full bg-(--line) sm:mt-3"
             role="progressbar"
             aria-label={`${category.name} spent`}
             aria-valuemin={0}
@@ -551,7 +565,22 @@ function CategoryRow({
               }}
             />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+          <div className="mt-2 flex items-baseline justify-between gap-3 font-mono text-xs font-semibold text-sea-ink-soft tabular-nums sm:hidden">
+            <span>
+              {formatBudgetMoney(category.spent, currency)} of{' '}
+              {formatBudgetMoney(category.planned, currency)}
+            </span>
+            <span
+              className={cn(
+                'text-right',
+                insight.remaining < 0 ? 'text-coral-deep' : 'text-sea-ink',
+              )}
+            >
+              {formatBudgetMoney(Math.abs(insight.remaining), currency)}{' '}
+              {insight.remaining < 0 ? 'over' : 'left'}
+            </span>
+          </div>
+          <div className="mt-3 hidden gap-x-4 gap-y-2 sm:grid sm:grid-cols-4">
             <Metric
               label="Plan"
               value={formatBudgetMoney(category.planned, currency)}
@@ -572,7 +601,7 @@ function CategoryRow({
               }
             />
           </div>
-          <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-sea-ink-soft">
+          <p className="mt-3 hidden items-center gap-1.5 text-xs font-semibold text-sea-ink-soft sm:flex">
             {insight.status === 'over-budget' ? (
               <ArrowUpRight
                 className="size-3.5 text-coral-deep"
@@ -631,13 +660,16 @@ function CategoryPlanCard({
   }))
 
   return (
-    <Card variant="island" className="min-w-0 gap-5 rounded-3xl p-6">
+    <Card
+      variant="island"
+      className="min-w-0 gap-4 rounded-3xl p-4 sm:gap-5 sm:p-6"
+    >
       <CardHeader className="p-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="island-kicker">Spending plan</p>
             <CardTitle className="mt-1.5 text-xl">Needs and wants</CardTitle>
-            <CardDescription className="mt-1">
+            <CardDescription className="mt-1 max-sm:hidden">
               {formatBudgetMoney(cycle.spendingLimit, currency)} available for
               planned spending.
             </CardDescription>
@@ -751,7 +783,10 @@ function IncomeSourcesCard({
     ) : null
 
   return (
-    <Card variant="island" className="min-w-0 gap-5 rounded-3xl p-6">
+    <Card
+      variant="island"
+      className="min-w-0 gap-4 rounded-3xl p-4 sm:gap-5 sm:p-6"
+    >
       <CardHeader className="p-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -767,6 +802,7 @@ function IncomeSourcesCard({
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="max-sm:h-10 max-sm:px-4"
                 onClick={onManage}
               >
                 Manage sources
@@ -1090,7 +1126,10 @@ function BudgetEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong) p-5 sm:p-7">
+      <DialogContent
+        sheet
+        className="max-h-[min(90vh,760px)] max-w-2xl rounded-3xl border-(--line) bg-(--surface-strong)"
+      >
         <DialogHeader className="pr-8 text-left">
           <p className="island-kicker">Edit plan · {cycle.label}</p>
           <DialogTitle className="font-display mt-1 text-2xl font-bold tracking-tight text-sea-ink">
@@ -1180,6 +1219,7 @@ function BudgetEditDialog({
                   type="button"
                   variant="secondary"
                   size="sm"
+                  className="max-sm:h-10"
                   onClick={() =>
                     onDraftChange(applyPreviousSpend(cycle, draft))
                   }
@@ -1220,7 +1260,7 @@ function BudgetEditDialog({
                         value={draft.categoryPlans[category.id] ?? ''}
                         onChange={handleCategoryChange(category.id)}
                         aria-label={`${category.name} planned amount`}
-                        className="h-9"
+                        className="h-10"
                       />
                     </span>
                   </Label>
@@ -1252,6 +1292,7 @@ function BudgetEditDialog({
                   type="button"
                   variant="secondary"
                   size="sm"
+                  className="max-sm:h-10"
                   onClick={() => {
                     handleOpenChange(false)
                     onManageIncomeSources()
@@ -1310,7 +1351,7 @@ function BudgetEditDialog({
             </p>
           )}
 
-          <DialogFooter className="border-t border-(--line) pt-4">
+          <DialogFooter sticky className="flex-row justify-end gap-3">
             <Button
               type="button"
               variant="ghost"
@@ -1422,21 +1463,21 @@ export function BudgetPage({
   return (
     <div className={cn('w-full', className)}>
       <div className="mx-auto w-full max-w-7xl space-y-5">
-        <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+        <header className="flex flex-col justify-between gap-4 sm:gap-5 lg:flex-row lg:items-end">
           <div>
             <p className="island-kicker">Plan your paydays</p>
             <h1 className="font-display mt-2 text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
               Budget
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-sea-ink-soft">
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-sea-ink-soft max-sm:hidden">
               A calm view of what can be spent, saved, and carried forward this
               cycle.
             </p>
           </div>
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2.5">
             <Select value={selectedCycle.id} onValueChange={onCycleChange}>
               <SelectTrigger
-                className="w-full sm:w-[190px]"
+                className="min-w-0 flex-1 sm:w-[190px] sm:flex-none"
                 aria-label="Choose budget cycle"
               >
                 <CalendarDays
@@ -1465,78 +1506,97 @@ export function BudgetPage({
           </div>
         </header>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-sea-ink-soft">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1.5">
-            <CalendarDays
-              className="size-3.5 text-lagoon-deep"
-              aria-hidden="true"
-            />
-            {selectedCycle.rangeLabel ?? selectedCycle.label}
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1.5">
-            <CircleGauge className="size-3.5 text-palm" aria-hidden="true" />
-            {paceLabel}
-          </span>
-          <span className="font-mono tabular-nums">
-            {formatBudgetPercent(progress)} through cycle
-          </span>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            label="Expected income"
-            value={formatBudgetMoney(expectedIncome, currency)}
-            detail={
-              actualIncome > 0
-                ? `${formatBudgetMoney(actualIncome, currency)} landed so far`
-                : 'No income landed yet'
-            }
-            icon={CircleDollarSign}
-            tone="lagoon"
-          />
-          <SummaryCard
-            label="Planned savings"
-            value={formatBudgetMoney(plannedSavings, currency)}
-            detail={
-              actualSavings > 0
-                ? `${formatBudgetMoney(actualSavings, currency)} saved so far`
-                : 'Savings target for this cycle'
-            }
-            icon={PiggyBank}
-            tone="palm"
-          />
-          <SummaryCard
-            label="Spending limit"
-            value={formatBudgetMoney(spendingLimit, currency)}
-            detail={`${formatBudgetMoney(totalSpent, currency)} spent · ${formatBudgetMoney(Math.max(0, spendingRemaining), currency)} left`}
-            icon={WalletCards}
-            tone="coral"
-          />
-          <SummaryCard
-            label={unallocated < 0 ? 'Over-allocated' : 'Unallocated'}
-            value={formatBudgetMoney(Math.abs(unallocated), currency)}
-            detail={
-              unallocated < 0
-                ? 'Trim a plan before this cycle starts'
-                : 'Give this amount a job or keep it flexible'
-            }
-            icon={unallocated < 0 ? CircleAlert : Target}
-            tone={unallocated < 0 ? 'coral' : 'sun'}
-          />
-        </div>
-
-        <AllocationBar cycle={selectedCycle} currency={currency} />
-
         <Tabs
           value={activeTab}
           onValueChange={handleTabChange}
-          className="space-y-1"
+          className="gap-4 sm:gap-5"
         >
-          <TabsList aria-label="Budget views">
+          <TabsList
+            aria-label="Budget views"
+            className="max-sm:order-first max-sm:h-12 max-sm:w-full max-sm:p-0.5"
+          >
             <TabsTrigger value="current">Current plan</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
-          <TabsContent value="current" className="space-y-5 pt-4">
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-sea-ink-soft max-sm:order-first">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1.5">
+              <CalendarDays
+                className="size-3.5 text-lagoon-deep"
+                aria-hidden="true"
+              />
+              {selectedCycle.rangeLabel ?? selectedCycle.label}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3 py-1.5">
+              <CircleGauge className="size-3.5 text-palm" aria-hidden="true" />
+              {paceLabel}
+            </span>
+            <span className="font-mono tabular-nums">
+              {formatBudgetPercent(progress)} through cycle
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
+            <SummaryCard
+              label="Expected income"
+              value={formatBudgetMoney(expectedIncome, currency)}
+              detail={
+                actualIncome > 0
+                  ? `${formatBudgetMoney(actualIncome, currency)} landed so far`
+                  : 'No income landed yet'
+              }
+              compactDetail={
+                actualIncome > 0
+                  ? `${formatBudgetMoney(actualIncome, currency)} landed`
+                  : 'None landed yet'
+              }
+              icon={CircleDollarSign}
+              tone="lagoon"
+            />
+            <SummaryCard
+              label="Planned savings"
+              value={formatBudgetMoney(plannedSavings, currency)}
+              detail={
+                actualSavings > 0
+                  ? `${formatBudgetMoney(actualSavings, currency)} saved so far`
+                  : 'Savings target for this cycle'
+              }
+              compactDetail={
+                actualSavings > 0
+                  ? `${formatBudgetMoney(actualSavings, currency)} saved`
+                  : undefined
+              }
+              icon={PiggyBank}
+              tone="palm"
+            />
+            <SummaryCard
+              label="Spending limit"
+              value={formatBudgetMoney(spendingLimit, currency)}
+              detail={`${formatBudgetMoney(totalSpent, currency)} spent · ${formatBudgetMoney(Math.max(0, spendingRemaining), currency)} left`}
+              compactDetail={
+                spendingRemaining < 0
+                  ? `${formatBudgetMoney(Math.abs(spendingRemaining), currency)} over`
+                  : `${formatBudgetMoney(spendingRemaining, currency)} left`
+              }
+              icon={WalletCards}
+              tone="coral"
+            />
+            <SummaryCard
+              label={unallocated < 0 ? 'Over-allocated' : 'Unallocated'}
+              value={formatBudgetMoney(Math.abs(unallocated), currency)}
+              detail={
+                unallocated < 0
+                  ? 'Trim a plan before this cycle starts'
+                  : 'Give this amount a job or keep it flexible'
+              }
+              icon={unallocated < 0 ? CircleAlert : Target}
+              tone={unallocated < 0 ? 'coral' : 'sun'}
+            />
+          </div>
+
+          <AllocationBar cycle={selectedCycle} currency={currency} />
+
+          <TabsContent value="current" className="space-y-5 sm:pt-2">
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
               <CategoryPlanCard cycle={selectedCycle} currency={currency} />
               <IncomeSourcesCard
@@ -1547,7 +1607,7 @@ export function BudgetPage({
             </div>
             <Card
               variant="subtle"
-              className="gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between"
+              className="gap-3 rounded-2xl p-4 max-sm:hidden sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex items-start gap-3">
                 <span
@@ -1580,7 +1640,7 @@ export function BudgetPage({
               </span>
             </Card>
           </TabsContent>
-          <TabsContent value="history" className="space-y-5 pt-4">
+          <TabsContent value="history" className="space-y-5 sm:pt-2">
             <HistoryCard rows={history} currency={currency} />
           </TabsContent>
         </Tabs>

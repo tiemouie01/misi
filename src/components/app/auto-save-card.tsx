@@ -86,7 +86,7 @@ export function AutoSaveCard({
                 <Input
                   type="number"
                   min="1"
-                  className="font-mono h-8 w-32 rounded-lg px-2 py-1 tabular-nums"
+                  className="font-mono h-10 w-32 rounded-lg px-2 py-1 tabular-nums sm:h-8"
                   value={draftAmount}
                   onChange={(event) => setDraftAmount(event.target.value)}
                 />
@@ -94,8 +94,8 @@ export function AutoSaveCard({
                   type="button"
                   aria-label="Confirm amount"
                   variant="secondary"
-                  size="icon-sm"
-                  className="text-palm"
+                  size="icon"
+                  className="text-palm sm:size-8"
                   onClick={confirmEdit}
                 >
                   <Check className="size-4" strokeWidth={3} />

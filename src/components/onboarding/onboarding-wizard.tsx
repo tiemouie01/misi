@@ -27,6 +27,7 @@ import {
   loadDraft,
   parseAmount,
   saveDraft,
+  validateIncomeSources,
   validateStep,
 } from '#/lib/onboarding-data'
 
@@ -141,6 +142,11 @@ export function OnboardingWizard({
   const stepIndex = ONBOARDING_STEPS.indexOf(step)
   const isFirst = stepIndex === 0
   const isLast = stepIndex === ONBOARDING_STEPS.length - 1
+  // The income step shows field-level errors next to the field itself.
+  const errorShownInline =
+    step === 'income' &&
+    error !== null &&
+    validateIncomeSources(draft)?.message === error
 
   useEffect(() => {
     const resumeStep = firstIncompleteStep(draft)
@@ -156,8 +162,8 @@ export function OnboardingWizard({
   }, [step])
 
   useEffect(() => {
-    if (error) errorRef.current?.focus()
-  }, [error])
+    if (error && !errorShownInline) errorRef.current?.focus()
+  }, [error, errorShownInline])
 
   function setDraft(updater: (draft: OnboardingDraft) => OnboardingDraft) {
     setDraftState((current) => {
@@ -254,10 +260,10 @@ export function OnboardingWizard({
         <ThemeToggle />
       </div>
 
-      <main className="flex flex-1 items-start justify-center px-4 pt-6 pb-16 sm:pt-10">
+      <main className="flex flex-1 items-start justify-center px-4 pt-2 sm:pt-10 sm:pb-16">
         <Card
           variant="island"
-          className="w-full max-w-lg rounded-3xl p-6 sm:p-8"
+          className="w-full max-w-lg rounded-3xl max-sm:rounded-none max-sm:border-0! max-sm:bg-none! max-sm:shadow-none! sm:p-8"
         >
           <p className="island-kicker">
             Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
@@ -284,7 +290,7 @@ export function OnboardingWizard({
             {step === 'review' && <ReviewStep {...stepProps} />}
           </div>
 
-          {error && (
+          {error && !errorShownInline && (
             <p
               ref={errorRef}
               id="onboarding-error"
@@ -297,7 +303,7 @@ export function OnboardingWizard({
             </p>
           )}
 
-          <div className="mt-6 flex items-center justify-between gap-3">
+          <div className="mt-6 flex items-center justify-between gap-3 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:border-t max-sm:border-(--line) max-sm:bg-(--surface-strong) max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:backdrop-blur-md">
             {isFirst ? (
               <span />
             ) : (

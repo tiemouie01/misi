@@ -54,6 +54,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           description: 'text-sm text-sea-ink-soft',
           success: 'text-sea-ink',
           error: 'border-coral/25 bg-coral/8 text-coral-deep',
+          closeButton: "after:absolute after:-inset-3 after:content-['']",
           icon: 'text-lagoon-deep group-data-[type=error]:text-coral-deep',
         },
       }}

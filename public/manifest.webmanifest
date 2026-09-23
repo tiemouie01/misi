@@ -1,0 +1,20 @@
+{
+  "name": "Misi",
+  "short_name": "Misi",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#e7f3ec",
+  "theme_color": "#fbfff8",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

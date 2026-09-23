@@ -38,6 +38,9 @@
   --btn-b: #1d5138;
   --btn-text: #ffffff;
   --link-hover: #246f76;
+  /* Height of the mobile bottom tab bar (app-header.tsx), safe area included.
+     The quick-add FAB and the /app layout padding offset from it. */
+  --app-bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -72,6 +75,12 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.871 0.006 286.286);
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --app-bottom-nav-h: 0px;
+  }
 }
 
 .dark {
@@ -298,7 +307,10 @@ pre code {
 }
 
 .page-wrap {
-  width: min(1080px, calc(100% - 2rem));
+  width: min(
+    1080px,
+    calc(100% - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right))
+  );
   margin-inline: auto;
 }
 

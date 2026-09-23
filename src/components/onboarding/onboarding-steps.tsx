@@ -1,8 +1,7 @@
 import { CalendarIcon, Minus, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '#/components/ui/button'
-import { Calendar } from '#/components/ui/calendar'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -27,17 +26,18 @@ import {
   formatAmountInput,
   newKey,
   parseAmount,
+  validateIncomeSources,
 } from '#/lib/onboarding-data'
 import { cn } from '#/lib/utils'
 
 import type { Account } from '#/lib/app-data'
 import type {
   DraftAccount,
+  IncomeSourceIssue,
   OnboardingDraft,
   OnboardingStep,
 } from '#/lib/onboarding-data'
 import type { BudgetGroup } from '../../../shared/category-defs'
-import type { DateRange } from 'react-day-picker'
 
 export interface StepProps {
   draft: OnboardingDraft
@@ -62,29 +62,6 @@ function ordinal(day: number) {
   }
 }
 
-function dayInCurrentMonth(day: number) {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), day)
-}
-
-function parseExpectedWindow(
-  expectedDayStart: string,
-  expectedDayEnd: string,
-): DateRange | undefined {
-  const fromDay = Number(expectedDayStart)
-  if (!Number.isInteger(fromDay) || fromDay < 1 || fromDay > 31) {
-    return undefined
-  }
-  const toDay = Number(expectedDayEnd || expectedDayStart)
-  if (!Number.isInteger(toDay) || toDay < fromDay || toDay > 31) {
-    return undefined
-  }
-  return {
-    from: dayInCurrentMonth(fromDay),
-    to: dayInCurrentMonth(toDay),
-  }
-}
-
 function formatExpectedWindow(
   expectedDayStart: string,
   expectedDayEnd: string,
@@ -100,23 +77,51 @@ function formatExpectedWindow(
     : `${ordinal(fromDay)}–${ordinal(toDay)}`
 }
 
+const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, index) => index + 1)
+
 function ExpectedWindowPicker({
   expectedDayStart,
   expectedDayEnd,
   onChange,
   id,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: {
   expectedDayStart: string
   expectedDayEnd: string
   onChange: (expectedDayStart: string, expectedDayEnd: string) => void
   id: string
+  'aria-invalid'?: boolean
+  'aria-describedby'?: string
 }) {
   const [open, setOpen] = useState(false)
-  const selected = parseExpectedWindow(expectedDayStart, expectedDayEnd)
+  // Start day picked in this session while waiting for the end day.
+  const [pendingStart, setPendingStart] = useState<number | null>(null)
   const value = formatExpectedWindow(expectedDayStart, expectedDayEnd)
+  const start = Number(expectedDayStart)
+  const end = Number(expectedDayEnd || expectedDayStart)
+
+  function pickDay(day: number) {
+    if (pendingStart === null) {
+      setPendingStart(day)
+      onChange(String(day), String(day))
+      return
+    }
+    const from = Math.min(pendingStart, day)
+    const to = Math.max(pendingStart, day)
+    onChange(String(from), String(to))
+    setPendingStart(null)
+    setOpen(false)
+  }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        setPendingStart(null)
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -127,30 +132,91 @@ function ExpectedWindowPicker({
             !value && 'text-sea-ink-soft/70',
           )}
           aria-label="Expected landing window"
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
         >
           <CalendarIcon className="size-4 shrink-0 opacity-70" />
           <span className="truncate">{value || 'Pick days'}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="range"
-          selected={selected}
-          defaultMonth={selected?.from}
-          numberOfMonths={1}
-          onSelect={(range) => {
-            const fromDay = range?.from?.getDate()
-            const toDay = range?.to?.getDate() ?? fromDay
-            onChange(
-              fromDay === undefined ? '' : String(fromDay),
-              toDay === undefined ? '' : String(toDay),
+      <PopoverContent
+        className="w-[min(20rem,calc(100vw-2rem))] p-3"
+        side="bottom"
+        align="start"
+        collisionPadding={16}
+      >
+        <div
+          role="group"
+          aria-label="Day of the month"
+          className="grid grid-cols-7 gap-1"
+        >
+          {DAYS_OF_MONTH.map((day) => {
+            const inWindow =
+              pendingStart === null
+                ? day >= start && day <= end
+                : day === pendingStart
+            const isEdge =
+              inWindow &&
+              (day === start || day === end || pendingStart !== null)
+            return (
+              <Button
+                key={day}
+                type="button"
+                variant="ghost"
+                aria-label={ordinal(day)}
+                aria-pressed={inWindow}
+                className={cn(
+                  'h-10 w-full rounded-lg p-0 text-sm font-semibold text-sea-ink tabular-nums sm:h-9',
+                  inWindow && 'bg-lagoon/15 hover:bg-lagoon/25',
+                  isEdge &&
+                    'bg-lagoon text-(--btn-text) hover:bg-lagoon-deep hover:text-(--btn-text)',
+                )}
+                onClick={() => pickDay(day)}
+              >
+                {day}
+              </Button>
             )
-            if (range?.from && range.to) setOpen(false)
-          }}
-        />
-        <p className="border-t border-(--line) px-3 py-2 text-[0.75rem] text-sea-ink-soft">
+          })}
+        </div>
+        <p className="mt-3 text-[0.75rem] text-sea-ink-soft">
           Day-of-month landing window each cycle
         </p>
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-(--line) pt-2">
+          <p
+            aria-live="polite"
+            className="min-w-0 truncate text-[0.8rem] font-semibold text-sea-ink"
+          >
+            {pendingStart === null
+              ? value || 'Tap a start day'
+              : `From the ${ordinal(pendingStart)}: tap an end day`}
+          </p>
+          <div className="flex shrink-0 gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="max-sm:h-10"
+              disabled={!value}
+              onClick={() => {
+                onChange('', '')
+                setPendingStart(null)
+              }}
+            >
+              Clear
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="hover:translate-y-0 max-sm:h-10"
+              onClick={() => {
+                setOpen(false)
+                setPendingStart(null)
+              }}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   )
@@ -167,10 +233,14 @@ function SavingsRateStepper({
   id,
   value,
   onChange,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: {
   id: string
   value: string
   onChange: (next: string) => void
+  'aria-invalid'?: boolean
+  'aria-describedby'?: string
 }) {
   const numeric = Number(value)
   const current = Number.isFinite(numeric) ? numeric : 0
@@ -198,6 +268,8 @@ function SavingsRateStepper({
         placeholder="20"
         value={value}
         aria-label="Savings rate percent"
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-center shadow-none focus-visible:border-transparent focus-visible:ring-0"
         onChange={(event) => {
           const next = event.target.value.replace(/[^\d]/g, '')
@@ -418,7 +490,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
               variant={selected ? 'default' : 'outline'}
               size="sm"
               aria-pressed={selected}
-              className="hover:translate-y-0"
+              className="hover:translate-y-0 max-sm:h-10 max-sm:px-4 max-sm:text-sm"
               onClick={() => togglePreset(preset)}
             >
               {preset.name}
@@ -576,7 +648,45 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
   )
 }
 
-export function IncomeStep({ draft, setDraft }: StepProps) {
+export function IncomeStep({
+  draft,
+  setDraft,
+  error,
+  showIntro = true,
+}: StepProps & { showIntro?: boolean }) {
+  const issue = error ? validateIncomeSources(draft) : null
+  const invalid = issue?.message === error ? issue : null
+  const invalidId = invalid
+    ? `ob-income-${invalid.field}-${invalid.sourceKey}`
+    : null
+
+  useEffect(() => {
+    if (!invalidId) return
+    const field = document.getElementById(invalidId)
+    field?.scrollIntoView({ block: 'center' })
+    field?.focus({ preventScroll: true })
+  }, [invalidId])
+
+  function fieldA11y(sourceKey: string, field: IncomeSourceIssue['field']) {
+    const id = `ob-income-${field}-${sourceKey}`
+    return id === invalidId
+      ? { id, 'aria-invalid': true, 'aria-describedby': `${id}-error` }
+      : { id }
+  }
+
+  function fieldError(sourceKey: string, field: IncomeSourceIssue['field']) {
+    const id = `ob-income-${field}-${sourceKey}`
+    if (id !== invalidId) return null
+    return (
+      <p
+        id={`${id}-error`}
+        className="text-[0.8rem] font-semibold text-coral-deep"
+      >
+        {error}
+      </p>
+    )
+  }
+
   function updateSource(
     key: string,
     patch: Partial<OnboardingDraft['incomeSources'][number]>,
@@ -591,11 +701,13 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[0.9rem] text-sea-ink-soft">
-        What money do you expect each cycle? Add a landing window and amount so
-        Misi can compare planned income with what actually lands. Skip this if
-        you'd rather add it later.
-      </p>
+      {showIntro && (
+        <p className="text-[0.9rem] text-sea-ink-soft">
+          What money do you expect each cycle? Add a landing window and amount
+          so Misi can compare planned income with what actually lands. Skip this
+          if you'd rather add it later.
+        </p>
+      )}
       {draft.incomeSources.map((source) => (
         <div
           key={source.key}
@@ -603,6 +715,7 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
         >
           <div className="flex items-start gap-2">
             <Input
+              {...fieldA11y(source.key, 'name')}
               aria-label="Income source name"
               placeholder="e.g. Salary"
               value={source.name}
@@ -627,26 +740,28 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
               <Trash2 className="size-4" />
             </Button>
           </div>
+          {fieldError(source.key, 'name')}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2">
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-window-${source.key}`}>
                 Landing window
               </Label>
               <ExpectedWindowPicker
-                id={`ob-income-window-${source.key}`}
+                {...fieldA11y(source.key, 'window')}
                 expectedDayStart={source.expectedDayStart}
                 expectedDayEnd={source.expectedDayEnd}
                 onChange={(expectedDayStart, expectedDayEnd) =>
                   updateSource(source.key, { expectedDayStart, expectedDayEnd })
                 }
               />
+              {fieldError(source.key, 'window')}
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-amount-${source.key}`}>
                 Expected amount
               </Label>
               <Input
-                id={`ob-income-amount-${source.key}`}
+                {...fieldA11y(source.key, 'amount')}
                 inputMode="numeric"
                 placeholder="1,850,000"
                 value={source.expectedAmount}
@@ -656,13 +771,14 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
                   })
                 }
               />
+              {fieldError(source.key, 'amount')}
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-amount-max-${source.key}`}>
                 High end (optional)
               </Label>
               <Input
-                id={`ob-income-amount-max-${source.key}`}
+                {...fieldA11y(source.key, 'amount-max')}
                 inputMode="numeric"
                 placeholder="For variable income"
                 value={source.expectedAmountMax}
@@ -672,18 +788,20 @@ export function IncomeStep({ draft, setDraft }: StepProps) {
                   })
                 }
               />
+              {fieldError(source.key, 'amount-max')}
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-savings-rate-${source.key}`}>
                 Savings rate
               </Label>
               <SavingsRateStepper
-                id={`ob-income-savings-rate-${source.key}`}
+                {...fieldA11y(source.key, 'savings-rate')}
                 value={source.savingsRate}
                 onChange={(savingsRate) =>
                   updateSource(source.key, { savingsRate })
                 }
               />
+              {fieldError(source.key, 'savings-rate')}
             </div>
           </div>
           <Button

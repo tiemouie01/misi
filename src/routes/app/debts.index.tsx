@@ -193,7 +193,8 @@ function DebtsPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon-sm"
+                        size="icon"
+                        className="sm:size-8"
                         aria-label={`Restore ${debt.name}`}
                         onClick={() => void restore(debt)}
                       >
@@ -209,7 +210,10 @@ function DebtsPage() {
       </div>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="rounded-3xl">
+        <DialogContent
+          sheet
+          className="rounded-3xl border-(--line) bg-(--surface-strong)"
+        >
           <DialogHeader>
             <DialogTitle>Add a debt</DialogTitle>
             <DialogDescription>
@@ -244,7 +248,7 @@ function DebtsPage() {
                     variant="secondary"
                     size="sm"
                     aria-pressed={direction === value}
-                    className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
+                    className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
                     onClick={() => setDirection(value)}
                   >
                     {label}
@@ -277,7 +281,7 @@ function DebtsPage() {
               </p>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter sticky>
             <Button
               type="button"
               variant="secondary"

@@ -50,7 +50,29 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
       {
         name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
+        content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+      },
+      {
+        name: 'theme-color',
+        media: '(prefers-color-scheme: light)',
+        content: '#fbfff8',
+      },
+      {
+        name: 'theme-color',
+        media: '(prefers-color-scheme: dark)',
+        content: '#0a1418',
+      },
+      {
+        name: 'mobile-web-app-capable',
+        content: 'yes',
+      },
+      {
+        name: 'apple-mobile-web-app-capable',
+        content: 'yes',
+      },
+      {
+        name: 'apple-mobile-web-app-title',
+        content: 'Misi',
       },
       {
         title: 'Misi — Money that flows',
@@ -87,6 +109,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       {
         rel: 'apple-touch-icon',
         href: '/apple-touch-icon.png',
+      },
+      {
+        rel: 'manifest',
+        href: '/manifest.webmanifest',
       },
     ],
   }),

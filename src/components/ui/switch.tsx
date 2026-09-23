@@ -16,7 +16,8 @@ function Switch({
       data-slot="switch"
       data-size={size}
       className={cn(
-        'peer group/switch inline-flex shrink-0 items-center rounded-full border border-transparent shadow-sm transition-all outline-none',
+        'peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent shadow-sm transition-all outline-none',
+        "after:absolute after:-inset-3 after:content-['']",
         'focus-visible:border-lagoon-deep focus-visible:ring-2 focus-visible:ring-lagoon/25',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'data-[size=default]:h-[1.15rem] data-[size=default]:w-8',

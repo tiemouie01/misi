@@ -155,6 +155,7 @@ export function ReconcileTask() {
         closed={reconcileClosed}
         lastClosed={lastClosed}
         startExpanded
+        embedded
         onActualChange={(accountId, actual) =>
           setActualOverrides((current) => ({
             ...current,

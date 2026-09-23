@@ -8,7 +8,7 @@ import {
 } from '#/components/ui/tooltip'
 import { themeChangeEvent, useIsDarkTheme } from '#/lib/use-theme'
 
-export function ThemeToggle() {
+export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
   const isDark = useIsDarkTheme()
 
   function toggleTheme() {
@@ -19,6 +19,21 @@ export function ThemeToggle() {
   }
 
   const label = `Switch to ${isDark ? 'light' : 'dark'} mode`
+  const icon = isDark ? <Sun className="size-4" /> : <Moon className="size-4" />
+
+  if (withLabel) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-11 w-full justify-start gap-3 px-3"
+        onClick={toggleTheme}
+      >
+        {icon}
+        {label}
+      </Button>
+    )
+  }
 
   return (
     <Tooltip>
@@ -31,7 +46,7 @@ export function ThemeToggle() {
           className="size-9"
           onClick={toggleTheme}
         >
-          {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          {icon}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>

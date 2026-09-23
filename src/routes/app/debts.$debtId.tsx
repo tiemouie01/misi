@@ -384,6 +384,7 @@ function DebtDetailPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="h-10 sm:h-8"
                         onClick={() => setPendingDelete(transaction)}
                       >
                         Delete
@@ -398,7 +399,10 @@ function DebtDetailPage() {
       </div>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="rounded-3xl">
+        <DialogContent
+          sheet
+          className="rounded-3xl border-(--line) bg-(--surface-strong)"
+        >
           <DialogHeader>
             <DialogTitle>Edit {debt.name}</DialogTitle>
             <DialogDescription>
@@ -436,7 +440,7 @@ function DebtDetailPage() {
               </p>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter sticky>
             <Button
               type="button"
               variant="secondary"

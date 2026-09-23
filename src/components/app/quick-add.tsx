@@ -1,4 +1,11 @@
-import { CalendarIcon, Delete, PiggyBank, Plus, Trash2 } from 'lucide-react'
+import {
+  CalendarIcon,
+  ChevronDown,
+  Delete,
+  PiggyBank,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
 
 import { AccountPicker } from '#/components/app/account-picker'
@@ -10,6 +17,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
@@ -292,7 +300,7 @@ function RecentChips({
             key={oneTapRecentKey(recent)}
             type="button"
             variant="secondary"
-            className="h-auto max-w-full px-3.5 py-2 font-semibold"
+            className="h-auto min-h-10 max-w-full px-3.5 py-2 font-semibold sm:min-h-0"
             onClick={() => onSelect(recent)}
           >
             <Icon className="size-4" style={{ color: category.color }} />
@@ -371,7 +379,7 @@ export function QuickAddCard({
 
 export function QuickAddFab({ onOpen }: QuickAddFabProps) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end p-5 pb-[max(calc(var(--app-bottom-nav-h,0px)+1.25rem),env(safe-area-inset-bottom))] sm:p-6">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -449,7 +457,7 @@ function ClaimFields({
                 size="sm"
                 disabled={lockIdentity}
                 aria-pressed={debtId === debt.id}
-                className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                 onClick={() => onDebtId(debt.id)}
               >
                 <span className="truncate">{debt.name}</span>
@@ -480,7 +488,7 @@ function ClaimFields({
               size="sm"
               disabled={lockIdentity}
               aria-pressed={claimAction === action}
-              className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+              className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
               onClick={() => onClaimAction(action)}
             >
               {claimActionLabel(action)}
@@ -499,7 +507,7 @@ function ClaimFields({
                 variant="secondary"
                 size="sm"
                 aria-pressed={adjustPolarity === polarity}
-                className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                 onClick={() => onAdjustPolarity(polarity)}
               >
                 {polarity === 'increase'
@@ -522,7 +530,7 @@ function ClaimFields({
                 variant="secondary"
                 size="sm"
                 aria-pressed={!accountId}
-                className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                 onClick={() => onAccountId('')}
               >
                 No account
@@ -535,7 +543,7 @@ function ClaimFields({
                 variant="secondary"
                 size="sm"
                 aria-pressed={accountId === account.id}
-                className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                 onClick={() => onAccountId(account.id)}
               >
                 <span className="truncate">{account.name}</span>
@@ -865,6 +873,39 @@ export function QuickAddSheet({
           ? `${claimActionLabel(claimAction, adjustPolarity)}${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
           : `Move${amount ? ` ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
 
+  // Optional fields behind "More details", summarised while collapsed.
+  const defaultPayee =
+    mode === 'income'
+      ? (incomeSources.find((source) => source.id === sourceId)?.name ??
+        'Income')
+      : resolveCategory(categories, categoryId)?.name
+  const detailSummary = [
+    (mode === 'expense' || mode === 'income') &&
+      payee.trim() &&
+      payee.trim().toLowerCase() !== defaultPayee?.toLowerCase() &&
+      payee.trim(),
+    mode === 'expense' && items.trim() && 'Items',
+    (mode === 'expense' || mode === 'transfer') &&
+      fromSavings &&
+      'From savings',
+    mode === 'expense' && !fromSavings && excludeFromBudget && 'Excluded',
+    occurredAt !== 0 &&
+      new Date(occurredAt).toDateString() !== new Date().toDateString() &&
+      formatTransactionDate(occurredAt),
+    note.trim() && 'Note',
+  ].filter((part): part is string => typeof part === 'string')
+  const [showDetails, setShowDetails] = useState(
+    () => isEditing && detailSummary.length > 0,
+  )
+  const [detailsError, setDetailsError] = useState(error)
+  if (error !== detailsError) {
+    setDetailsError(error)
+    if (error && /date|note|payee|item|saving|budget/i.test(error)) {
+      setShowDetails(true)
+    }
+  }
+  const detailsOpen = isAutoSave || showDetails
+
   function selectRecent(recent: RecentTransaction) {
     const nextAccountId = resolveAccountId(recent.accountId)
     const nextAccount = accounts.find((account) => account.id === nextAccountId)
@@ -908,7 +949,10 @@ export function QuickAddSheet({
         if (!nextOpen) onClose()
       }}
     >
-      <DialogContent className="top-auto right-0 bottom-0 left-0 max-h-[92dvh] w-full min-w-0 max-w-none translate-x-0 translate-y-0 gap-0 overflow-x-hidden overflow-y-auto rounded-t-3xl rounded-b-none border border-(--line) bg-(--surface-strong) p-5 pb-8 shadow-2xl backdrop-blur-md data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:top-1/2 sm:right-auto sm:bottom-auto sm:left-1/2 sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6 sm:pb-6 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:slide-in-from-bottom-0">
+      <DialogContent
+        sheet
+        className="gap-0 overflow-x-hidden rounded-3xl border border-(--line) bg-(--surface-strong) shadow-2xl backdrop-blur-md sm:max-w-md"
+      >
         <DialogTitle className="sr-only">
           {isAutoSave
             ? 'Edit auto-save'
@@ -932,10 +976,8 @@ export function QuickAddSheet({
           </p>
         ) : (
           <div
-            className={`mr-11 grid min-h-10 min-w-0 gap-1 rounded-2xl border border-(--chip-line) bg-(--chip-bg) p-1 sm:h-10 sm:rounded-full ${
-              isEditing
-                ? 'grid-cols-3 sm:grid-cols-3'
-                : 'grid-cols-2 sm:grid-cols-4'
+            className={`mr-11 grid h-13 min-w-0 gap-0.5 rounded-full border border-(--chip-line) bg-(--chip-bg) p-1 sm:mr-11 sm:h-10 sm:gap-1 ${
+              isEditing ? 'grid-cols-3' : 'grid-cols-4'
             }`}
           >
             {(isEditing
@@ -948,7 +990,7 @@ export function QuickAddSheet({
                 variant="ghost"
                 size="sm"
                 aria-pressed={mode === type}
-                className="h-full min-w-0 w-full rounded-full px-1.5 text-sea-ink-soft shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
+                className="h-full min-w-0 w-full rounded-full px-1 text-[0.6875rem] text-sea-ink-soft min-[360px]:text-xs sm:px-1.5 shadow-none hover:text-sea-ink aria-pressed:bg-lagoon-deep/15 aria-pressed:font-bold aria-pressed:text-lagoon-deep aria-pressed:shadow-sm aria-pressed:ring-1 aria-pressed:ring-lagoon-deep/35"
                 onClick={() => switchMode(type)}
               >
                 <span className="truncate">
@@ -1045,7 +1087,7 @@ export function QuickAddSheet({
                         variant="secondary"
                         size="sm"
                         aria-pressed={categoryId === category.key}
-                        className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                        className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                         onClick={() => setCategoryId(category.key)}
                       >
                         <Icon
@@ -1076,26 +1118,6 @@ export function QuickAddSheet({
               onSelect={setToAccountId}
               includeAll
             />
-            <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
-              <div className="min-w-0">
-                <Label
-                  htmlFor="quick-add-from-savings"
-                  className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
-                >
-                  From savings
-                </Label>
-                {fromSavings && (
-                  <p className="mt-1 text-xs font-normal text-sea-ink-soft">
-                    Sweeps earmarked savings into the destination account.
-                  </p>
-                )}
-              </div>
-              <Switch
-                id="quick-add-from-savings"
-                checked={fromSavings}
-                onCheckedChange={setFromSavings}
-              />
-            </div>
           </>
         )}
         {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
@@ -1141,7 +1163,7 @@ export function QuickAddSheet({
                   variant="secondary"
                   size="sm"
                   aria-pressed={!sourceId}
-                  className="aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                  className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                   onClick={() => {
                     // Start an unassigned income without retaining the source
                     // description that was selected before this action.
@@ -1159,7 +1181,7 @@ export function QuickAddSheet({
                     disabled
                     aria-pressed={sourceId === archivedIncomeSourceId}
                     title="This source is archived and will remain linked unless you choose another source."
-                    className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                    className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                   >
                     <span className="truncate">Archived source</span>
                   </Button>
@@ -1171,7 +1193,7 @@ export function QuickAddSheet({
                     variant="secondary"
                     size="sm"
                     aria-pressed={sourceId === source.id}
-                    className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                    className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                     onClick={() => {
                       const previous = incomeSources.find(
                         (item) => item.id === sourceId,
@@ -1192,85 +1214,6 @@ export function QuickAddSheet({
               </div>
             </fieldset>
           )}
-        {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
-          <div className="mt-5">
-            <Label htmlFor="quick-add-payee" className="mb-2">
-              {mode === 'income' ? 'From' : 'Payee'}
-            </Label>
-            <Input
-              id="quick-add-payee"
-              className="px-4 py-2.5 font-semibold placeholder:font-normal"
-              placeholder={mode === 'income' ? 'e.g. Salary' : 'e.g. Chipiku'}
-              value={payee}
-              onChange={(event) => setPayee(event.target.value)}
-            />
-          </div>
-        )}
-        {!isAutoSave && mode === 'expense' && (
-          <div className="mt-4">
-            <Label htmlFor="quick-add-items" className="sr-only">
-              Items
-            </Label>
-            <Input
-              id="quick-add-items"
-              className="px-4 py-2.5 font-semibold placeholder:font-normal"
-              placeholder="Items — milk, bread… (optional)"
-              value={items}
-              onChange={(event) => setItems(event.target.value)}
-            />
-            <p className="mt-1.5 text-[0.72rem] text-sea-ink-soft italic">
-              Items answer 'how much on milk?' later.
-            </p>
-          </div>
-        )}
-        {!isAutoSave && mode === 'expense' && (
-          <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
-            <div className="min-w-0">
-              <Label
-                htmlFor="quick-add-pay-from-savings"
-                className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
-              >
-                Pay from savings
-              </Label>
-              {fromSavings && (
-                <p className="mt-1 text-xs font-normal text-sea-ink-soft">
-                  Won't count against this cycle's budget. The savings envelope
-                  covers it.
-                </p>
-              )}
-            </div>
-            <Switch
-              id="quick-add-pay-from-savings"
-              checked={fromSavings}
-              onCheckedChange={setFromSavings}
-            />
-          </div>
-        )}
-        {!isAutoSave && mode === 'expense' && !fromSavings && (
-          <Button
-            type="button"
-            variant="secondary"
-            aria-pressed={excludeFromBudget}
-            className="mt-4 h-auto w-full min-w-0 justify-start whitespace-normal rounded-xl px-4 py-3 text-left aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
-            onClick={() => setExcludeFromBudget((current) => !current)}
-          >
-            <span
-              aria-hidden="true"
-              className="flex size-5 shrink-0 items-center justify-center rounded-md border border-(--line) bg-(--surface-strong) text-xs font-black text-lagoon-deep"
-            >
-              {excludeFromBudget ? '✓' : ''}
-            </span>
-            <span className="min-w-0">
-              <span className="block font-bold text-sea-ink">
-                Exclude from spending plan
-              </span>
-              <span className="block text-xs font-normal text-sea-ink-soft">
-                Keep the transaction in your records without counting it toward
-                this cycle's budget.
-              </span>
-            </span>
-          </Button>
-        )}
         {!isAutoSave && mode === 'income' && !isEditing && (
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
@@ -1283,50 +1226,182 @@ export function QuickAddSheet({
             </p>
           </div>
         )}
-        <div className="mt-5 flex min-w-0 gap-2.5">
-          <TransactionDatePicker
-            occurredAt={occurredAt}
-            onChange={setOccurredAt}
-          />
-          <Label htmlFor="quick-add-note" className="sr-only">
-            Note
-          </Label>
-          <Input
-            id="quick-add-note"
-            className="min-w-0 flex-1 px-4 py-2.5 font-semibold placeholder:font-normal"
-            placeholder="Note (optional)"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </div>
-        {error && (
-          <p
-            role="alert"
-            className="mt-5 rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
-          >
-            {error}
-          </p>
-        )}
-        <Button
-          type="button"
-          disabled={!canSave}
-          size="lg"
-          className="mt-6 h-auto w-full py-3.5 shadow-lg disabled:opacity-45"
-          onClick={save}
-        >
-          {saveLabel}
-        </Button>
-        {isEditing && onDelete && (
+        {!isAutoSave && (
           <Button
             type="button"
             variant="ghost"
-            className="mt-3 h-auto w-full py-3 text-coral-deep hover:bg-coral/10 hover:text-coral-deep"
-            onClick={onDelete}
+            aria-expanded={detailsOpen}
+            aria-controls="quick-add-details"
+            className="group mt-4 h-11 w-full min-w-0 justify-between rounded-xl px-3 sm:h-10"
+            onClick={() => setShowDetails((current) => !current)}
           >
-            <Trash2 className="size-4" />
-            Delete transaction
+            <span className="shrink-0">More details</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              {!detailsOpen && detailSummary.length > 0 && (
+                <span className="truncate text-xs font-semibold">
+                  {detailSummary.join(' · ')}
+                </span>
+              )}
+              <ChevronDown className="size-4 transition-transform group-aria-expanded:rotate-180" />
+            </span>
           </Button>
         )}
+        {detailsOpen && (
+          <div id="quick-add-details" className="min-w-0">
+            {!isAutoSave && mode === 'transfer' && (
+              <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+                <div className="min-w-0">
+                  <Label
+                    htmlFor="quick-add-from-savings"
+                    className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+                  >
+                    From savings
+                  </Label>
+                  {fromSavings && (
+                    <p className="mt-1 text-xs font-normal text-sea-ink-soft">
+                      Sweeps earmarked savings into the destination account.
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  id="quick-add-from-savings"
+                  checked={fromSavings}
+                  onCheckedChange={setFromSavings}
+                />
+              </div>
+            )}
+            {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
+              <div className="mt-5">
+                <Label htmlFor="quick-add-payee" className="mb-2">
+                  {mode === 'income' ? 'From' : 'Payee'}
+                </Label>
+                <Input
+                  id="quick-add-payee"
+                  className="px-4 py-2.5 font-semibold placeholder:font-normal"
+                  placeholder={
+                    mode === 'income' ? 'e.g. Salary' : 'e.g. Chipiku'
+                  }
+                  value={payee}
+                  onChange={(event) => setPayee(event.target.value)}
+                />
+              </div>
+            )}
+            {!isAutoSave && mode === 'expense' && (
+              <div className="mt-4">
+                <Label htmlFor="quick-add-items" className="sr-only">
+                  Items
+                </Label>
+                <Input
+                  id="quick-add-items"
+                  className="px-4 py-2.5 font-semibold placeholder:font-normal"
+                  placeholder="Items — milk, bread… (optional)"
+                  value={items}
+                  onChange={(event) => setItems(event.target.value)}
+                />
+                <p className="mt-1.5 text-[0.72rem] text-sea-ink-soft italic">
+                  Items answer 'how much on milk?' later.
+                </p>
+              </div>
+            )}
+            {!isAutoSave && mode === 'expense' && (
+              <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+                <div className="min-w-0">
+                  <Label
+                    htmlFor="quick-add-pay-from-savings"
+                    className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+                  >
+                    Pay from savings
+                  </Label>
+                  {fromSavings && (
+                    <p className="mt-1 text-xs font-normal text-sea-ink-soft">
+                      Won't count against this cycle's budget. The savings
+                      envelope covers it.
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  id="quick-add-pay-from-savings"
+                  checked={fromSavings}
+                  onCheckedChange={setFromSavings}
+                />
+              </div>
+            )}
+            {!isAutoSave && mode === 'expense' && !fromSavings && (
+              <Button
+                type="button"
+                variant="secondary"
+                aria-pressed={excludeFromBudget}
+                className="mt-4 h-auto w-full min-w-0 justify-start whitespace-normal rounded-xl px-4 py-3 text-left aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
+                onClick={() => setExcludeFromBudget((current) => !current)}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex size-5 shrink-0 items-center justify-center rounded-md border border-(--line) bg-(--surface-strong) text-xs font-black text-lagoon-deep"
+                >
+                  {excludeFromBudget ? '✓' : ''}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-sea-ink">
+                    Exclude from spending plan
+                  </span>
+                  <span className="block text-xs font-normal text-sea-ink-soft">
+                    Keep the transaction in your records without counting it
+                    toward this cycle's budget.
+                  </span>
+                </span>
+              </Button>
+            )}
+            <div className="mt-5 flex min-w-0 gap-2.5">
+              <TransactionDatePicker
+                occurredAt={occurredAt}
+                onChange={setOccurredAt}
+              />
+              <Label htmlFor="quick-add-note" className="sr-only">
+                Note
+              </Label>
+              <Input
+                id="quick-add-note"
+                className="min-w-0 flex-1 px-4 py-2.5 font-semibold placeholder:font-normal"
+                placeholder="Note (optional)"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter
+          sticky
+          className="mt-6 flex-col sm:flex-col sm:justify-start"
+        >
+          {error && (
+            <p
+              role="alert"
+              className="rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+            >
+              {error}
+            </p>
+          )}
+          <Button
+            type="button"
+            disabled={!canSave}
+            size="lg"
+            className="h-auto w-full py-3.5 shadow-lg disabled:opacity-45"
+            onClick={save}
+          >
+            {saveLabel}
+          </Button>
+          {isEditing && onDelete && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-auto w-full py-2.5 text-coral-deep hover:bg-coral/10 hover:text-coral-deep"
+              onClick={onDelete}
+            >
+              <Trash2 className="size-4" />
+              Delete transaction
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -51,9 +51,13 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  sheet = false,
+  onOpenAutoFocus,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /** Bottom sheet below `sm`; pair with `<DialogFooter sticky>` for reachable actions. */
+  sheet?: boolean
 }) {
   return (
     <DialogPortal>
@@ -65,15 +69,30 @@ function DialogContent({
           'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           'sm:max-w-lg',
+          sheet && [
+            'p-(--dialog-p) pb-(--dialog-pb) [--dialog-p:1.25rem] [--dialog-pb:max(var(--dialog-p),env(safe-area-inset-bottom))] sm:[--dialog-p:1.75rem]',
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-h-[92dvh] max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-3xl max-sm:rounded-b-none',
+            'max-sm:data-[state=closed]:slide-out-to-bottom max-sm:data-[state=open]:slide-in-from-bottom',
+          ],
           className,
         )}
+        onOpenAutoFocus={(event) => {
+          onOpenAutoFocus?.(event)
+          // Focusing a field on touch devices opens the keyboard over the dialog.
+          if (event.defaultPrevented) return
+          if (!window.matchMedia('(pointer: coarse)').matches) return
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) {
+            event.currentTarget.focus()
+          }
+        }}
         {...props}
       >
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 grid size-9 place-items-center rounded-full border border-(--chip-line) bg-(--chip-bg) text-sea-ink transition hover:border-lagoon-deep focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="absolute top-4 right-4 grid size-10 place-items-center sm:size-9 rounded-full border border-(--chip-line) bg-(--chip-bg) text-sea-ink transition hover:border-lagoon-deep focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
@@ -94,12 +113,21 @@ function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   )
 }
 
-function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
+function DialogFooter({
+  className,
+  sticky = false,
+  ...props
+}: ComponentProps<'div'> & {
+  /** Pins actions to the bottom of a scrolling `sheet` dialog. */
+  sticky?: boolean
+}) {
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
         'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        sticky &&
+          'sticky -bottom-(--dialog-pb) z-10 -mx-(--dialog-p) -mb-(--dialog-pb) border-t border-(--line) bg-(--surface-strong) px-(--dialog-p) pt-3 pb-(--dialog-pb)',
         className,
       )}
       {...props}

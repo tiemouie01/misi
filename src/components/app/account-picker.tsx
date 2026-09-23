@@ -34,7 +34,7 @@ export function AccountPicker({
             aria-pressed={selected === account.id}
             variant="secondary"
             size="sm"
-            className="max-w-full aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+            className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
             onClick={() => onSelect(account.id)}
           >
             <span className="truncate">{account.name}</span>

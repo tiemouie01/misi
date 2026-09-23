@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
+import { DialogFooter } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import {
   currencyToMwk,
@@ -12,9 +13,11 @@ import {
   isSpendableAccount,
 } from '#/lib/app-data'
 import { firstExpenseCategoryKey } from '#/lib/categories'
+import { cn } from '#/lib/utils'
 
 import type { Account, QuickAddInitial, ReconcileBalance } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
+import type { ReactNode } from 'react'
 
 interface ReconcileCardProps {
   accounts: Account[]
@@ -28,6 +31,8 @@ interface ReconcileCardProps {
   animationDelay: string
   usdRate: number
   startExpanded?: boolean
+  /** Rendered inside a sheet dialog: no card chrome, actions in a sticky footer. */
+  embedded?: boolean
 }
 
 function formatNativeAmount(amount: number, currency: Account['currency']) {
@@ -68,6 +73,7 @@ export function ReconcileCard({
   animationDelay,
   usdRate,
   startExpanded = false,
+  embedded = false,
 }: ReconcileCardProps) {
   const [expanded, setExpanded] = useState(startExpanded)
   const visibleBalances = balances.filter((balance) => {
@@ -89,14 +95,23 @@ export function ReconcileCard({
       )
     )
   }, 0)
+  const actions = (button: ReactNode) =>
+    embedded ? (
+      <DialogFooter sticky className="mt-4">
+        {button}
+      </DialogFooter>
+    ) : (
+      button
+    )
 
-  return (
-    <Card
-      variant="island"
-      className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
-      style={{ animationDelay }}
-    >
-      <div className="flex items-center justify-between gap-3">
+  const body = (
+    <>
+      <div
+        className={cn(
+          'flex items-center justify-between gap-3',
+          embedded && 'pr-10',
+        )}
+      >
         <p className="island-kicker">Reconcile</p>
         <span className="text-[0.72rem] font-semibold text-sea-ink-soft">
           {closed ? 'closed just now' : lastClosed}
@@ -119,14 +134,16 @@ export function ReconcileCard({
               All matched — books agree with reality.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="mt-3 w-full"
-            onClick={() => setExpanded(true)}
-          >
-            Check balances again
-          </Button>
+          {actions(
+            <Button
+              type="button"
+              variant="secondary"
+              className={cn('w-full', !embedded && 'mt-3')}
+              onClick={() => setExpanded(true)}
+            >
+              Check balances again
+            </Button>,
+          )}
         </>
       ) : expanded ? (
         <>
@@ -157,7 +174,7 @@ export function ReconcileCard({
                       type="number"
                       step={account.currency === 'USD' ? '0.01' : '1'}
                       aria-label={`${account.name} actual balance`}
-                      className="font-mono h-9 w-28 rounded-lg px-2.5 py-1.5 text-right tabular-nums"
+                      className="font-mono h-10 w-28 sm:h-9 rounded-lg px-2.5 py-1.5 text-right tabular-nums"
                       value={balance.actual}
                       onChange={(event) =>
                         onActualChange(
@@ -218,14 +235,16 @@ export function ReconcileCard({
               </p>
             </div>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            className="mt-3"
-            onClick={() => setExpanded(false)}
-          >
-            Close
-          </Button>
+          {actions(
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn(!embedded && 'mt-3')}
+              onClick={() => setExpanded(false)}
+            >
+              Close
+            </Button>,
+          )}
         </>
       ) : (
         <>
@@ -258,15 +277,29 @@ export function ReconcileCard({
               )
             })}
           </div>
-          <Button
-            type="button"
-            className="mt-4 w-full"
-            onClick={() => setExpanded(true)}
-          >
-            Reconcile now
-          </Button>
+          {actions(
+            <Button
+              type="button"
+              className={cn('w-full', !embedded && 'mt-4')}
+              onClick={() => setExpanded(true)}
+            >
+              Reconcile now
+            </Button>,
+          )}
         </>
       )}
+    </>
+  )
+
+  if (embedded) return <div className="flex flex-col">{body}</div>
+
+  return (
+    <Card
+      variant="island"
+      className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
+      style={{ animationDelay }}
+    >
+      {body}
     </Card>
   )
 }
