@@ -6,7 +6,7 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
+import { useConvexAuth, useMutation } from 'convex/react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
@@ -120,12 +120,22 @@ function AppTaskOverlays({
 function AppLayout() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const convexAuth = useConvexAuth()
   const { task } = Route.useSearch()
   const { data } = useSuspenseQuery(bootstrapQuery)
   const ensureDefaultCategories = useMutation(api.misi.ensureDefaultCategories)
   const requestedCategorySeed = useRef(false)
   const [setupError, setSetupError] = useState<string | null>(null)
   const categoryCount = data?.categories.length ?? 0
+
+  // Convex only reports signed out once the auth server has said so, e.g.
+  // the session expired while the tab was suspended. Every call would fail
+  // from here, so send the user to sign in again.
+  useEffect(() => {
+    if (!convexAuth.isLoading && !convexAuth.isAuthenticated) {
+      void navigate({ to: '/login', replace: true })
+    }
+  }, [convexAuth.isLoading, convexAuth.isAuthenticated, navigate])
 
   useEffect(() => {
     if (
