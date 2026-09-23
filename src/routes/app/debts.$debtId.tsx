@@ -141,6 +141,7 @@ function DebtDetailPage() {
         name: category.name,
         icon: resolveCategoryIcon(category.icon),
         color: resolveCategoryColor(category.color),
+        budgetGroup: category.budgetGroup,
         isSystem: category.isSystem,
         archived: category.archivedAt !== undefined,
       })),

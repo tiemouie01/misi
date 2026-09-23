@@ -9,6 +9,7 @@ import {
 import { useEffect, useEffectEvent, useState } from 'react'
 
 import { AccountPicker } from '#/components/app/account-picker'
+import { CategoryPicker } from '#/components/app/category-picker'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Calendar } from '#/components/ui/calendar'
@@ -85,6 +86,8 @@ interface QuickAddSheetProps {
   debts?: Debt[]
   incomeSources?: QuickAddIncomeSource[]
   recents?: RecentTransaction[]
+  /** Category keys ranked by recent use, most used first. */
+  categoryUsage?: string[]
   defaultExpenseAccountId: string
   defaultTransferFromAccountId: string
   defaultTransferToAccountId: string
@@ -595,6 +598,7 @@ export function QuickAddSheet({
   debts = [],
   incomeSources = [],
   recents = [],
+  categoryUsage,
   defaultExpenseAccountId,
   defaultTransferFromAccountId,
   defaultTransferToAccountId,
@@ -1082,32 +1086,12 @@ export function QuickAddSheet({
             )}
             <div className="mt-5 min-w-0">
               <p className="field-label mb-2">Category</p>
-              <div className="flex min-w-0 flex-wrap gap-2">
-                {categories
-                  .filter(
-                    (category) => !category.archived && !category.isSystem,
-                  )
-                  .map((category) => {
-                    const Icon = category.icon
-                    return (
-                      <Button
-                        key={category.key}
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        aria-pressed={categoryId === category.key}
-                        className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
-                        onClick={() => setCategoryId(category.key)}
-                      >
-                        <Icon
-                          className="size-4"
-                          style={{ color: category.color }}
-                        />
-                        <span className="truncate">{category.name}</span>
-                      </Button>
-                    )
-                  })}
-              </div>
+              <CategoryPicker
+                categories={categories}
+                usage={categoryUsage}
+                value={categoryId}
+                onChange={setCategoryId}
+              />
             </div>
           </>
         )}

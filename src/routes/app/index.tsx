@@ -251,6 +251,7 @@ function AppDashboard({
         name: category.name,
         icon: resolveCategoryIcon(category.icon),
         color: resolveCategoryColor(category.color),
+        budgetGroup: category.budgetGroup,
         isSystem: category.isSystem,
         archived: category.archivedAt !== undefined,
       })),
@@ -656,6 +657,7 @@ function AppDashboard({
             isAnchor: source.isAnchor,
           }))}
           recents={recents}
+          categoryUsage={data.categoryUsage}
           defaultExpenseAccountId={defaultExpenseAccountId}
           defaultTransferFromAccountId={defaultTransferFromAccountId}
           defaultTransferToAccountId={defaultTransferToAccountId}

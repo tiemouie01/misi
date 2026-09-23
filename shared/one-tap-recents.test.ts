@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   ONE_TAP_RECENTS_LIMIT,
+  categoryUsageFromLogs,
   oneTapRecentKey,
   oneTapRecentsFromLogs,
 } from './one-tap-recents.ts'
@@ -196,5 +197,41 @@ test('builds a stable key for chips with the same payee', () => {
       amount: 3_500,
       categoryId: 'transport',
     }),
+  )
+})
+
+test('ranks categories by expense count, then recency, skipping adjustments', () => {
+  assert.deepEqual(
+    categoryUsageFromLogs([
+      expense({
+        payee: 'Chipiku',
+        amount: 1,
+        categoryId: 'groceries',
+        occurredAt: 1,
+      }),
+      expense({ payee: 'Minibus', amount: 1, occurredAt: 2 }),
+      expense({ payee: 'Minibus', amount: 1, occurredAt: 3 }),
+      expense({
+        payee: 'Airtime',
+        amount: 1,
+        categoryId: 'airtime',
+        occurredAt: 4,
+      }),
+      expense({
+        payee: 'Fix',
+        amount: 1,
+        categoryId: 'adjustment',
+        occurredAt: 5,
+        adjustment: true,
+      }),
+      {
+        type: 'income',
+        payee: 'Salary',
+        amount: 1,
+        categoryId: 'salary',
+        occurredAt: 6,
+      },
+    ]),
+    ['transport', 'airtime', 'groceries'],
   )
 })

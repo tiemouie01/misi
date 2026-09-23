@@ -17,6 +17,7 @@ import { landedAmountForSource, totalActualIncome } from '../shared/income'
 import {
   ONE_TAP_RECENTS_LIMIT,
   ONE_TAP_RECENTS_WINDOW_MS,
+  categoryUsageFromLogs,
   oneTapRecentsFromLogs,
 } from '../shared/one-tap-recents'
 import { mutation, query } from './_generated/server'
@@ -290,6 +291,7 @@ async function loadBootstrapData(
     savingsBalance,
     pendingAutoSave,
     oneTapRecents,
+    categoryUsage: categoryUsageFromLogs(recentLogDocs),
   }
 }
 

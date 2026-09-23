@@ -38,6 +38,7 @@ import {
 } from '../../shared/category-defs'
 
 import type {
+  BudgetGroup,
   CategoryColorId,
   CategoryIconId,
 } from '../../shared/category-defs'
@@ -51,6 +52,7 @@ export interface Category {
   name: string
   icon: LucideIcon
   color: string
+  budgetGroup: BudgetGroup
   isSystem: boolean
   archived: boolean
 }

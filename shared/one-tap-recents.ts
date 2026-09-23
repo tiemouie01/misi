@@ -130,6 +130,29 @@ export function oneTapRecentsFromLogs(
     })
 }
 
+/** Category keys ranked by how often expenses used them, then by recency. */
+export function categoryUsageFromLogs(
+  logs: readonly OneTapRecentLog[],
+): string[] {
+  const usage = new Map<string, { count: number; lastOccurredAt: number }>()
+  for (const log of logs) {
+    const categoryId = log.categoryId?.trim()
+    if (log.type !== 'expense' || log.adjustment || log.autoSave) continue
+    if (!categoryId) continue
+    const existing = usage.get(categoryId)
+    usage.set(categoryId, {
+      count: (existing?.count ?? 0) + 1,
+      lastOccurredAt: Math.max(existing?.lastOccurredAt ?? 0, log.occurredAt),
+    })
+  }
+  return [...usage.entries()]
+    .sort(
+      ([, left], [, right]) =>
+        right.count - left.count || right.lastOccurredAt - left.lastOccurredAt,
+    )
+    .map(([categoryId]) => categoryId)
+}
+
 function isEligibleRecentLog(log: OneTapRecentLog, sinceOccurredAt?: number) {
   if (log.type !== 'expense') return false
   if (log.adjustment || log.autoSave) return false
