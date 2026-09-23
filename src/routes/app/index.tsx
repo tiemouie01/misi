@@ -1,7 +1,7 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
+import { useMutation, usePaginatedQuery } from 'convex/react'
 import { Waves } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -42,7 +42,7 @@ import {
 } from '#/lib/use-quick-add-sheet'
 
 import type { FunctionReturnType } from 'convex/server'
-import type { Id } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import type { AutoSaveStatus } from '#/components/app/auto-save-card'
 import type { PulseIncomeSource } from '#/components/app/cycle-pulse-card'
 import type { Account, Txn, Wallet } from '#/lib/app-data'
@@ -57,6 +57,15 @@ const dayLabelFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
 })
+
+const dayLabelWithYearFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+const FEED_PAGE_SIZE = 50
 
 const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -116,7 +125,37 @@ function transactionDayLabel(occurredAt: number, now: number) {
   yesterday.setDate(today.getDate() - 1)
   if (sameCalendarDay(date, yesterday)) return 'Yesterday'
 
-  return dayLabelFormat.format(date).replace(',', '')
+  const format =
+    date.getFullYear() === today.getFullYear()
+      ? dayLabelFormat
+      : dayLabelWithYearFormat
+  return format.format(date).replace(',', '')
+}
+
+function toTxn(transaction: Doc<'transactions'>, now: number): Txn {
+  return {
+    id: transaction._id,
+    type: transaction.type,
+    amount: transaction.amount,
+    fxRate: transaction.fxRate,
+    payee: transaction.payee,
+    categoryId: transaction.categoryId,
+    accountId: transaction.accountId,
+    toAccountId: transaction.toAccountId,
+    direction: transaction.direction,
+    walletId: transaction.walletId,
+    sourceId: transaction.sourceId,
+    items: transaction.items,
+    note: transaction.note,
+    excludeFromBudget: transaction.excludeFromBudget,
+    occurredAt: transaction.occurredAt,
+    day: transactionDayLabel(transaction.occurredAt, now),
+    debtId: transaction.debtId,
+    claimAction: transaction.claimAction,
+    adjustPolarity: transaction.adjustPolarity,
+    adjustment: transaction.adjustment ? true : undefined,
+    autoSave: transaction.autoSave ? true : undefined,
+  }
 }
 
 function shortDate(timestamp: number) {
@@ -219,31 +258,23 @@ function AppDashboard({
   )
 
   const transactions = useMemo<Txn[]>(
-    () =>
-      data.transactions.map((transaction) => ({
-        id: transaction._id,
-        type: transaction.type,
-        amount: transaction.amount,
-        fxRate: transaction.fxRate,
-        payee: transaction.payee,
-        categoryId: transaction.categoryId,
-        accountId: transaction.accountId,
-        toAccountId: transaction.toAccountId,
-        direction: transaction.direction,
-        walletId: transaction.walletId,
-        sourceId: transaction.sourceId,
-        items: transaction.items,
-        note: transaction.note,
-        excludeFromBudget: transaction.excludeFromBudget,
-        occurredAt: transaction.occurredAt,
-        day: transactionDayLabel(transaction.occurredAt, now),
-        debtId: transaction.debtId,
-        claimAction: transaction.claimAction,
-        adjustPolarity: transaction.adjustPolarity,
-        adjustment: transaction.adjustment ? true : undefined,
-        autoSave: transaction.autoSave ? true : undefined,
-      })),
+    () => data.transactions.map((transaction) => toTxn(transaction, now)),
     [data.transactions, now],
+  )
+
+  // The feed pages through all history; until the first page lands, show the
+  // current cycle from bootstrap so the card never flashes empty.
+  const feed = usePaginatedQuery(
+    api.misi.listTransactions,
+    {},
+    { initialNumItems: FEED_PAGE_SIZE },
+  )
+  const feedTransactions = useMemo<Txn[]>(
+    () =>
+      feed.status === 'LoadingFirstPage'
+        ? transactions
+        : feed.results.map((transaction) => toTxn(transaction, now)),
+    [feed.status, feed.results, transactions, now],
   )
 
   const cycleInfo = useMemo(() => {
@@ -517,7 +548,7 @@ function AppDashboard({
   return (
     <div className="min-h-screen">
       <main className="page-wrap pb-28 py-6 sm:py-8">
-        <div className="grid items-start gap-5 lg:grid-cols-[1fr_380px]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-5">
             <section>
               <p className="island-kicker">
@@ -561,10 +592,11 @@ function AppDashboard({
               />
             )}
             <TransactionsCard
-              transactions={transactions}
+              transactions={feedTransactions}
               accounts={accounts}
               categories={categories}
-              cycleLabel={cycleInfo.label}
+              status={feed.status}
+              onLoadMore={() => feed.loadMore(FEED_PAGE_SIZE)}
               animationDelay="90ms"
               onEdit={editTransaction}
               onDelete={requestDelete}
@@ -637,7 +669,7 @@ function AppDashboard({
           onDelete={
             sheet.initial.transactionId
               ? () => {
-                  const transaction = transactions.find(
+                  const transaction = feedTransactions.find(
                     (item) => item.id === sheet.initial.transactionId,
                   )
                   if (transaction) requestDelete(transaction)

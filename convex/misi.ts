@@ -3,6 +3,7 @@
  * keep handlers here thin so the `api.misi.*` paths stay stable while the
  * implementation can move freely.
  */
+import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
 
 import { spentByCategory, totalBudgetSpending } from '../shared/budget-rollover'
@@ -303,6 +304,20 @@ export const bootstrap = query({
     return await loadBootstrapData(ctx, user._id, cycle)
   },
 })
+
+/** Newest-first transaction history across every cycle, for the home feed. */
+export const listTransactions = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    return await ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_time', (q) => q.eq('userId', user._id))
+      .order('desc')
+      .paginate(args.paginationOpts)
+  },
+})
+
 export const listCategories = query({
   args: {},
   handler: async (ctx) => {

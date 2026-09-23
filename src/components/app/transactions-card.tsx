@@ -27,6 +27,7 @@ import {
 } from '#/lib/app-data'
 import { resolveCategory } from '#/lib/categories'
 
+import type { PaginationStatus } from 'convex/react'
 import type { Account, Txn } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
 
@@ -34,7 +35,8 @@ interface TransactionsCardProps {
   transactions: Txn[]
   accounts: Account[]
   categories: Category[]
-  cycleLabel: string
+  status: PaginationStatus
+  onLoadMore: () => void
   animationDelay: string
   onEdit: (transaction: Txn) => void
   onDelete: (transaction: Txn) => void
@@ -128,7 +130,8 @@ export function TransactionsCard({
   transactions,
   accounts,
   categories,
-  cycleLabel,
+  status,
+  onLoadMore,
   animationDelay,
   onEdit,
   onDelete,
@@ -149,12 +152,7 @@ export function TransactionsCard({
       className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
       style={{ animationDelay }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="island-kicker">Recent activity</p>
-        <span className="font-mono text-[0.72rem] font-semibold text-sea-ink-soft">
-          {cycleLabel}
-        </span>
-      </div>
+      <p className="island-kicker">Recent activity</p>
       {groups.map((group, groupIndex) => {
         const expenseTotal = group.txns
           .filter((transaction) => transaction.type === 'expense')
@@ -316,6 +314,17 @@ export function TransactionsCard({
           </div>
         )
       })}
+      {(status === 'CanLoadMore' || status === 'LoadingMore') && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={status === 'LoadingMore'}
+          className="mt-4 w-full"
+          onClick={onLoadMore}
+        >
+          {status === 'LoadingMore' ? 'Loading…' : 'Show more'}
+        </Button>
+      )}
     </Card>
   )
 }
