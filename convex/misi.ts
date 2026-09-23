@@ -37,6 +37,7 @@ import {
   insertTransaction,
   invalidateAllCheckpoints,
   latestCheckpoint,
+  mergeDebtClaims,
   patchTransaction,
   removeTransaction,
 } from './model/checkpoints'
@@ -1304,7 +1305,7 @@ export const createDebt = mutation({
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
     const name = validateDebtName(args.name)
-    await assertUniqueDebtName(ctx, user._id, name)
+    await assertUniqueDebtName(ctx, user._id, name, args.direction)
     const openingBalance = args.openingBalance ?? 0
     assertNonnegativeFinite(openingBalance, 'Opening balance')
     const existing = await ctx.db
@@ -1339,7 +1340,7 @@ export const updateDebt = mutation({
     } = {}
     if (args.name !== undefined) {
       const name = validateDebtName(args.name)
-      await assertUniqueDebtName(ctx, user._id, name, debt._id)
+      await assertUniqueDebtName(ctx, user._id, name, debt.direction, debt._id)
       patch.name = name
     }
     if (args.openingBalance !== undefined) {
@@ -1354,6 +1355,12 @@ export const updateDebt = mutation({
     }
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(debt._id, patch)
+    }
+    if (patch.name !== undefined && patch.name !== debt.name) {
+      // Claims carry their debt's name as payee, so keep the feed in step.
+      for (const claim of await getClaimMovements(ctx, user._id, debt._id)) {
+        await ctx.db.patch(claim._id, { payee: patch.name })
+      }
     }
     return debt._id
   },
@@ -1383,9 +1390,36 @@ export const restoreDebt = mutation({
     const debt = await requireOwnedDebt(ctx, user._id, args.debtId)
     if (debt.archivedAt === undefined) return debt._id
     const name = validateDebtName(debt.name)
-    await assertUniqueDebtName(ctx, user._id, name, debt._id)
+    await assertUniqueDebtName(ctx, user._id, name, debt.direction, debt._id)
     await ctx.db.patch(debt._id, { archivedAt: undefined })
     return debt._id
+  },
+})
+
+export const mergeDebt = mutation({
+  args: { sourceId: v.id('debts'), targetId: v.id('debts') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    if (args.sourceId === args.targetId) {
+      throw new Error('Pick a different debt to merge into')
+    }
+    const [source, target] = await Promise.all([
+      requireOwnedDebt(ctx, user._id, args.sourceId),
+      requireOwnedDebt(ctx, user._id, args.targetId),
+    ])
+    if (source.archivedAt !== undefined || target.archivedAt !== undefined) {
+      throw new Error('Restore archived debts before merging')
+    }
+    if (source.direction !== target.direction) {
+      throw new Error('Only debts in the same direction can be merged')
+    }
+    await mergeDebtClaims(ctx, user._id, source, target)
+    await ctx.db.patch(target._id, {
+      openingBalance:
+        Math.round((target.openingBalance + source.openingBalance) * 100) / 100,
+    })
+    await ctx.db.delete(source._id)
+    return target._id
   },
 })
 

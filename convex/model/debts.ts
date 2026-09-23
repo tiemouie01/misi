@@ -13,10 +13,12 @@ export function validateDebtName(name: string) {
   return trimmed
 }
 
+/** Names are unique per direction: you can owe Ama and have Ama owe you. */
 export async function assertUniqueDebtName(
   ctx: ReadCtx,
   userId: string,
   name: string,
+  direction: Doc<'debts'>['direction'],
   excludeId?: Id<'debts'>,
 ) {
   const debts = await ctx.db
@@ -27,9 +29,13 @@ export async function assertUniqueDebtName(
     (debt) =>
       debt._id !== excludeId &&
       debt.archivedAt === undefined &&
+      debt.direction === direction &&
       debt.name.toLowerCase() === name.toLowerCase(),
   )
-  if (duplicate) throw new Error(`A debt named ${name} already exists`)
+  if (duplicate) {
+    const label = direction === 'you_owe' ? 'You owe' : 'Owed to you'
+    throw new Error(`A debt named ${name} already exists under ${label}`)
+  }
 }
 
 export async function requireOwnedDebt(

@@ -461,6 +461,15 @@ function ClaimFields({
                 onClick={() => onDebtId(debt.id)}
               >
                 <span className="truncate">{debt.name}</span>
+                {debts.some(
+                  (other) =>
+                    other.id !== debt.id &&
+                    other.name.toLowerCase() === debt.name.toLowerCase(),
+                ) && (
+                  <span className="shrink-0 text-sea-ink-soft">
+                    · {debt.direction === 'you_owe' ? 'You owe' : 'Owed to you'}
+                  </span>
+                )}
               </Button>
             ))}
           </div>

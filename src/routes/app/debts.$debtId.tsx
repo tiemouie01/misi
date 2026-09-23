@@ -1,8 +1,13 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { Archive, ArchiveRestore, Pencil, Plus } from 'lucide-react'
+import { Archive, ArchiveRestore, Merge, Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -11,6 +16,15 @@ import { claimFeedTitle } from '../../../shared/claim'
 import { AppProviders } from '#/components/app/app-providers'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { TransactionDeleteDialog } from '#/components/app/transactions-card'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import {
@@ -23,6 +37,13 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select'
 import {
   canDeleteTransaction,
   canMutateTransaction,
@@ -83,6 +104,8 @@ function DebtDetailPage() {
   const updateDebt = useMutation(api.misi.updateDebt)
   const archiveDebt = useMutation(api.misi.archiveDebt)
   const restoreDebt = useMutation(api.misi.restoreDebt)
+  const mergeDebt = useMutation(api.misi.mergeDebt)
+  const navigate = useNavigate()
   const [editorOpen, setEditorOpen] = useState(false)
   const [name, setName] = useState(detail.name)
   const [opening, setOpening] = useState(
@@ -92,6 +115,10 @@ function DebtDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeTargetId, setMergeTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
+  const [mergeError, setMergeError] = useState<string | null>(null)
 
   const debt = mapDebt(detail)
   const accounts = useMemo<Account[]>(
@@ -120,6 +147,15 @@ function DebtDetailPage() {
     [data?.categories],
   )
   const debts = (data?.debts ?? []).map(mapDebt)
+  const mergeTargets = debt.archived
+    ? []
+    : debts.filter(
+        (item) =>
+          item.id !== debt.id &&
+          !item.archived &&
+          item.direction === debt.direction,
+      )
+  const mergeTarget = mergeTargets.find((item) => item.id === mergeTargetId)
   const recents = data?.oneTapRecents ?? []
   const transactions = useMemo<Txn[]>(
     () =>
@@ -215,6 +251,35 @@ function DebtDetailPage() {
     }
   }
 
+  async function confirmMerge() {
+    if (!mergeTarget || merging) return
+    setMergeError(null)
+    setMerging(true)
+    try {
+      await mergeDebt({
+        sourceId: debt.id as Id<'debts'>,
+        targetId: mergeTarget.id as Id<'debts'>,
+      })
+      // This debt no longer exists, so skip refetching its detail query.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: bootstrapQuery.queryKey }),
+        queryClient.invalidateQueries({
+          queryKey: convexQuery(api.misi.listDebts, {}).queryKey,
+        }),
+      ])
+      setMergeOpen(false)
+      toast.success(`Merged into ${mergeTarget.name}`)
+      void navigate({
+        to: '/app/debts/$debtId',
+        params: { debtId: mergeTarget.id },
+      })
+    } catch (caught) {
+      setMergeError(mutationErrorMessage(caught, 'Unable to merge debts'))
+    } finally {
+      setMerging(false)
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete || deleting) return
     setDeleting(true)
@@ -300,6 +365,22 @@ function DebtDetailPage() {
                 >
                   <Archive className="size-4" />
                   Archive
+                </Button>
+              )}
+              {mergeTargets.length > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setMergeTargetId(
+                      mergeTargets.length === 1 ? mergeTargets[0].id : '',
+                    )
+                    setMergeError(null)
+                    setMergeOpen(true)
+                  }}
+                >
+                  <Merge className="size-4" />
+                  Merge into…
                 </Button>
               )}
               {!debt.archived && (
@@ -458,6 +539,63 @@ function DebtDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={mergeOpen}
+        onOpenChange={(open) => {
+          if (!open && !merging) setMergeOpen(false)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Merge {debt.name} into…</AlertDialogTitle>
+            <AlertDialogDescription>
+              {mergeTarget
+                ? `${debt.name}'s movements and ${formatK(debt.openingBalance)} opening balance will move to ${mergeTarget.name}, bringing its remaining to ${formatK(mergeTarget.remaining + debt.remaining)}. ${debt.name} is then deleted.`
+                : `Pick another ${debt.direction === 'you_owe' ? 'you owe' : 'owed to you'} debt. ${debt.name}'s movements and balance will move there, and ${debt.name} is then deleted.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div>
+            <Label htmlFor="merge-debt-target" className="mb-2">
+              Merge into
+            </Label>
+            <Select
+              value={mergeTargetId}
+              disabled={merging}
+              onValueChange={setMergeTargetId}
+            >
+              <SelectTrigger id="merge-debt-target" className="w-full">
+                <SelectValue placeholder="Choose a debt" />
+              </SelectTrigger>
+              <SelectContent>
+                {mergeTargets.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name} · {formatK(item.remaining)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {mergeError && (
+            <p
+              role="alert"
+              className="rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+            >
+              {mergeError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={merging}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              disabled={!mergeTarget || merging}
+              onClick={() => void confirmMerge()}
+            >
+              {merging ? 'Merging…' : 'Merge debts'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {sheet.open && (
         <QuickAddSheet

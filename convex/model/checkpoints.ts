@@ -1,6 +1,7 @@
 import {
   checkpointDebtOpeningBalance,
   isBeforeCheckpoint,
+  mergeCheckpointDebtEntries,
 } from '../../shared/checkpoints'
 import { computeClaimRemaining } from '../../shared/claim'
 import { foldSavingsBalance } from '../../shared/savings'
@@ -237,4 +238,43 @@ export async function removeTransaction(
   await invalidateCheckpointsFrom(ctx, userId, transaction.occurredAt)
   await ctx.db.delete(transaction._id)
   return transaction._id
+}
+
+/**
+ * Moves every claim from `source` onto `target` and folds the source's
+ * checkpoint remaining into the target's. No occurredAt changes and every
+ * checkpoint is rewritten here, so none is invalidated. The caller must add
+ * the source's opening balance to the target's in the same mutation.
+ */
+export async function mergeDebtClaims(
+  ctx: MutationCtx,
+  userId: string,
+  source: Doc<'debts'>,
+  target: Doc<'debts'>,
+) {
+  const [claims, checkpoints] = await Promise.all([
+    ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_debt_and_time', (q) =>
+        q.eq('userId', userId).eq('debtId', source._id),
+      )
+      .collect(),
+    ctx.db
+      .query('cycleCheckpoints')
+      .withIndex('by_user_and_as_of', (q) => q.eq('userId', userId))
+      .collect(),
+  ])
+  for (const claim of claims) {
+    // Claims carry their debt's name as payee, as addTransaction writes it.
+    await ctx.db.patch(claim._id, { debtId: target._id, payee: target.name })
+  }
+  for (const checkpoint of checkpoints) {
+    await ctx.db.patch(checkpoint._id, {
+      debtRemaining: mergeCheckpointDebtEntries(
+        checkpoint.debtRemaining,
+        { debtId: source._id, openingBalance: source.openingBalance },
+        { debtId: target._id, openingBalance: target.openingBalance },
+      ),
+    })
+  }
 }
