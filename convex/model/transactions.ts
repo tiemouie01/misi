@@ -101,7 +101,7 @@ export async function assertMutableUserTransaction(
     assertDebtClaimMutable(debt.archivedAt, action)
   }
 
-  if (transaction.type !== 'income') return
+  if (transaction.type !== 'income' || action === 'edited') return
 
   const autoSaveEvent = await ctx.db
     .query('autoSaveEvents')
@@ -111,6 +111,34 @@ export async function assertMutableUserTransaction(
     throw new Error(
       `Income with a handled savings proposal cannot be ${action}`,
     )
+  }
+}
+
+/**
+ * Income whose savings proposal was confirmed or dismissed stays editable
+ * (source, account, payee, date, amount), but it must remain income and cannot
+ * drop below a confirmed auto-save, so the Savings move it funded stays valid.
+ */
+export async function assertHandledIncomeEdit(
+  ctx: ReadCtx,
+  transaction: Doc<'transactions'>,
+  next: { type: Doc<'transactions'>['type']; amount: number },
+) {
+  if (transaction.type !== 'income') return
+
+  const autoSaveEvent = await ctx.db
+    .query('autoSaveEvents')
+    .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
+    .first()
+  if (!autoSaveEvent) return
+  if (next.type !== 'income') {
+    throw new Error('Income with a handled savings proposal must stay income')
+  }
+  if (
+    autoSaveEvent.status === 'confirmed' &&
+    next.amount < autoSaveEvent.amount
+  ) {
+    throw new Error('Income cannot be less than the amount already auto-saved')
   }
 }
 

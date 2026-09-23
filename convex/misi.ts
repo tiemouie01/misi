@@ -73,6 +73,7 @@ import {
 import { assertSavingsHasAmount, computeSavingsBalance } from './model/savings'
 import {
   applyTransactionBalanceTransition,
+  assertHandledIncomeEdit,
   assertMutableUserTransaction,
   assertNoAutoSaveEvent,
   requireOwnedIncomeTransaction,
@@ -1137,6 +1138,7 @@ export const updateTransaction = mutation({
     }
 
     await assertMutableUserTransaction(ctx, transaction, 'edited')
+    await assertHandledIncomeEdit(ctx, transaction, args)
 
     if (args.type === 'allocation') {
       throw new Error('Transactions cannot be converted into envelope moves')
