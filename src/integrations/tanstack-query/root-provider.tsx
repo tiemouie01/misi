@@ -1,6 +1,8 @@
 import { ConvexQueryClient } from '@convex-dev/react-query'
 import { QueryClient } from '@tanstack/react-query'
 
+import { persistQueries } from './persist'
+
 export function getContext() {
   const convexUrl = import.meta.env.VITE_CONVEX_URL
   if (!convexUrl) throw new Error('VITE_CONVEX_URL is not configured')
@@ -17,6 +19,7 @@ export function getContext() {
     },
   })
   convexQueryClient.connect(queryClient)
+  persistQueries(queryClient)
 
   return {
     queryClient,

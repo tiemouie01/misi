@@ -22,6 +22,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '#/components/ui/tooltip'
+import { clearOfflineData } from '#/integrations/tanstack-query/persist'
 import { authClient } from '#/lib/auth-client'
 
 const DAY_MS = 86_400_000
@@ -59,6 +60,7 @@ const bottomNavItemClassName =
 
 async function signOut() {
   await authClient.signOut()
+  await clearOfflineData()
   window.location.href = '/login'
 }
 
