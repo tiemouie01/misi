@@ -156,6 +156,12 @@ function RootComponent() {
     lastKnownAuth = context.isAuthenticated
   }, [context.isAuthenticated])
 
+  useEffect(() => {
+    if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('/sw.js')
+    }
+  }, [])
+
   return (
     <ConvexAuthProvider
       client={context.convexQueryClient.convexClient}

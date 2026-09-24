@@ -22,6 +22,7 @@ export default [
       'convex/_generated/**',
       'eslint.config.js',
       'prettier.config.js',
+      'public/**',
     ],
   },
 ]
