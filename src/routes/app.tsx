@@ -12,6 +12,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { api } from '../../convex/_generated/api'
 import { AppBottomNav, AppHeader } from '#/components/app/app-header'
 import { IncomeSourcesTask } from '#/components/app/income-sources-task'
+import { QuickAddProvider } from '#/components/app/quick-add-provider'
 import { ReconcileTask } from '#/components/app/reconcile-task'
 import {
   Dialog,
@@ -175,13 +176,13 @@ function AppLayout() {
           </span>
         </p>
       )}
-      <Outlet />
-      {/* Keeps the end of the page clear of the bottom tab bar and the
-          quick-add FAB above it on mobile. */}
-      <div
-        aria-hidden
-        className="h-[calc(var(--app-bottom-nav-h)+5rem)] sm:hidden"
-      />
+      <QuickAddProvider>
+        <Outlet />
+      </QuickAddProvider>
+      {/* The only bottom spacing /app pages need: together with <main>'s own
+          bottom padding it keeps the end of the page clear of the quick-add
+          FAB and, on phones, the bottom tab bar under it. */}
+      <div aria-hidden className="h-[calc(var(--app-bottom-nav-h)+4rem)]" />
       <AppBottomNav />
       <AppTaskOverlays
         task={task}

@@ -13,7 +13,6 @@ import { CategoryPicker } from '#/components/app/category-picker'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Calendar } from '#/components/ui/calendar'
-import { Card } from '#/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -62,15 +61,6 @@ import type {
   TxnType,
 } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
-
-interface QuickAddCardProps {
-  categories: Category[]
-  recents: RecentTransaction[]
-  accounts: Account[]
-  usdRate: number
-  onOpen: (initial: QuickAddInitial) => void
-  animationDelay: string
-}
 
 interface QuickAddIncomeSource {
   id: string
@@ -315,68 +305,6 @@ function RecentChips({
         )
       })}
     </div>
-  )
-}
-
-export function QuickAddCard({
-  categories,
-  recents,
-  accounts,
-  usdRate,
-  onOpen,
-  animationDelay,
-}: QuickAddCardProps) {
-  const visible = visibleRecents(recents, categories)
-
-  return (
-    <Card
-      variant="island"
-      className="rise-in gap-0 rounded-3xl p-6"
-      style={{ animationDelay }}
-    >
-      <p className="island-kicker">Log · under 10 seconds</p>
-      <div className="mt-4 flex items-center gap-4">
-        <Button
-          type="button"
-          aria-label="Log a transaction"
-          size="icon-lg"
-          className="size-14 shadow-lg hover:shadow-xl"
-          onClick={() => onOpen({ mode: 'expense' })}
-        >
-          <Plus className="size-6" />
-        </Button>
-        <div>
-          <p className="text-lg font-extrabold text-sea-ink">
-            Log a transaction
-          </p>
-          <p className="text-sm text-sea-ink-soft">
-            Amount first — details only if you want them.
-          </p>
-        </div>
-      </div>
-      {visible.length > 0 && (
-        <div className="mt-5 border-t border-dashed border-(--line) pt-4">
-          <p className="field-label">One-tap recents</p>
-          <div className="mt-2.5">
-            <RecentChips
-              recents={visible}
-              categories={categories}
-              accounts={accounts}
-              usdRate={usdRate}
-              onSelect={(recent) =>
-                onOpen({
-                  mode: 'expense',
-                  amount: recent.amount,
-                  categoryId: recent.categoryId,
-                  accountId: recent.accountId,
-                  payee: recent.payee,
-                })
-              }
-            />
-          </div>
-        </div>
-      )}
-    </Card>
   )
 }
 

@@ -17,6 +17,7 @@ import { TooltipProvider } from '#/components/ui/tooltip'
 import { authClient } from '#/lib/auth-client'
 import { ConvexAuthProvider } from '#/lib/convex-auth'
 import { getToken } from '#/lib/auth-server'
+import { SPLASH_SCREENS } from '#/lib/splash-screens'
 
 import type { ConvexQueryClient } from '@convex-dev/react-query'
 import type { QueryClient } from '@tanstack/react-query'
@@ -143,6 +144,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         rel: 'manifest',
         href: '/manifest.webmanifest',
       },
+      ...SPLASH_SCREENS.map(({ href, media }) => ({
+        rel: 'apple-touch-startup-image',
+        href,
+        media,
+      })),
     ],
   }),
   component: RootComponent,

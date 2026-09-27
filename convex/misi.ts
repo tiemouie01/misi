@@ -305,7 +305,10 @@ export const bootstrap = query({
       return null
     }
 
-    return await loadBootstrapData(ctx, user._id, cycle)
+    return {
+      ...(await loadBootstrapData(ctx, user._id, cycle)),
+      userName: user.name,
+    }
   },
 })
 

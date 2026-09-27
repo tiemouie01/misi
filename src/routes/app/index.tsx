@@ -4,6 +4,7 @@ import {
   createFileRoute,
   Link,
   redirect,
+  useHydrated,
   useNavigate,
 } from '@tanstack/react-router'
 import { useMutation, usePaginatedQuery } from 'convex/react'
@@ -19,34 +20,22 @@ import {
   totalActualIncome,
 } from '../../../shared/income'
 import { spendingEnvelopeBalance } from '../../../shared/savings'
+import { greeting } from '#/lib/greeting'
 import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
 import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
 import { NetWorthCard } from '#/components/app/net-worth-card'
-import {
-  QuickAddCard,
-  QuickAddFab,
-  QuickAddSheet,
-} from '#/components/app/quick-add'
-import {
-  TransactionsCard,
-  TransactionDeleteDialog,
-} from '#/components/app/transactions-card'
+import { useQuickAdd } from '#/components/app/quick-add-provider'
+import { TransactionsCard } from '#/components/app/transactions-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import {
   accountMwkValue,
-  canDeleteTransaction,
   canMutateTransaction,
   formatK,
-  isSpendableAccount,
   spendableTotalMwk,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
-import { mapDebt } from '#/lib/debts'
-import {
-  mutationErrorMessage,
-  useQuickAddSheet,
-} from '#/lib/use-quick-add-sheet'
+import { mutationErrorMessage } from '#/lib/use-quick-add-sheet'
 
 import type { FunctionReturnType } from 'convex/server'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
@@ -255,8 +244,6 @@ function AppDashboard({
   const setAccountSpendableMutation = useMutation(api.misi.setAccountSpendable)
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<Txn | null>(null)
-  const [deleting, setDeleting] = useState(false)
   const { tab = 'activity' } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -299,7 +286,6 @@ function AppDashboard({
       })),
     [data.accounts],
   )
-  const recents = data.oneTapRecents ?? []
 
   const categories = useMemo<Category[]>(
     () =>
@@ -348,7 +334,6 @@ function AppDashboard({
     )
     const daysRemaining = Math.max(0, Math.ceil((cycle.endsAt - now) / DAY_MS))
     const today = new Date(now)
-    const todayShort = shortDate(now)
 
     return {
       label: cycle.label,
@@ -360,7 +345,6 @@ function AppDashboard({
       headerBadge: `${cycle.label} · day ${dayNumber}`,
       greetingDate: greetingDateFormat.format(today),
       endsOn: shortDate(cycle.endsAt),
-      reconcileNote: `Reconcile ${todayShort}`,
       cycleGain: data.transactions.reduce((sum, transaction) => {
         if (transaction.type === 'income') return sum + transaction.amount
         if (transaction.type === 'expense') return sum - transaction.amount
@@ -438,48 +422,8 @@ function AppDashboard({
       currency: 'MWK',
     },
   ]
-  const debts = data.debts.map(mapDebt)
-
-  const expectedBalances = useMemo(
-    () =>
-      accounts
-        .filter((account) => isSpendableAccount(account))
-        .map((account) => ({
-          accountId: account.id,
-          expected: account.balance,
-        })),
-    [accounts],
-  )
-
-  const defaultExpenseAccountId =
-    data.settings.defaultExpenseAccountId ||
-    expectedBalances[0]?.accountId ||
-    ''
-  const defaultTransferFromAccountId =
-    data.settings.defaultTransferFromAccountId ||
-    expectedBalances[0]?.accountId ||
-    ''
-  const defaultTransferToAccountId =
-    data.settings.defaultTransferToAccountId ??
-    expectedBalances.find(
-      (balance) => balance.accountId !== defaultTransferFromAccountId,
-    )?.accountId ??
-    defaultTransferFromAccountId
-  const {
-    sheet,
-    error: quickAddError,
-    openSheet,
-    closeSheet,
-    saveTransaction,
-    deleteTransaction,
-    resolveAccountId,
-    autoSaveRateForSource,
-  } = useQuickAddSheet({
-    accounts,
-    incomePlans: data.cycleIncomePlans,
-    defaultSavingsRate: data.settings.defaultSavingsRate,
-    defaultExpenseAccountId,
-  })
+  const hydrated = useHydrated()
+  const { openSheet, requestDelete } = useQuickAdd()
 
   const pendingAutoSave = data.pendingAutoSave
   const autoSaveUi: AutoSaveUiState | null = pendingAutoSave
@@ -500,47 +444,31 @@ function AppDashboard({
 
   function editTransaction(transaction: Txn) {
     if (!canMutateTransaction(transaction)) return
-    openSheet({
-      transactionId: transaction.id,
-      mode: transaction.type,
-      amount: transaction.amount,
-      fxRate: transaction.fxRate,
-      categoryId: transaction.categoryId,
-      accountId: transaction.accountId,
-      toAccountId: transaction.toAccountId,
-      payee: transaction.payee,
-      sourceId: transaction.sourceId,
-      items: transaction.items,
-      note: transaction.note,
-      occurredAt: transaction.occurredAt,
-      excludeFromBudget: transaction.excludeFromBudget,
-      autoSave: transaction.autoSave,
-      fromSavings:
-        transaction.walletId === 'savings' && transaction.type !== 'allocation',
-      debtId: transaction.debtId,
-      claimAction: transaction.claimAction,
-      adjustPolarity: transaction.adjustPolarity,
-    })
-  }
-
-  function requestDelete(transaction: Txn) {
-    if (!canDeleteTransaction(transaction)) return
-    closeSheet()
-    setPendingDelete(transaction)
-  }
-
-  async function confirmDelete() {
-    if (!pendingDelete || deleting) return
-    setDeleting(true)
-    try {
-      const deleted = await deleteTransaction(pendingDelete.id)
-      if (deleted) {
-        setPendingDelete(null)
-        toast.success('Transaction deleted')
-      }
-    } finally {
-      setDeleting(false)
-    }
+    openSheet(
+      {
+        transactionId: transaction.id,
+        mode: transaction.type,
+        amount: transaction.amount,
+        fxRate: transaction.fxRate,
+        categoryId: transaction.categoryId,
+        accountId: transaction.accountId,
+        toAccountId: transaction.toAccountId,
+        payee: transaction.payee,
+        sourceId: transaction.sourceId,
+        items: transaction.items,
+        note: transaction.note,
+        occurredAt: transaction.occurredAt,
+        excludeFromBudget: transaction.excludeFromBudget,
+        autoSave: transaction.autoSave,
+        fromSavings:
+          transaction.walletId === 'savings' &&
+          transaction.type !== 'allocation',
+        debtId: transaction.debtId,
+        claimAction: transaction.claimAction,
+        adjustPolarity: transaction.adjustPolarity,
+      },
+      transaction,
+    )
   }
 
   async function confirmAutoSave() {
@@ -606,7 +534,7 @@ function AppDashboard({
 
   return (
     <div className="min-h-screen">
-      <main className="page-wrap pb-28 py-6 sm:py-8">
+      <main className="page-wrap py-6 sm:py-8">
         {/* Phones and tablets get Activity / Balances tabs under a sticky bar;
             from `lg` both panels sit side by side as two columns. Flex (not
             grid) below `lg` so the sticky bar can pin across either panel. */}
@@ -622,7 +550,7 @@ function AppDashboard({
                 {cycleInfo.greetingDate} · {cycleInfo.label} · {cycleInfo.dayOf}
               </p>
               <h1 className="font-display mt-2 text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
-                Good afternoon.
+                {greeting(hydrated ? new Date() : null, data.userName)}
               </h1>
               <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
                 <span className="font-mono font-semibold text-sea-ink tabular-nums">
@@ -635,14 +563,6 @@ function AppDashboard({
                 /day until {cycleInfo.endsOn}.
               </p>
             </section>
-            <QuickAddCard
-              categories={categories}
-              recents={recents}
-              accounts={accounts}
-              usdRate={data.settings.usdRate}
-              onOpen={openSheet}
-              animationDelay="30ms"
-            />
             {autoSaveUi && (
               <AutoSaveCard
                 status={autoSaveUi.status}
@@ -733,54 +653,6 @@ function AppDashboard({
           </Link>
         </footer>
       </main>
-      {!sheet.open && !pendingDelete && <QuickAddFab onOpen={openSheet} />}
-      {sheet.open && (
-        <QuickAddSheet
-          initial={sheet.initial}
-          categories={categories}
-          accounts={accounts}
-          debts={debts}
-          incomeSources={data.incomeSources.map((source) => ({
-            id: source._id,
-            name: source.name,
-            savingsRate: source.savingsRate,
-            isAnchor: source.isAnchor,
-          }))}
-          recents={recents}
-          categoryUsage={data.categoryUsage}
-          defaultExpenseAccountId={defaultExpenseAccountId}
-          defaultTransferFromAccountId={defaultTransferFromAccountId}
-          defaultTransferToAccountId={defaultTransferToAccountId}
-          usdRate={data.settings.usdRate}
-          reconcileNote={cycleInfo.reconcileNote}
-          autoSaveRateForSource={autoSaveRateForSource}
-          resolveAccountId={resolveAccountId}
-          error={quickAddError}
-          onClose={closeSheet}
-          onSave={(payload) => void saveTransaction(payload)}
-          onDelete={
-            sheet.initial.transactionId
-              ? () => {
-                  const transaction = feedTransactions.find(
-                    (item) => item.id === sheet.initial.transactionId,
-                  )
-                  if (transaction) requestDelete(transaction)
-                }
-              : undefined
-          }
-        />
-      )}
-      <TransactionDeleteDialog
-        transaction={pendingDelete}
-        error={pendingDelete ? quickAddError : null}
-        busy={deleting}
-        onCancel={() => {
-          if (deleting) return
-          closeSheet()
-          setPendingDelete(null)
-        }}
-        onConfirm={() => void confirmDelete()}
-      />
     </div>
   )
 }
