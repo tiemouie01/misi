@@ -93,7 +93,7 @@ export function AppHeader({ cycle }: { cycle?: CycleBadgeSource | null }) {
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
               <MisiMark className="size-5" />
             </span>
-            <span className="font-display hidden text-2xl font-bold tracking-tight text-sea-ink sm:inline">
+            <span className="font-display text-xl font-bold tracking-tight text-sea-ink sm:text-2xl">
               Misi
             </span>
           </Link>

@@ -14,6 +14,7 @@ import {
   CATEGORY_BUDGET_GROUPS,
   CATEGORY_BUDGET_GROUP_LABELS,
 } from '../../../shared/category-defs'
+import { sortByUsage } from '../../../shared/one-tap-recents'
 
 import type { Category } from '#/lib/categories'
 
@@ -22,7 +23,7 @@ const PILL_LIMIT = 6
 
 interface CategoryPickerProps {
   categories: Category[]
-  /** Category keys ranked by recent use, most used first. */
+  /** Category keys ranked by use, most used first; unused keep their order. */
   usage?: string[]
   value: string
   onChange: (key: string) => void
@@ -34,13 +35,16 @@ export function CategoryPicker({
   value,
   onChange,
 }: CategoryPickerProps) {
-  const active = categories.filter(
-    (category) => !category.archived && !category.isSystem,
+  // Snapshot usage on open so pills don't reshuffle when a save updates it.
+  const [ranking] = useState(usage)
+  const active = sortByUsage(
+    categories.filter((category) => !category.archived && !category.isSystem),
+    ranking,
   )
   // Collapse only when "More" would hide at least two categories.
   const collapsed = active.length > PILL_LIMIT + 1
   const [row, setRow] = useState(() =>
-    initialRow(active, usage, value).slice(0, PILL_LIMIT),
+    initialRow(active, value).slice(0, PILL_LIMIT),
   )
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -200,11 +204,8 @@ function CategoryPill({
   )
 }
 
-/** Selected first, then most used, then the user's own category order. */
-function initialRow(active: Category[], usage: string[], value: string) {
+/** Selected first, then the rest in usage order. */
+function initialRow(active: Category[], value: string) {
   const keys = active.map((category) => category.key)
-  const used = usage.filter((key) => keys.includes(key))
-  return [...new Set([value, ...used, ...keys])].filter((key) =>
-    keys.includes(key),
-  )
+  return [...new Set([value, ...keys])].filter((key) => keys.includes(key))
 }

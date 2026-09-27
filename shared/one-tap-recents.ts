@@ -153,6 +153,25 @@ export function categoryUsageFromLogs(
     .map(([categoryId]) => categoryId)
 }
 
+/**
+ * Orders items by their key's rank in `usage` (most used first). Unused items
+ * keep their original relative order after the used ones.
+ */
+export function sortByUsage<T extends { key: string }>(
+  items: readonly T[],
+  usage: readonly string[],
+): T[] {
+  const rank = new Map(usage.map((key, index) => [key, index]))
+  return items
+    .map((item, index) => ({ item, index, rank: rank.get(item.key) }))
+    .sort(
+      (left, right) =>
+        (left.rank ?? Infinity) - (right.rank ?? Infinity) ||
+        left.index - right.index,
+    )
+    .map(({ item }) => item)
+}
+
 function isEligibleRecentLog(log: OneTapRecentLog, sinceOccurredAt?: number) {
   if (log.type !== 'expense') return false
   if (log.adjustment || log.autoSave) return false

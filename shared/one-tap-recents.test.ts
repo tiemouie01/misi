@@ -6,6 +6,7 @@ import {
   categoryUsageFromLogs,
   oneTapRecentKey,
   oneTapRecentsFromLogs,
+  sortByUsage,
 } from './one-tap-recents.ts'
 
 import type { OneTapRecentLog } from './one-tap-recents.ts'
@@ -233,5 +234,15 @@ test('ranks categories by expense count, then recency, skipping adjustments', ()
       },
     ]),
     ['transport', 'airtime', 'groceries'],
+  )
+})
+
+test('sorts items by usage rank, keeping unused items in original order', () => {
+  const items = ['food', 'rent', 'transport', 'airtime', 'fun'].map((key) => ({
+    key,
+  }))
+  assert.deepEqual(
+    sortByUsage(items, ['transport', 'gone', 'food']).map((item) => item.key),
+    ['transport', 'food', 'rent', 'airtime', 'fun'],
   )
 })

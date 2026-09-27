@@ -1,5 +1,5 @@
 import { useMutation } from 'convex/react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../convex/_generated/api'
@@ -33,6 +33,8 @@ export function useQuickAddSheet({
     initial: QuickAddInitial
   }>({ open: false, initial: { mode: 'expense' } })
   const [error, setError] = useState<string | null>(null)
+  // Mirrors sheet.open for async callbacks; only openSheet/closeSheet set it.
+  const sheetOpenRef = useRef(false)
 
   const resolveAccountId = useCallback(
     (accountId: string) => {
@@ -72,6 +74,7 @@ export function useQuickAddSheet({
   )
 
   function openSheet(initial: QuickAddInitial) {
+    sheetOpenRef.current = true
     setError(null)
     setSheet({
       open: true,
@@ -89,12 +92,19 @@ export function useQuickAddSheet({
   }
 
   function closeSheet() {
+    sheetOpenRef.current = false
     setError(null)
     setSheet((current) => ({ ...current, open: false }))
   }
 
   async function saveTransaction(payload: QuickAddPayload) {
-    setError(null)
+    // Convex resolves a mutation only once every subscribed query (bootstrap,
+    // the feed, …) has re-run with it, so waiting to close the sheet makes
+    // logging feel sluggish. Close new transactions straight away and bring
+    // the sheet back with the error if the save fails.
+    const isNew = !payload.transactionId
+    if (isNew) closeSheet()
+    else setError(null)
     try {
       if (payload.transactionId) {
         if (payload.occurredAt === undefined) {
@@ -160,15 +170,23 @@ export function useQuickAddSheet({
           'Envelope moves are created from Spendable, not Quick add',
         )
       }
-      closeSheet()
+      if (!isNew) closeSheet()
     } catch (caught) {
-      setError(
-        mutationErrorMessage(
-          caught,
-          'Unable to save transaction. Check the details and try again.',
-        ),
+      const message = mutationErrorMessage(
+        caught,
+        'Unable to save transaction. Check the details and try again.',
       )
       console.error('Unable to save transaction', caught)
+      if (!isNew) {
+        setError(message)
+      } else if (sheetOpenRef.current) {
+        // The user already started another entry; don't clobber it.
+        toast.error(message)
+      } else {
+        const { type, ...fields } = payload
+        openSheet({ ...fields, mode: type })
+        setError(message)
+      }
     }
   }
 
