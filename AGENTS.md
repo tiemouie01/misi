@@ -126,6 +126,6 @@ tanstackIntent:
 
 # UI implementation
 
-- Build UI with the existing Shadcn components in `src/components/ui` as the base.
+- Build UI with the existing Shadcn components in `apps/web/src/components/ui` as the base.
 - Adapt and extend those shared components to match Misi's visual style instead of recreating equivalent controls from raw elements or one-off components.
 - Add a new shared primitive only when no existing Shadcn component provides the required semantics or behavior.

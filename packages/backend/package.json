@@ -1,0 +1,25 @@
+{
+  "name": "@misi/backend",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./_generated/*": "./convex/_generated/*.js"
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "codegen": "convex codegen",
+    "typecheck": "tsc --noEmit -p convex",
+    "lint": "eslint -c ../../apps/web/eslint.config.js"
+  },
+  "dependencies": {
+    "@convex-dev/better-auth": "^0.12.5",
+    "@misi/shared": "workspace:*",
+    "better-auth": "^1.5.3",
+    "convex": "^1.32.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "eslint": "^9.20.0",
+    "typescript": "^6.0.2"
+  }
+}
