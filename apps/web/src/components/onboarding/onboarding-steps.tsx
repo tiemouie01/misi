@@ -1,5 +1,5 @@
 import { CalendarIcon, Minus, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -17,22 +17,33 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 import { Switch } from '#/components/ui/switch'
+import {
+  DAYS_OF_MONTH,
+  buildReviewSections,
+  incomeFieldId,
+  ordinal,
+} from '#/hooks/onboarding-step-helpers'
+import {
+  useAccountsStep,
+  useBudgetsStep,
+  useExpectedWindowPicker,
+  useIncomeStep,
+  usePaydayStep,
+  useSavingsRateStepper,
+  useWelcomeStep,
+} from '#/hooks/use-onboarding-steps'
 import { formatK } from '#/lib/app-data'
 import {
   ACCOUNT_KIND_LABELS,
   ACCOUNT_PRESETS,
   BUDGETABLE_CATEGORIES,
   BUDGET_GROUP_LABELS,
-  formatAmountInput,
-  newKey,
-  parseAmount,
-  validateIncomeSources,
 } from '#/lib/onboarding-data'
 import { cn } from '#/lib/utils'
 
+import type { OnboardingDraftUpdater } from '#/hooks/onboarding-step-helpers'
 import type { Account } from '#/lib/app-data'
 import type {
-  DraftAccount,
   IncomeSourceIssue,
   OnboardingDraft,
   OnboardingStep,
@@ -41,43 +52,12 @@ import type { BudgetGroup } from '@misi/shared/category-defs'
 
 export interface StepProps {
   draft: OnboardingDraft
-  setDraft: (updater: (draft: OnboardingDraft) => OnboardingDraft) => void
+  setDraft: OnboardingDraftUpdater
   goToStep: (step: OnboardingStep) => void
   error?: string | null
 }
 
 const accountKinds: Account['kind'][] = ['bank', 'mobile', 'cash', 'investment']
-
-function ordinal(day: number) {
-  if (day >= 11 && day <= 13) return `${day}th`
-  switch (day % 10) {
-    case 1:
-      return `${day}st`
-    case 2:
-      return `${day}nd`
-    case 3:
-      return `${day}rd`
-    default:
-      return `${day}th`
-  }
-}
-
-function formatExpectedWindow(
-  expectedDayStart: string,
-  expectedDayEnd: string,
-): string {
-  const fromDay = Number(expectedDayStart)
-  if (!Number.isInteger(fromDay) || fromDay < 1 || fromDay > 31) return ''
-  const toDay = Number(expectedDayEnd || expectedDayStart)
-  if (!Number.isInteger(toDay) || toDay < fromDay || toDay > 31) {
-    return ordinal(fromDay)
-  }
-  return toDay === fromDay
-    ? ordinal(fromDay)
-    : `${ordinal(fromDay)}–${ordinal(toDay)}`
-}
-
-const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, index) => index + 1)
 
 function ExpectedWindowPicker({
   expectedDayStart,
@@ -94,34 +74,11 @@ function ExpectedWindowPicker({
   'aria-invalid'?: boolean
   'aria-describedby'?: string
 }) {
-  const [open, setOpen] = useState(false)
-  // Start day picked in this session while waiting for the end day.
-  const [pendingStart, setPendingStart] = useState<number | null>(null)
-  const value = formatExpectedWindow(expectedDayStart, expectedDayEnd)
-  const start = Number(expectedDayStart)
-  const end = Number(expectedDayEnd || expectedDayStart)
-
-  function pickDay(day: number) {
-    if (pendingStart === null) {
-      setPendingStart(day)
-      onChange(String(day), String(day))
-      return
-    }
-    const from = Math.min(pendingStart, day)
-    const to = Math.max(pendingStart, day)
-    onChange(String(from), String(to))
-    setPendingStart(null)
-    setOpen(false)
-  }
+  const { open, setOpen, pendingStart, value, dayState, pickDay, clear, done } =
+    useExpectedWindowPicker({ expectedDayStart, expectedDayEnd, onChange })
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        setPendingStart(null)
-      }}
-    >
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -151,13 +108,7 @@ function ExpectedWindowPicker({
           className="grid grid-cols-7 gap-1"
         >
           {DAYS_OF_MONTH.map((day) => {
-            const inWindow =
-              pendingStart === null
-                ? day >= start && day <= end
-                : day === pendingStart
-            const isEdge =
-              inWindow &&
-              (day === start || day === end || pendingStart !== null)
+            const { inWindow, isEdge } = dayState(day)
             return (
               <Button
                 key={day}
@@ -197,10 +148,7 @@ function ExpectedWindowPicker({
               size="sm"
               className="max-sm:h-10"
               disabled={!value}
-              onClick={() => {
-                onChange('', '')
-                setPendingStart(null)
-              }}
+              onClick={clear}
             >
               Clear
             </Button>
@@ -208,10 +156,7 @@ function ExpectedWindowPicker({
               type="button"
               size="sm"
               className="hover:translate-y-0 max-sm:h-10"
-              onClick={() => {
-                setOpen(false)
-                setPendingStart(null)
-              }}
+              onClick={done}
             >
               Done
             </Button>
@@ -220,13 +165,6 @@ function ExpectedWindowPicker({
       </PopoverContent>
     </Popover>
   )
-}
-
-const SAVINGS_RATE_STEP = 5
-
-function clampSavingsRatePct(value: number) {
-  if (!Number.isFinite(value)) return 0
-  return Math.min(100, Math.max(0, value))
 }
 
 function SavingsRateStepper({
@@ -242,12 +180,8 @@ function SavingsRateStepper({
   'aria-invalid'?: boolean
   'aria-describedby'?: string
 }) {
-  const numeric = Number(value)
-  const current = Number.isFinite(numeric) ? numeric : 0
-
-  function stepBy(delta: number) {
-    onChange(String(clampSavingsRatePct(current + delta)))
-  }
+  const { canDecrease, canIncrease, decrease, increase, setFromText } =
+    useSavingsRateStepper(value, onChange)
 
   return (
     <div className="flex h-10 items-stretch overflow-hidden rounded-xl border border-(--chip-line) bg-(--chip-bg) shadow-sm focus-within:border-lagoon-deep focus-within:ring-2 focus-within:ring-lagoon/25">
@@ -257,8 +191,8 @@ function SavingsRateStepper({
         size="icon"
         className="size-10 shrink-0 rounded-none text-sea-ink-soft hover:bg-(--link-bg-hover) hover:text-sea-ink"
         aria-label="Decrease savings rate by 5%"
-        disabled={current <= 0}
-        onClick={() => stepBy(-SAVINGS_RATE_STEP)}
+        disabled={!canDecrease}
+        onClick={decrease}
       >
         <Minus className="size-4" />
       </Button>
@@ -271,14 +205,7 @@ function SavingsRateStepper({
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
         className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-center shadow-none focus-visible:border-transparent focus-visible:ring-0"
-        onChange={(event) => {
-          const next = event.target.value.replace(/[^\d]/g, '')
-          if (next === '') {
-            onChange('')
-            return
-          }
-          onChange(String(clampSavingsRatePct(Number(next))))
-        }}
+        onChange={(event) => setFromText(event.target.value)}
       />
       <Button
         type="button"
@@ -286,8 +213,8 @@ function SavingsRateStepper({
         size="icon"
         className="size-10 shrink-0 rounded-none text-sea-ink-soft hover:bg-(--link-bg-hover) hover:text-sea-ink"
         aria-label="Increase savings rate by 5%"
-        disabled={current >= 100}
-        onClick={() => stepBy(SAVINGS_RATE_STEP)}
+        disabled={!canIncrease}
+        onClick={increase}
       >
         <Plus className="size-4" />
       </Button>
@@ -296,6 +223,8 @@ function SavingsRateStepper({
 }
 
 export function WelcomeStep({ draft, setDraft, error }: StepProps) {
+  const { setUsdRate, setDefaultSavingsRate, setSavingsOpeningBalance } =
+    useWelcomeStep(setDraft)
   const invalid = Boolean(error)
 
   return (
@@ -313,12 +242,7 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           value={draft.usdRate}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              usdRate: formatAmountInput(event.target.value),
-            }))
-          }
+          onChange={(event) => setUsdRate(event.target.value)}
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
           Used to fold USD accounts into your net worth.
@@ -335,12 +259,7 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           value={draft.defaultSavingsRate}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              defaultSavingsRate: event.target.value.replace(/[^\d]/g, ''),
-            }))
-          }
+          onChange={(event) => setDefaultSavingsRate(event.target.value)}
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
           Used as the starting rate for new income sources. Each source can have
@@ -363,12 +282,7 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
               ? 'onboarding-error ob-savings-balance-hint'
               : 'ob-savings-balance-hint'
           }
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              savingsOpeningBalance: formatAmountInput(event.target.value),
-            }))
-          }
+          onChange={(event) => setSavingsOpeningBalance(event.target.value)}
         />
         <p
           id="ob-savings-balance-hint"
@@ -383,6 +297,8 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
 }
 
 export function PaydayStep({ draft, setDraft }: StepProps) {
+  const { setPaydayDay } = usePaydayStep(setDraft)
+
   return (
     <div className="space-y-4">
       <p className="text-[0.9rem] text-sea-ink-soft">
@@ -391,15 +307,7 @@ export function PaydayStep({ draft, setDraft }: StepProps) {
       </p>
       <div>
         <Label htmlFor="ob-payday">Payday</Label>
-        <Select
-          value={String(draft.paydayDay)}
-          onValueChange={(value) =>
-            setDraft((current) => ({
-              ...current,
-              paydayDay: Number(value),
-            }))
-          }
-        >
+        <Select value={String(draft.paydayDay)} onValueChange={setPaydayDay}>
           <SelectTrigger id="ob-payday" className="mt-2 h-10 w-full rounded-xl">
             <SelectValue />
           </SelectTrigger>
@@ -421,58 +329,15 @@ export function PaydayStep({ draft, setDraft }: StepProps) {
 }
 
 export function AccountsStep({ draft, setDraft }: StepProps) {
-  const isPresetSelected = (presetName: string) =>
-    draft.accounts.some(
-      (account) =>
-        account.isPreset &&
-        account.name.toLowerCase() === presetName.toLowerCase(),
-    )
-
-  function togglePreset(preset: (typeof ACCOUNT_PRESETS)[number]) {
-    setDraft((current) => {
-      const selected = current.accounts.some(
-        (account) =>
-          account.isPreset &&
-          account.name.toLowerCase() === preset.name.toLowerCase(),
-      )
-      if (selected) {
-        return {
-          ...current,
-          accounts: current.accounts.filter(
-            (account) =>
-              !(
-                account.isPreset &&
-                account.name.toLowerCase() === preset.name.toLowerCase()
-              ),
-          ),
-        }
-      }
-      return {
-        ...current,
-        accounts: [
-          ...current.accounts,
-          {
-            key: newKey(),
-            name: preset.name,
-            kind: preset.kind,
-            currency: preset.currency,
-            balance: '',
-            isPreset: true,
-            includeInSpendable: preset.kind !== 'investment',
-          },
-        ],
-      }
-    })
-  }
-
-  function updateAccount(key: string, patch: Partial<DraftAccount>) {
-    setDraft((current) => ({
-      ...current,
-      accounts: current.accounts.map((account) =>
-        account.key === key ? { ...account, ...patch } : account,
-      ),
-    }))
-  }
+  const {
+    isPresetSelected,
+    togglePreset,
+    updateAccount,
+    setAccountKind,
+    setAccountBalance,
+    removeAccount,
+    addAccount,
+  } = useAccountsStep(draft, setDraft)
 
   return (
     <div className="space-y-4">
@@ -520,14 +385,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                     variant="ghost"
                     size="icon"
                     aria-label={`Remove ${account.name || 'account'}`}
-                    onClick={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        accounts: current.accounts.filter(
-                          (item) => item.key !== account.key,
-                        ),
-                      }))
-                    }
+                    onClick={() => removeAccount(account.key)}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -543,10 +401,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                     <Select
                       value={account.kind}
                       onValueChange={(value) =>
-                        updateAccount(account.key, {
-                          kind: value as Account['kind'],
-                          includeInSpendable: value !== 'investment',
-                        })
+                        setAccountKind(account.key, value as Account['kind'])
                       }
                     >
                       <SelectTrigger
@@ -592,9 +447,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
                   }
                   value={account.balance}
                   onChange={(event) =>
-                    updateAccount(account.key, {
-                      balance: formatAmountInput(event.target.value),
-                    })
+                    setAccountBalance(account.key, event.target.value)
                   }
                 />
               </div>
@@ -623,23 +476,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
         type="button"
         variant="secondary"
         className="w-full"
-        onClick={() =>
-          setDraft((current) => ({
-            ...current,
-            accounts: [
-              ...current.accounts,
-              {
-                key: newKey(),
-                name: '',
-                kind: 'bank',
-                currency: 'MWK',
-                balance: '',
-                isPreset: false,
-                includeInSpendable: true,
-              },
-            ],
-          }))
-        }
+        onClick={addAccount}
       >
         <Plus className="size-4" />
         Add another account
@@ -654,11 +491,15 @@ export function IncomeStep({
   error,
   showIntro = true,
 }: StepProps & { showIntro?: boolean }) {
-  const issue = error ? validateIncomeSources(draft) : null
-  const invalid = issue?.message === error ? issue : null
-  const invalidId = invalid
-    ? `ob-income-${invalid.field}-${invalid.sourceKey}`
-    : null
+  const {
+    invalidId,
+    updateSource,
+    setExpectedAmount,
+    setExpectedAmountMax,
+    removeSource,
+    setAnchor,
+    addSource,
+  } = useIncomeStep(draft, setDraft, error)
 
   useEffect(() => {
     if (!invalidId) return
@@ -668,14 +509,14 @@ export function IncomeStep({
   }, [invalidId])
 
   function fieldA11y(sourceKey: string, field: IncomeSourceIssue['field']) {
-    const id = `ob-income-${field}-${sourceKey}`
+    const id = incomeFieldId(sourceKey, field)
     return id === invalidId
       ? { id, 'aria-invalid': true, 'aria-describedby': `${id}-error` }
       : { id }
   }
 
   function fieldError(sourceKey: string, field: IncomeSourceIssue['field']) {
-    const id = `ob-income-${field}-${sourceKey}`
+    const id = incomeFieldId(sourceKey, field)
     if (id !== invalidId) return null
     return (
       <p
@@ -685,18 +526,6 @@ export function IncomeStep({
         {error}
       </p>
     )
-  }
-
-  function updateSource(
-    key: string,
-    patch: Partial<OnboardingDraft['incomeSources'][number]>,
-  ) {
-    setDraft((current) => ({
-      ...current,
-      incomeSources: current.incomeSources.map((source) =>
-        source.key === key ? { ...source, ...patch } : source,
-      ),
-    }))
   }
 
   return (
@@ -728,14 +557,7 @@ export function IncomeStep({
               variant="ghost"
               size="icon"
               aria-label={`Remove ${source.name || 'income source'}`}
-              onClick={() =>
-                setDraft((current) => ({
-                  ...current,
-                  incomeSources: current.incomeSources.filter(
-                    (item) => item.key !== source.key,
-                  ),
-                }))
-              }
+              onClick={() => removeSource(source.key)}
             >
               <Trash2 className="size-4" />
             </Button>
@@ -766,9 +588,7 @@ export function IncomeStep({
                 placeholder="1,850,000"
                 value={source.expectedAmount}
                 onChange={(event) =>
-                  updateSource(source.key, {
-                    expectedAmount: formatAmountInput(event.target.value),
-                  })
+                  setExpectedAmount(source.key, event.target.value)
                 }
               />
               {fieldError(source.key, 'amount')}
@@ -783,9 +603,7 @@ export function IncomeStep({
                 placeholder="For variable income"
                 value={source.expectedAmountMax}
                 onChange={(event) =>
-                  updateSource(source.key, {
-                    expectedAmountMax: formatAmountInput(event.target.value),
-                  })
+                  setExpectedAmountMax(source.key, event.target.value)
                 }
               />
               {fieldError(source.key, 'amount-max')}
@@ -809,15 +627,7 @@ export function IncomeStep({
             variant="secondary"
             aria-pressed={source.isAnchor}
             className="h-auto w-full justify-between rounded-xl px-3 py-2 text-left text-[0.8rem] font-normal whitespace-normal aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon/10 aria-pressed:text-sea-ink"
-            onClick={() =>
-              setDraft((current) => ({
-                ...current,
-                incomeSources: current.incomeSources.map((item) => ({
-                  ...item,
-                  isAnchor: item.key === source.key,
-                })),
-              }))
-            }
+            onClick={() => setAnchor(source.key)}
           >
             <span>
               <span className="font-semibold">Anchor income</span>
@@ -831,24 +641,7 @@ export function IncomeStep({
         type="button"
         variant="secondary"
         className="w-full"
-        onClick={() =>
-          setDraft((current) => ({
-            ...current,
-            incomeSources: [
-              ...current.incomeSources,
-              {
-                key: newKey(),
-                name: '',
-                expectedDayStart: '',
-                expectedDayEnd: '',
-                expectedAmount: '',
-                expectedAmountMax: '',
-                savingsRate: current.defaultSavingsRate,
-                isAnchor: current.incomeSources.length === 0,
-              },
-            ],
-          }))
-        }
+        onClick={addSource}
       >
         <Plus className="size-4" />
         Add income source
@@ -858,25 +651,16 @@ export function IncomeStep({
 }
 
 export function BudgetsStep({ draft, setDraft, error }: StepProps) {
-  const categoryTotal = draft.budgets.reduce(
-    (sum, budget) => sum + parseAmount(budget.plannedAmount),
-    0,
-  )
-  const spendingLimit = parseAmount(draft.spendingLimit)
-  const unallocated = Math.max(spendingLimit - categoryTotal, 0)
-  const overallocated = Math.max(categoryTotal - spendingLimit, 0)
+  const {
+    categoryTotal,
+    spendingLimit,
+    unallocated,
+    overallocated,
+    setSpendingLimit,
+    updatePlannedAmount,
+    plannedAmountFor,
+  } = useBudgetsStep(draft, setDraft)
   const invalid = Boolean(error)
-
-  function updatePlannedAmount(categoryId: string, value: string) {
-    setDraft((current) => ({
-      ...current,
-      budgets: current.budgets.map((item) =>
-        item.categoryId === categoryId
-          ? { ...item, plannedAmount: formatAmountInput(value) }
-          : item,
-      ),
-    }))
-  }
 
   return (
     <div className="space-y-4">
@@ -894,12 +678,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           value={draft.spendingLimit}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? 'onboarding-error' : undefined}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              spendingLimit: formatAmountInput(event.target.value),
-            }))
-          }
+          onChange={(event) => setSpendingLimit(event.target.value)}
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
           This is your spending envelope from payday to payday. Savings sits
@@ -961,33 +740,28 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           <section key={group} className="space-y-2">
             <h2 className="field-label">{BUDGET_GROUP_LABELS[group]}</h2>
             <div className="space-y-2">
-              {categories.map((category) => {
-                const budget = draft.budgets.find(
-                  (item) => item.categoryId === category.id,
-                )
-                return (
-                  <div key={category.id} className="flex items-center gap-3">
-                    <span className="flex flex-1 items-center gap-2 text-[0.9rem] font-semibold text-sea-ink">
-                      <category.icon
-                        aria-hidden
-                        className="size-4"
-                        style={{ color: category.color }}
-                      />
-                      {category.name}
-                    </span>
-                    <Input
-                      aria-label={`${category.name} planned amount`}
-                      className="w-32"
-                      inputMode="numeric"
-                      placeholder="0"
-                      value={budget?.plannedAmount ?? ''}
-                      onChange={(event) =>
-                        updatePlannedAmount(category.id, event.target.value)
-                      }
+              {categories.map((category) => (
+                <div key={category.id} className="flex items-center gap-3">
+                  <span className="flex flex-1 items-center gap-2 text-[0.9rem] font-semibold text-sea-ink">
+                    <category.icon
+                      aria-hidden
+                      className="size-4"
+                      style={{ color: category.color }}
                     />
-                  </div>
-                )
-              })}
+                    {category.name}
+                  </span>
+                  <Input
+                    aria-label={`${category.name} planned amount`}
+                    className="w-32"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={plannedAmountFor(category.id)}
+                    onChange={(event) =>
+                      updatePlannedAmount(category.id, event.target.value)
+                    }
+                  />
+                </div>
+              ))}
             </div>
           </section>
         )
@@ -997,91 +771,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
 }
 
 export function ReviewStep({ draft, goToStep }: StepProps) {
-  const categoryTotal = draft.budgets.reduce(
-    (sum, budget) => sum + parseAmount(budget.plannedAmount),
-    0,
-  )
-  const spendingLimit = parseAmount(draft.spendingLimit)
-  const unallocated = Math.max(spendingLimit - categoryTotal, 0)
-  const overallocated = Math.max(categoryTotal - spendingLimit, 0)
-  const activeBudgets = draft.budgets.filter(
-    (budget) => parseAmount(budget.plannedAmount) > 0,
-  )
-
-  const sections: {
-    title: string
-    step: OnboardingStep
-    rows: [string, string][]
-  }[] = [
-    {
-      title: 'Basics',
-      step: 'welcome',
-      rows: [
-        ['USD rate', `K${draft.usdRate || '—'} per $1`],
-        [
-          'Default savings rate',
-          `${draft.defaultSavingsRate || '0'}% for new sources`,
-        ],
-        [
-          'Savings balance',
-          draft.savingsOpeningBalance
-            ? formatK(parseAmount(draft.savingsOpeningBalance))
-            : 'K0',
-        ],
-      ],
-    },
-    {
-      title: 'Payday',
-      step: 'payday',
-      rows: [['Cycle anchor', `${ordinal(draft.paydayDay)} of the month`]],
-    },
-    {
-      title: 'Accounts',
-      step: 'accounts',
-      rows: draft.accounts.map((account) => [
-        account.name,
-        account.currency === 'USD'
-          ? `$${parseAmount(account.balance).toLocaleString('en-US')}`
-          : formatK(parseAmount(account.balance)),
-      ]),
-    },
-    {
-      title: 'Income',
-      step: 'income',
-      rows:
-        draft.incomeSources.length > 0
-          ? draft.incomeSources.map((source) => [
-              source.name,
-              `${formatK(parseAmount(source.expectedAmount))}${source.expectedAmountMax ? `–${formatK(parseAmount(source.expectedAmountMax))}` : ''} · ${formatExpectedWindow(source.expectedDayStart, source.expectedDayEnd) || '—'}`,
-            ])
-          : [['None added', 'You can add income sources later']],
-    },
-    {
-      title: 'Budgets',
-      step: 'budgets',
-      rows: [
-        [
-          'Spending limit per cycle',
-          draft.spendingLimit.trim() === ''
-            ? 'Not set'
-            : formatK(spendingLimit),
-        ],
-        [
-          overallocated > 0 ? 'Overallocated' : 'Unallocated',
-          formatK(overallocated || unallocated),
-        ],
-        ...activeBudgets.map((budget): [string, string] => {
-          const category = BUDGETABLE_CATEGORIES.find(
-            (item) => item.id === budget.categoryId,
-          )
-          return [
-            category?.name ?? budget.categoryId,
-            formatK(parseAmount(budget.plannedAmount)),
-          ]
-        }),
-      ],
-    },
-  ]
+  const sections = buildReviewSections(draft)
 
   return (
     <div className="space-y-4">

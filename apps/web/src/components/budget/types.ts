@@ -1,82 +1,34 @@
 import type { LucideIcon } from 'lucide-react'
+import type {
+  BudgetCategoryData,
+  BudgetCycleData,
+  BudgetHistoryRow,
+  BudgetIncomeSourceData,
+  BudgetPlanUpdate,
+  BudgetTab,
+} from '#/hooks/budget'
 
-export type BudgetGroup = 'needs' | 'wants'
+export type {
+  BudgetCategoryPlanUpdate,
+  BudgetCategoryStatus,
+  BudgetGroup,
+  BudgetHistoryRow,
+  BudgetIncomePlanUpdate,
+  BudgetPlanUpdate,
+  BudgetTab,
+} from '#/hooks/budget'
 
-export type BudgetTab = 'current' | 'history'
-
-export type BudgetCategoryStatus =
-  'on-track' | 'watch' | 'over-budget' | 'not-started'
-
-export interface BudgetCategoryPlan {
-  id: string
-  name: string
-  group: BudgetGroup
-  planned: number
-  spent: number
-  previousSpent?: number
-  icon?: LucideIcon
-  color?: string
-}
-
-export interface BudgetIncomeSourcePlan {
-  id: string
-  name: string
-  expectedAmount: number
-  expectedAmountMax?: number
-  actualAmount: number
-  savingsRate: number
-  status?: 'landed' | 'pending' | 'partial'
-  note?: string
+export interface BudgetCategoryPlan extends BudgetCategoryData {
   icon?: LucideIcon
 }
 
-export interface BudgetCycle {
-  id: string
-  label: string
-  rangeLabel?: string
-  expectedIncome: number
-  actualIncome?: number
-  unassignedIncome?: number
-  actualSavings?: number
-  actualSpending?: number
-  isClosed?: boolean
-  spendingLimit: number
+export interface BudgetIncomeSourcePlan extends BudgetIncomeSourceData {
+  icon?: LucideIcon
+}
+
+export interface BudgetCycle extends BudgetCycleData {
   categories: readonly BudgetCategoryPlan[]
   incomeSources?: readonly BudgetIncomeSourcePlan[]
-  daysElapsed?: number
-  totalDays?: number
-  previousActualSpending?: number
-}
-
-export interface BudgetHistoryRow {
-  id: string
-  label: string
-  rangeLabel?: string
-  income: number
-  needs: number
-  wants: number
-  savings: number
-  spent: number
-  surplus: number
-}
-
-export interface BudgetPlanUpdate {
-  cycleId: string
-  spendingLimit: number
-  categoryPlans: readonly BudgetCategoryPlanUpdate[]
-  incomePlans?: readonly BudgetIncomePlanUpdate[]
-}
-
-export interface BudgetCategoryPlanUpdate {
-  categoryId: string
-  plannedAmount: number
-}
-
-export interface BudgetIncomePlanUpdate {
-  sourceId: string
-  expectedAmount: number
-  expectedAmountMax?: number
-  savingsRate: number
 }
 
 export interface BudgetPageProps {

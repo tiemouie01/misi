@@ -16,8 +16,6 @@ import {
   TrendingUp,
   WalletCards,
 } from 'lucide-react'
-import { useState } from 'react'
-
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
@@ -46,41 +44,46 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { cn } from '#/lib/utils'
 import {
-  hasPreviousSpend,
-  seedCycleBudgetsFromPrevious,
-  spendingLimitForPlans,
-} from '@misi/shared/budget-rollover'
-import { incomeSourceStatus } from '@misi/shared/income'
+  applyPreviousSpend,
+  canApplyPreviousSpend,
+  clampPercent,
+  formatBudgetMoney,
+  formatBudgetPercent,
+  getAllocation,
+  getBudgetSummary,
+  getCategoryInsight,
+  getIncomeSourceProgress,
+  getIncomeSummary,
+  groupBudgetCategories,
+  groupTotal,
+  hasPreviousCycle,
+  incomeShare,
+  plannedSavingsTotal,
+  positiveAmount,
+  withDraftCategoryPlan,
+  withDraftSpendingLimit,
+} from '#/hooks/budget'
+import { useBudgetPage, useBudgetPlanEditor } from '#/hooks/use-budget-page'
+import { cn } from '#/lib/utils'
 
 import type { ChangeEvent, FormEvent } from 'react'
 import type {
-  BudgetCategoryPlan,
+  AllocationSegmentKey,
   BudgetCategoryStatus,
-  BudgetCycle,
+  BudgetDraft,
   BudgetGroup,
+  CategoryInsight,
+} from '#/hooks/budget'
+import type {
+  BudgetCategoryPlan,
+  BudgetCycle,
   BudgetHistoryRow,
-  BudgetIncomeSourcePlan,
   BudgetPageProps,
   BudgetPlanUpdate,
-  BudgetTab,
 } from './types'
 
-interface BudgetDraft {
-  spendingLimit: string
-  categoryPlans: Record<string, string>
-}
-
-interface CategoryInsight {
-  remaining: number
-  spentPercent: number
-  incomePercent: number
-  status: BudgetCategoryStatus
-  statusLabel: string
-  forecast: string
-  projected: number | null
-}
+export { formatBudgetMoney, formatBudgetPercent } from '#/hooks/budget'
 
 interface SummaryCardProps {
   label: string
@@ -92,11 +95,18 @@ interface SummaryCardProps {
   tone?: 'lagoon' | 'palm' | 'coral' | 'sun'
 }
 
-const GROUPS: readonly BudgetGroup[] = ['needs', 'wants']
-
 const GROUP_META: Record<BudgetGroup, { label: string; color: string }> = {
   needs: { label: 'Needs', color: 'var(--lagoon-deep)' },
   wants: { label: 'Wants', color: 'var(--coral)' },
+}
+
+const SEGMENT_COLORS: Record<
+  Exclude<AllocationSegmentKey, 'unallocated'>,
+  string
+> = {
+  needs: 'var(--lagoon-deep)',
+  wants: 'var(--coral)',
+  savings: 'var(--palm)',
 }
 
 const TONE_CLASSES: Record<NonNullable<SummaryCardProps['tone']>, string> = {
@@ -104,221 +114,6 @@ const TONE_CLASSES: Record<NonNullable<SummaryCardProps['tone']>, string> = {
   palm: 'bg-palm/12 text-palm',
   coral: 'bg-coral/12 text-coral-deep',
   sun: 'bg-sun/14 text-sun',
-}
-
-const wholeNumberFormat = new Intl.NumberFormat('en-US')
-
-export function formatBudgetMoney(value: number, currency = 'K') {
-  const amount = Number.isFinite(value) ? value : 0
-  const sign = amount < 0 ? '−' : ''
-  return `${sign}${currency}${wholeNumberFormat.format(Math.round(Math.abs(amount)))}`
-}
-
-export function formatBudgetPercent(value: number, digits = 0) {
-  if (!Number.isFinite(value)) return '0%'
-  return `${value.toFixed(digits)}%`
-}
-
-function clampPercent(value: number) {
-  return Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0))
-}
-
-function positiveAmount(value: number | undefined) {
-  return Number.isFinite(value) ? Math.max(0, value ?? 0) : 0
-}
-
-function groupTotal(
-  categories: readonly BudgetCategoryPlan[],
-  group: BudgetGroup,
-) {
-  return categories.reduce(
-    (total, category) =>
-      category.group === group
-        ? total + positiveAmount(category.planned)
-        : total,
-    0,
-  )
-}
-
-function plannedSavingsTotal(
-  incomeSources: readonly BudgetIncomeSourcePlan[] | undefined,
-) {
-  return (incomeSources ?? []).reduce(
-    (total, source) =>
-      total +
-      positiveAmount(source.expectedAmount) * Math.max(0, source.savingsRate),
-    0,
-  )
-}
-
-function hasPreviousCycle(cycle: BudgetCycle) {
-  return cycle.previousActualSpending !== undefined
-}
-
-function canApplyPreviousSpend(cycle: BudgetCycle) {
-  return hasPreviousSpend({
-    previousActualSpending: cycle.previousActualSpending,
-    categorySpent: cycle.categories.map((category) =>
-      positiveAmount(category.previousSpent),
-    ),
-  })
-}
-
-function applyPreviousSpend(
-  cycle: BudgetCycle,
-  draft: BudgetDraft,
-): BudgetDraft {
-  const seeded = seedCycleBudgetsFromPrevious({
-    categories: cycle.categories.map((category) => ({
-      categoryId: category.id,
-      spent: positiveAmount(category.previousSpent),
-      planned: parseAmount(draft.categoryPlans[category.id] ?? ''),
-    })),
-    previousActualSpending: positiveAmount(cycle.previousActualSpending),
-    previousSpendingLimit: parseAmount(draft.spendingLimit),
-  })
-
-  return {
-    ...draft,
-    spendingLimit: String(seeded.spendingLimit),
-    categoryPlans: Object.fromEntries(
-      seeded.categoryPlans.map((plan) => [
-        plan.categoryId,
-        String(plan.plannedAmount),
-      ]),
-    ),
-  }
-}
-
-function createDraft(cycle: BudgetCycle): BudgetDraft {
-  const categoryPlans = Object.fromEntries(
-    cycle.categories.map((category) => [
-      category.id,
-      String(Math.max(0, Math.round(category.planned))),
-    ]),
-  )
-  return {
-    spendingLimit: String(
-      spendingLimitForPlans(
-        cycle.spendingLimit,
-        cycle.categories.map((category) => category.planned),
-      ),
-    ),
-    categoryPlans,
-  }
-}
-
-function parseAmount(value: string) {
-  const amount = Number(value)
-  return Number.isFinite(amount) && amount >= 0 ? amount : 0
-}
-
-function cycleProgress(cycle: BudgetCycle) {
-  const elapsed = positiveAmount(cycle.daysElapsed)
-  const total = positiveAmount(cycle.totalDays)
-  return total > 0 ? clampPercent((elapsed / total) * 100) : 0
-}
-
-function getCategoryInsight(
-  category: BudgetCategoryPlan,
-  cycle: BudgetCycle,
-  expectedIncome: number,
-): CategoryInsight {
-  const planned = positiveAmount(category.planned)
-  const spent = positiveAmount(category.spent)
-  const remaining = planned - spent
-  const spentPercent =
-    planned > 0 ? (spent / planned) * 100 : spent > 0 ? 100 : 0
-  const incomePercent =
-    expectedIncome > 0 ? (planned / expectedIncome) * 100 : 0
-  const elapsed = positiveAmount(cycle.daysElapsed)
-  const totalDays = positiveAmount(cycle.totalDays)
-  const hasPace = elapsed > 0 && totalDays > 0
-  const projected = hasPace ? (spent / elapsed) * totalDays : null
-
-  if (planned === 0 && spent > 0) {
-    return {
-      remaining,
-      spentPercent,
-      incomePercent,
-      status: 'over-budget',
-      statusLabel: 'Over budget',
-      forecast: `Over by ${formatBudgetMoney(spent)}`,
-      projected,
-    }
-  }
-
-  if (planned === 0) {
-    return {
-      remaining,
-      spentPercent,
-      incomePercent,
-      status: 'not-started',
-      statusLabel: 'Not started',
-      forecast: 'No plan set for this category',
-      projected,
-    }
-  }
-
-  if (spent > planned) {
-    return {
-      remaining,
-      spentPercent,
-      incomePercent,
-      status: 'over-budget',
-      statusLabel: 'Over budget',
-      forecast: `Over by ${formatBudgetMoney(spent - planned)}`,
-      projected,
-    }
-  }
-
-  const isWatch =
-    spentPercent >= 85 || (projected !== null && projected > planned * 1.1)
-
-  if (isWatch) {
-    const dailySpend = elapsed > 0 ? spent / elapsed : 0
-    const daysUntilLimit =
-      dailySpend > 0 && remaining > 0 ? Math.ceil(remaining / dailySpend) : 0
-
-    return {
-      remaining,
-      spentPercent,
-      incomePercent,
-      status: 'watch',
-      statusLabel: 'Watch',
-      forecast:
-        daysUntilLimit > 0
-          ? `Likely runs out in ~${daysUntilLimit} day${daysUntilLimit === 1 ? '' : 's'}`
-          : 'Spending is moving faster than plan',
-      projected,
-    }
-  }
-
-  if (spent === 0) {
-    return {
-      remaining,
-      spentPercent,
-      incomePercent,
-      status: 'not-started',
-      statusLabel: 'Not started',
-      forecast: hasPace ? 'Ready when you need it' : 'No spending yet',
-      projected,
-    }
-  }
-
-  const projectedRemainder = projected !== null ? planned - projected : null
-  return {
-    remaining,
-    spentPercent,
-    incomePercent,
-    status: 'on-track',
-    statusLabel: 'On track',
-    forecast:
-      projectedRemainder !== null && projectedRemainder > 0
-        ? `On pace to finish with ${formatBudgetMoney(projectedRemainder)} left`
-        : 'On track for this cycle',
-    projected,
-  }
 }
 
 function statusBadgeVariant(status: BudgetCategoryStatus) {
@@ -375,29 +170,18 @@ function AllocationBar({
   cycle: BudgetCycle
   currency: string
 }) {
-  const expectedIncome = positiveAmount(cycle.expectedIncome)
-  const needs = groupTotal(cycle.categories, 'needs')
-  const wants = groupTotal(cycle.categories, 'wants')
-  const savings = plannedSavingsTotal(cycle.incomeSources)
-  const spendingLimit = positiveAmount(cycle.spendingLimit)
-  const allocated = needs + wants + savings
-  const unallocated = expectedIncome - allocated
-  const segments = [
-    {
-      key: 'needs',
-      label: 'Needs',
-      amount: needs,
-      color: 'var(--lagoon-deep)',
-    },
-    { key: 'wants', label: 'Wants', amount: wants, color: 'var(--coral)' },
-    { key: 'savings', label: 'Savings', amount: savings, color: 'var(--palm)' },
-    {
-      key: 'unallocated',
-      label: unallocated < 0 ? 'Over-allocated' : 'Unallocated',
-      amount: Math.abs(unallocated),
-      color: unallocated < 0 ? 'var(--coral-deep)' : 'var(--sun)',
-    },
-  ]
+  const allocation = getAllocation(cycle)
+  const { expectedIncome, needs, wants, spendingLimit, unallocated } =
+    allocation
+  const segments = allocation.segments.map((segment) => ({
+    ...segment,
+    color:
+      segment.key === 'unallocated'
+        ? unallocated < 0
+          ? 'var(--coral-deep)'
+          : 'var(--sun)'
+        : SEGMENT_COLORS[segment.key],
+  }))
 
   return (
     <Card variant="island" className="gap-4 rounded-3xl p-4 sm:gap-5 sm:p-6">
@@ -432,7 +216,9 @@ function AllocationBar({
       >
         {expectedIncome > 0 ? (
           segments.map((segment) => {
-            const width = clampPercent((segment.amount / expectedIncome) * 100)
+            const width = clampPercent(
+              incomeShare(segment.amount, expectedIncome),
+            )
             if (width === 0) return null
             return (
               <span
@@ -450,8 +236,7 @@ function AllocationBar({
 
       <div className="grid grid-cols-2 gap-x-5 gap-y-3 xl:grid-cols-4">
         {segments.map((segment) => {
-          const percent =
-            expectedIncome > 0 ? (segment.amount / expectedIncome) * 100 : 0
+          const percent = incomeShare(segment.amount, expectedIncome)
           return (
             <div key={segment.key} className="flex min-w-0 items-start gap-2.5">
               <span
@@ -654,10 +439,7 @@ function CategoryPlanCard({
   currency: string
 }) {
   const expectedIncome = positiveAmount(cycle.expectedIncome)
-  const grouped = GROUPS.map((group) => ({
-    group,
-    categories: cycle.categories.filter((category) => category.group === group),
-  }))
+  const grouped = groupBudgetCategories(cycle.categories)
 
   return (
     <Card
@@ -732,15 +514,6 @@ function CategoryPlanCard({
   )
 }
 
-function getIncomeSourceStatus(source: BudgetIncomeSourcePlan) {
-  const planned = positiveAmount(source.expectedAmount)
-  const actual = positiveAmount(source.actualAmount)
-  const status = incomeSourceStatus(actual, planned)
-  if (status === 'landed') return 'Landed'
-  if (status === 'partial') return 'Part landed'
-  return 'Pending'
-}
-
 function IncomeSourcesCard({
   cycle,
   currency,
@@ -751,22 +524,8 @@ function IncomeSourcesCard({
   onManage?: () => void
 }) {
   const sources = cycle.incomeSources ?? []
-  const planned = sources.reduce(
-    (total, source) => total + positiveAmount(source.expectedAmount),
-    0,
-  )
-  const actual = sources.reduce(
-    (total, source) => total + positiveAmount(source.actualAmount),
-    0,
-  )
-  const totalActual = positiveAmount(cycle.actualIncome)
-  const unassigned = Math.max(
-    0,
-    positiveAmount(cycle.unassignedIncome ?? totalActual - actual),
-  )
-  const actualTotal = Math.max(totalActual, actual + unassigned)
-  const actualPercent =
-    planned > 0 ? clampPercent((actualTotal / planned) * 100) : 0
+  const { planned, unassigned, actualTotal, actualPercent } =
+    getIncomeSummary(cycle)
   const unassignedNotice =
     unassigned > 0 ? (
       <div className="rounded-2xl border border-dashed border-sun/40 bg-sun/8 px-3.5 py-3 text-sm">
@@ -837,13 +596,12 @@ function IncomeSourcesCard({
             <div className="space-y-2.5">
               {sources.map((source) => {
                 const Icon = source.icon ?? Banknote
-                const sourcePlan = positiveAmount(source.expectedAmount)
-                const sourceActual = positiveAmount(source.actualAmount)
-                const sourceProgress =
-                  sourcePlan > 0
-                    ? clampPercent((sourceActual / sourcePlan) * 100)
-                    : 0
-                const status = getIncomeSourceStatus(source)
+                const {
+                  planned: sourcePlan,
+                  actual: sourceActual,
+                  progress: sourceProgress,
+                  status,
+                } = getIncomeSourceProgress(source)
                 return (
                   <div
                     key={source.id}
@@ -1061,67 +819,27 @@ function BudgetEditDialog({
   onManageIncomeSources?: () => void
   onSave: (update: BudgetPlanUpdate) => void | Promise<void>
 }) {
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const {
+    saving,
+    saveError,
+    submit,
+    requestOpenChange: handleOpenChange,
+  } = useBudgetPlanEditor({ cycle, currency, onOpenChange, onSave })
 
   if (!draft) return null
 
-  const handleAmountChange =
-    (field: 'spendingLimit') => (event: ChangeEvent<HTMLInputElement>) => {
-      onDraftChange({ ...draft, [field]: event.target.value })
-    }
+  const handleSpendingLimitChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onDraftChange(withDraftSpendingLimit(draft, event.target.value))
+  }
 
   const handleCategoryChange =
     (id: string) => (event: ChangeEvent<HTMLInputElement>) => {
-      onDraftChange({
-        ...draft,
-        categoryPlans: { ...draft.categoryPlans, [id]: event.target.value },
-      })
+      onDraftChange(withDraftCategoryPlan(draft, id, event.target.value))
     }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const spendingLimit = parseAmount(draft.spendingLimit)
-    const categoryPlans = cycle.categories.map((category) => ({
-      categoryId: category.id,
-      plannedAmount: parseAmount(draft.categoryPlans[category.id] ?? ''),
-    }))
-    const categoryTotal = categoryPlans.reduce(
-      (sum, plan) => sum + plan.plannedAmount,
-      0,
-    )
-    if (categoryTotal > spendingLimit) {
-      setSaveError(
-        `Category plans exceed the spending limit by ${formatBudgetMoney(categoryTotal - spendingLimit, currency)}.`,
-      )
-      return
-    }
-
-    const update = {
-      cycleId: cycle.id,
-      spendingLimit,
-      categoryPlans,
-    } satisfies BudgetPlanUpdate
-
-    setSaveError(null)
-    setSaving(true)
-    try {
-      await onSave(update)
-    } catch (error) {
-      setSaveError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : 'Unable to save this cycle plan.',
-      )
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (saving) return
-    setSaveError(null)
-    onOpenChange(nextOpen)
+    void submit(draft)
   }
 
   return (
@@ -1169,7 +887,7 @@ function BudgetEditDialog({
                   step="1"
                   inputMode="numeric"
                   value={draft.spendingLimit}
-                  onChange={handleAmountChange('spendingLimit')}
+                  onChange={handleSpendingLimitChange}
                 />
                 {hasPreviousCycle(cycle) ? (
                   <span className="text-[0.68rem] text-sea-ink-soft">
@@ -1408,11 +1126,23 @@ export function BudgetPage({
   onManageIncomeSources,
   onSavePlan,
 }: BudgetPageProps) {
-  const selectedCycle =
-    cycles.find((cycle) => cycle.id === currentCycleId) ?? cycles.at(0)
-  const [activeTab, setActiveTab] = useState<BudgetTab>(defaultTab)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [draft, setDraft] = useState<BudgetDraft | undefined>()
+  const {
+    selectedCycle,
+    activeTab,
+    changeTab: handleTabChange,
+    dialogOpen,
+    setDialogOpen,
+    draft,
+    setDraft,
+    openEdit,
+    savePlan: handleSavePlan,
+  } = useBudgetPage({
+    cycles,
+    currentCycleId,
+    defaultTab,
+    onTabChange,
+    onSavePlan,
+  })
 
   if (!selectedCycle) {
     return (
@@ -1422,43 +1152,19 @@ export function BudgetPage({
     )
   }
 
-  const expectedIncome = positiveAmount(selectedCycle.expectedIncome)
-  const actualIncome = positiveAmount(selectedCycle.actualIncome)
-  const plannedSavings = plannedSavingsTotal(selectedCycle.incomeSources)
-  const actualSavings = positiveAmount(selectedCycle.actualSavings)
-  const spendingLimit = positiveAmount(selectedCycle.spendingLimit)
-  const unallocated = expectedIncome - plannedSavings - spendingLimit
-  const totalSpent =
-    selectedCycle.actualSpending ??
-    selectedCycle.categories.reduce(
-      (total, category) => total + positiveAmount(category.spent),
-      0,
-    )
-  const spendingRemaining = spendingLimit - totalSpent
-  const progress = cycleProgress(selectedCycle)
-  const paceLabel =
-    selectedCycle.daysElapsed !== undefined &&
-    selectedCycle.totalDays !== undefined
-      ? `Day ${Math.max(0, Math.round(selectedCycle.daysElapsed))} of ${Math.max(0, Math.round(selectedCycle.totalDays))}`
-      : (selectedCycle.rangeLabel ?? 'Payday cycle')
-
-  const openEdit = () => {
-    if (selectedCycle.isClosed) return
-    setDraft(createDraft(selectedCycle))
-    setDialogOpen(true)
-  }
-
-  const handleTabChange = (value: string) => {
-    if (value !== 'current' && value !== 'history') return
-    const nextTab = value
-    setActiveTab(nextTab)
-    onTabChange?.(nextTab)
-  }
-
-  const handleSavePlan = async (update: BudgetPlanUpdate) => {
-    await onSavePlan?.(update)
-    setDialogOpen(false)
-  }
+  const {
+    expectedIncome,
+    actualIncome,
+    plannedSavings,
+    actualSavings,
+    spendingLimit,
+    unallocated,
+    totalSpent,
+    spendingRemaining,
+    progress,
+    paceLabel,
+    spentPercent,
+  } = getBudgetSummary(selectedCycle)
 
   return (
     <div className={cn('w-full', className)}>
@@ -1633,10 +1339,7 @@ export function BudgetPage({
                   spendingRemaining < 0 ? 'text-coral-deep' : 'text-palm',
                 )}
               >
-                {formatBudgetPercent(
-                  spendingLimit > 0 ? (totalSpent / spendingLimit) * 100 : 0,
-                )}{' '}
-                spent
+                {formatBudgetPercent(spentPercent)} spent
               </span>
             </Card>
           </TabsContent>

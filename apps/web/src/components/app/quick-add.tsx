@@ -34,22 +34,24 @@ import {
   TooltipTrigger,
 } from '#/components/ui/tooltip'
 import {
-  currencyToMwk,
-  formatK,
-  formatUsd,
-  mwkToCurrency,
-} from '#/lib/app-data'
-import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
+  claimActionsForDebt,
+  debtNameIsAmbiguous,
+  formatTransactionDate,
+  occurredAtFromDate,
+  recentDisplayAmount,
+} from '#/hooks/quick-add-form'
+import { useQuickAddForm } from '#/hooks/use-quick-add-form'
+import { formatK, formatUsd } from '#/lib/app-data'
+import { resolveCategory } from '#/lib/categories'
 import {
   claimActionLabel,
   claimAllowsFromSavings,
   claimForbidsAccount,
   claimRequiresAccount,
-  defaultClaimAction,
-  remainingAfterReplacement,
 } from '@misi/shared/claim'
 import { oneTapRecentKey } from '@misi/shared/one-tap-recents'
 
+import type { QuickAddIncomeSource } from '#/hooks/quick-add-form'
 import type {
   Account,
   AdjustPolarity,
@@ -58,16 +60,8 @@ import type {
   QuickAddInitial,
   QuickAddPayload,
   RecentTransaction,
-  TxnType,
 } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
-
-interface QuickAddIncomeSource {
-  id: string
-  name: string
-  savingsRate?: number
-  isAnchor?: boolean
-}
 
 interface QuickAddSheetProps {
   initial: QuickAddInitial
@@ -93,104 +87,6 @@ interface QuickAddSheetProps {
 
 interface QuickAddFabProps {
   onOpen: (initial: QuickAddInitial) => void
-}
-
-function defaultIncomeSourceId(sources: readonly QuickAddIncomeSource[]) {
-  const anchor = sources.find((source) => source.isAnchor)
-  if (anchor) return anchor.id
-  return sources.length > 0 ? sources[0].id : ''
-}
-
-function occurredAtFromDate(date: Date) {
-  const next = new Date(date)
-  next.setHours(12, 0, 0, 0)
-  return next.getTime()
-}
-
-const transactionDateFormat = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-})
-
-function formatTransactionDate(occurredAt: number) {
-  return transactionDateFormat.format(new Date(occurredAt))
-}
-
-const MAX_AMOUNT_WHOLE_DIGITS = 9
-const MAX_AMOUNT_FRACTION_DIGITS = 2
-
-function amountToDigits(amount: number) {
-  if (!Number.isFinite(amount) || amount <= 0) return ''
-  return String(Math.round(amount * 100) / 100)
-}
-
-function parseAmountDigits(digits: string) {
-  if (!digits || digits === '.') return 0
-  const amount = Number(digits)
-  if (!Number.isFinite(amount)) return 0
-  return Math.round(amount * 100) / 100
-}
-
-function appendAmountInput(current: string, value: string) {
-  if (value === '.' || value === ',') {
-    if (current.includes('.')) return current
-    return current === '' ? '0.' : `${current}.`
-  }
-
-  if (!/^\d+$/.test(value)) return current
-
-  if (current.includes('.')) {
-    const [whole, fraction = ''] = current.split('.')
-    if (fraction.length >= MAX_AMOUNT_FRACTION_DIGITS) return current
-    const nextFraction = `${fraction}${value}`.slice(
-      0,
-      MAX_AMOUNT_FRACTION_DIGITS,
-    )
-    return `${whole}.${nextFraction}`
-  }
-
-  if (current === '0') {
-    return value.replace(/^0+/, '') || '0'
-  }
-
-  const next = `${current}${value}`.replace(/^0+(\d)/, '$1')
-  return next.slice(0, MAX_AMOUNT_WHOLE_DIGITS)
-}
-
-function formatTransferLeg(
-  account: Account,
-  mwkAmount: number,
-  usdRate: number,
-  sign: '+' | '−',
-) {
-  const native =
-    account.currency === 'USD'
-      ? formatUsd(mwkToCurrency(mwkAmount, 'USD', usdRate))
-      : formatK(mwkAmount)
-  return `${account.name} ${sign}${native}`
-}
-
-function formatAmountDigitsDisplay(
-  digits: string,
-  currency: Account['currency'],
-) {
-  const prefix = currency === 'USD' ? '$ ' : 'K '
-  if (!digits) return `${prefix}0`
-
-  const hasDecimal = digits.includes('.')
-  const [wholePart, fractionPart = ''] = digits.split('.')
-  const whole = Number(wholePart || '0')
-  const formattedWhole = Number.isFinite(whole)
-    ? whole.toLocaleString('en-US')
-    : '0'
-
-  if (!hasDecimal) return `${prefix}${formattedWhole}`
-  return `${prefix}${formattedWhole}.${fractionPart}`
-}
-
-function formatEnteredAmount(value: number, currency: Account['currency']) {
-  return currency === 'USD' ? formatUsd(value) : formatK(value)
 }
 
 function TransactionDatePicker({
@@ -230,35 +126,6 @@ function TransactionDatePicker({
       </PopoverContent>
     </Popover>
   )
-}
-
-function visibleRecents(recents: RecentTransaction[], categories: Category[]) {
-  return recents.filter((recent) => {
-    const category = resolveCategory(categories, recent.categoryId)
-    return Boolean(category && !category.archived && !category.isSystem)
-  })
-}
-
-/**
- * Recents store MWK amounts; show the account's native amount when the account
- * is a USD one. Falls back to the stored MWK amount if the rate is unusable.
- */
-function recentDisplayAmount(
-  recent: RecentTransaction,
-  account: Account | undefined,
-  usdRate: number,
-): { amount: number; currency: Account['currency'] } {
-  if (account?.currency === 'USD' && usdRate > 0) {
-    try {
-      return {
-        amount: mwkToCurrency(recent.amount, 'USD', usdRate),
-        currency: 'USD',
-      }
-    } catch {
-      // Treat an unusable rate as if the account were MWK.
-    }
-  }
-  return { amount: recent.amount, currency: 'MWK' }
 }
 
 function RecentChips({
@@ -361,11 +228,7 @@ function ClaimFields({
   onFromSavings: (value: boolean) => void
 }) {
   const selected = debts.find((debt) => debt.id === debtId)
-  const actions: ClaimAction[] = selected
-    ? selected.direction === 'you_owe'
-      ? ['repay', 'borrow', 'adjust']
-      : ['collect', 'lend', 'adjust']
-    : ['repay']
+  const actions = claimActionsForDebt(selected)
   const needsAccount = claimRequiresAccount(claimAction)
   const hidesAccount = claimForbidsAccount(claimAction)
   const showFromSavings = claimAllowsFromSavings(claimAction)
@@ -392,11 +255,7 @@ function ClaimFields({
                 onClick={() => onDebtId(debt.id)}
               >
                 <span className="truncate">{debt.name}</span>
-                {debts.some(
-                  (other) =>
-                    other.id !== debt.id &&
-                    other.name.toLowerCase() === debt.name.toLowerCase(),
-                ) && (
+                {debtNameIsAmbiguous(debts, debt) && (
                   <span className="shrink-0 text-sea-ink-soft">
                     · {debt.direction === 'you_owe' ? 'You owe' : 'Owed to you'}
                   </span>
@@ -523,9 +382,9 @@ export function QuickAddSheet({
   initial,
   categories,
   accounts,
-  debts = [],
+  debts,
   incomeSources = [],
-  recents = [],
+  recents,
   categoryUsage,
   defaultExpenseAccountId,
   defaultTransferFromAccountId,
@@ -539,231 +398,76 @@ export function QuickAddSheet({
   onSave,
   onDelete,
 }: QuickAddSheetProps) {
-  const isEditing = initial.transactionId !== undefined
-  const defaultMwkAccountId =
-    accounts.find(
-      (account) =>
-        account.id === defaultExpenseAccountId && account.currency === 'MWK',
-    )?.id ??
-    accounts.find((account) => account.currency === 'MWK')?.id ??
-    ''
-  const initialAccountId =
-    initial.accountId ??
-    (initial.mode === 'transfer'
-      ? defaultTransferFromAccountId
-      : initial.mode === 'claim'
-        ? isEditing
-          ? ''
-          : defaultMwkAccountId
-        : defaultExpenseAccountId)
-  const initialAmountCurrency =
-    initial.autoSave === true || initial.mode === 'claim'
-      ? 'MWK'
-      : (initial.amountCurrency ??
-        accounts.find((account) => account.id === initialAccountId)?.currency ??
-        'MWK')
-  const initialUsdRate = initial.fxRate ?? usdRate
-  const initialAmountIsNative =
-    initial.amountCurrency !== undefined &&
-    initial.autoSave !== true &&
-    initial.mode !== 'claim'
-  const [mode, setMode] = useState<TxnType>(initial.mode)
-  const [digits, setDigits] = useState(() =>
-    initial.amount
-      ? amountToDigits(
-          initialAmountIsNative
-            ? initial.amount
-            : initialAmountCurrency === 'USD'
-              ? mwkToCurrency(initial.amount, 'USD', initialUsdRate)
-              : initial.amount,
-        )
-      : '',
-  )
-  const [categoryId, setCategoryId] = useState(
-    initial.categoryId ?? firstExpenseCategoryKey(categories),
-  )
-  const [accountId, setAccountId] = useState(initialAccountId)
-  const [toAccountId, setToAccountId] = useState(
-    initial.toAccountId ?? defaultTransferToAccountId,
-  )
-  const initialIncomeSourceId =
-    initial.sourceId ||
-    (!isEditing && initial.mode === 'income'
-      ? defaultIncomeSourceId(incomeSources)
-      : '')
-  const archivedIncomeSourceId =
-    initial.mode === 'income' &&
-    initial.sourceId &&
-    !incomeSources.some((source) => source.id === initial.sourceId)
-      ? initial.sourceId
-      : undefined
-  const [sourceId, setSourceId] = useState(initialIncomeSourceId)
-  const [payee, setPayee] = useState(() => {
-    if (initial.payee) return initial.payee
-    if (initial.mode !== 'income') return ''
-    return (
-      incomeSources.find((source) => source.id === initialIncomeSourceId)
-        ?.name ?? ''
-    )
+  const {
+    isEditing,
+    isAutoSave,
+    mode,
+    switchMode,
+    digits,
+    amountMwk,
+    amountCurrency,
+    amountDisplay,
+    conversionRate,
+    appendDigit,
+    deleteDigit,
+    transferLegs,
+    accountId,
+    selectAccount,
+    setAccountId,
+    toAccountId,
+    setToAccountId,
+    mwkAccounts,
+    categoryId,
+    setCategoryId,
+    sheetRecents,
+    selectRecent,
+    items,
+    setItems,
+    excludeFromBudget,
+    toggleExcludeFromBudget,
+    sourceId,
+    archivedIncomeSourceId,
+    selectIncomeSource,
+    clearIncomeSource,
+    autoSaveRate,
+    debtId,
+    selectDebt,
+    pickerDebts,
+    claimAction,
+    setClaimAction,
+    adjustPolarity,
+    setAdjustPolarity,
+    nextRemaining,
+    payee,
+    setPayee,
+    note,
+    setNote,
+    fromSavings,
+    setFromSavings,
+    occurredAt,
+    setOccurredAt,
+    detailSummary,
+    detailsOpen,
+    toggleDetails,
+    canSave,
+    save,
+    saveLabel,
+  } = useQuickAddForm({
+    initial,
+    categories,
+    accounts,
+    debts,
+    incomeSources,
+    recents,
+    defaultExpenseAccountId,
+    defaultTransferFromAccountId,
+    defaultTransferToAccountId,
+    usdRate,
+    autoSaveRateForSource,
+    resolveAccountId,
+    error,
+    onSave,
   })
-  const [items, setItems] = useState(initial.items ?? '')
-  const [note, setNote] = useState(initial.note ?? '')
-  const [excludeFromBudget, setExcludeFromBudget] = useState(
-    initial.excludeFromBudget ?? false,
-  )
-  const [fromSavings, setFromSavings] = useState(initial.fromSavings ?? false)
-  const [debtId, setDebtId] = useState(initial.debtId ?? '')
-  const [claimAction, setClaimAction] = useState<ClaimAction>(
-    initial.claimAction ??
-      defaultClaimAction(
-        debts.find((debt) => debt.id === initial.debtId)?.direction ??
-          'you_owe',
-      ),
-  )
-  const [adjustPolarity, setAdjustPolarity] = useState<AdjustPolarity>(
-    initial.adjustPolarity ?? 'decrease',
-  )
-  const [occurredAt, setOccurredAt] = useState(initial.occurredAt ?? 0)
-  const isAutoSave = initial.autoSave === true
-  const fromAccount = accounts.find((account) => account.id === accountId)
-  const toAccount = accounts.find((account) => account.id === toAccountId)
-  const amountCurrency: Account['currency'] = isAutoSave
-    ? 'MWK'
-    : mode === 'claim'
-      ? 'MWK'
-      : (fromAccount?.currency ?? 'MWK')
-  const conversionRate = initial.fxRate ?? usdRate
-  const amount = parseAmountDigits(digits)
-  let amountMwk = amount
-  if (amount > 0 && amountCurrency === 'USD' && conversionRate > 0) {
-    try {
-      amountMwk = currencyToMwk(amount, 'USD', conversionRate)
-    } catch {
-      amountMwk = 0
-    }
-  }
-  const autoSaveRate = autoSaveRateForSource(
-    mode === 'income' ? sourceId || undefined : undefined,
-  )
-  const sheetRecents = visibleRecents(recents, categories)
-  const selectedDebt = debts.find((debt) => debt.id === debtId)
-  const pickerDebts = debts.filter(
-    (debt) => !debt.archived || debt.id === (initial.debtId ?? debtId),
-  )
-  const activeDebts = debts.filter((debt) => !debt.archived)
-  const mwkAccounts = accounts.filter((account) => account.currency === 'MWK')
-  const claimNeedsAccount =
-    mode === 'claim' && claimRequiresAccount(claimAction)
-  const claimHidesAccount = mode === 'claim' && claimForbidsAccount(claimAction)
-  const nextRemaining =
-    mode === 'claim' && selectedDebt && amountMwk > 0
-      ? remainingAfterReplacement(
-          selectedDebt.remaining,
-          {
-            action: claimAction,
-            amount: amountMwk,
-            adjustPolarity:
-              claimAction === 'adjust' ? adjustPolarity : undefined,
-          },
-          isEditing && initial.claimAction
-            ? {
-                action: initial.claimAction,
-                amount: initial.amount ?? 0,
-                adjustPolarity: initial.adjustPolarity,
-              }
-            : undefined,
-        )
-      : null
-  const claimWouldGoNegative = nextRemaining !== null && nextRemaining < 0
-  const canSave =
-    amount > 0 &&
-    amountMwk > 0 &&
-    (amountCurrency !== 'USD' || conversionRate > 0) &&
-    !claimWouldGoNegative &&
-    (isAutoSave ||
-      (mode === 'claim'
-        ? Boolean(debtId) && (!claimNeedsAccount || Boolean(accountId))
-        : Boolean(accountId) &&
-          (mode !== 'transfer' || accountId !== toAccountId)))
-
-  function retargetAmount(previousAccountId: string, nextAccountId: string) {
-    const previous = accounts.find(
-      (account) => account.id === previousAccountId,
-    )
-    const next = accounts.find((account) => account.id === nextAccountId)
-    if (!previous || !next || previous.currency === next.currency) return
-    setDigits((current) => {
-      const parsed = parseAmountDigits(current)
-      if (parsed <= 0 || conversionRate <= 0) return current
-      try {
-        const mwk = currencyToMwk(parsed, previous.currency, conversionRate)
-        return amountToDigits(mwkToCurrency(mwk, next.currency, conversionRate))
-      } catch {
-        return current
-      }
-    })
-  }
-
-  function selectAccount(nextAccountId: string) {
-    retargetAmount(accountId, nextAccountId)
-    setAccountId(nextAccountId)
-  }
-
-  function appendDigits(value: string) {
-    setDigits((current) => appendAmountInput(current, value))
-  }
-
-  function save() {
-    if (!canSave) return
-    if (isAutoSave) {
-      onSave({
-        transactionId: initial.transactionId,
-        type: 'allocation',
-        amount: amountMwk,
-        payee: initial.payee ?? 'Auto-save',
-        note: note.trim() || undefined,
-        occurredAt,
-      })
-      return
-    }
-    onSave({
-      transactionId: initial.transactionId,
-      type: mode,
-      amount: amountMwk,
-      categoryId: mode !== 'expense' ? undefined : categoryId,
-      accountId:
-        mode === 'claim' && (claimHidesAccount || !accountId)
-          ? undefined
-          : accountId,
-      toAccountId: mode !== 'transfer' ? undefined : toAccountId,
-      payee:
-        mode === 'claim'
-          ? (selectedDebt?.name ?? (payee.trim() || 'Debt'))
-          : mode === 'transfer'
-            ? 'Transfer'
-            : payee.trim() ||
-              (mode === 'income'
-                ? 'Income'
-                : (resolveCategory(categories, categoryId)?.name ?? 'Expense')),
-      sourceId: mode === 'income' ? sourceId || undefined : undefined,
-      items: mode === 'expense' && items.trim() ? items.trim() : undefined,
-      note: note.trim() || undefined,
-      occurredAt,
-      excludeFromBudget: mode === 'expense' && excludeFromBudget,
-      reconcile: initial.reconcile,
-      fromSavings:
-        ((mode === 'expense' || mode === 'transfer') && fromSavings) ||
-        (mode === 'claim' && fromSavings && claimAllowsFromSavings(claimAction))
-          ? true
-          : undefined,
-      debtId: mode === 'claim' ? debtId : undefined,
-      claimAction: mode === 'claim' ? claimAction : undefined,
-      adjustPolarity:
-        mode === 'claim' && claimAction === 'adjust'
-          ? adjustPolarity
-          : undefined,
-    })
-  }
 
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target
@@ -785,13 +489,13 @@ export function QuickAddSheet({
     }
     if (/^\d$/.test(event.key)) {
       event.preventDefault()
-      appendDigits(event.key)
+      appendDigit(event.key)
     } else if (event.key === '.' || event.key === ',') {
       event.preventDefault()
-      appendDigits('.')
+      appendDigit('.')
     } else if (event.key === 'Backspace') {
       event.preventDefault()
-      setDigits((current) => current.slice(0, -1))
+      deleteDigit()
     } else if (event.key === 'Enter') {
       event.preventDefault()
       save()
@@ -802,86 +506,6 @@ export function QuickAddSheet({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
-
-  const amountDisplay = formatAmountDigitsDisplay(digits, amountCurrency)
-  const saveLabel = isEditing
-    ? 'Save changes'
-    : mode === 'expense'
-      ? `Log expense${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
-      : mode === 'income'
-        ? `Log income${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
-        : mode === 'claim'
-          ? `${claimActionLabel(claimAction, adjustPolarity)}${amount ? ` — ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
-          : `Move${amount ? ` ${formatEnteredAmount(amount, amountCurrency)}` : ''}`
-
-  // Optional fields behind "More details", summarised while collapsed.
-  const defaultPayee =
-    mode === 'income'
-      ? (incomeSources.find((source) => source.id === sourceId)?.name ??
-        'Income')
-      : resolveCategory(categories, categoryId)?.name
-  const detailSummary = [
-    (mode === 'expense' || mode === 'income') &&
-      payee.trim() &&
-      payee.trim().toLowerCase() !== defaultPayee?.toLowerCase() &&
-      payee.trim(),
-    mode === 'expense' && items.trim() && 'Items',
-    (mode === 'expense' || mode === 'transfer') &&
-      fromSavings &&
-      'From savings',
-    mode === 'expense' && !fromSavings && excludeFromBudget && 'Excluded',
-    occurredAt !== 0 &&
-      new Date(occurredAt).toDateString() !== new Date().toDateString() &&
-      formatTransactionDate(occurredAt),
-    note.trim() && 'Note',
-  ].filter((part): part is string => typeof part === 'string')
-  const [showDetails, setShowDetails] = useState(
-    () => isEditing && detailSummary.length > 0,
-  )
-  const [detailsError, setDetailsError] = useState(error)
-  if (error !== detailsError) {
-    setDetailsError(error)
-    if (error && /date|note|payee|item|saving|budget/i.test(error)) {
-      setShowDetails(true)
-    }
-  }
-  const detailsOpen = isAutoSave || showDetails
-
-  function selectRecent(recent: RecentTransaction) {
-    const nextAccountId = resolveAccountId(recent.accountId)
-    const nextAccount = accounts.find((account) => account.id === nextAccountId)
-    const display = recentDisplayAmount(recent, nextAccount, conversionRate)
-    setDigits(amountToDigits(display.amount))
-    setCategoryId(recent.categoryId)
-    setAccountId(nextAccountId)
-    setPayee(recent.payee)
-  }
-
-  function switchMode(nextMode: TxnType) {
-    const nextAccountId =
-      nextMode === 'transfer'
-        ? defaultTransferFromAccountId
-        : nextMode === 'claim'
-          ? defaultMwkAccountId
-          : mode === 'transfer' || mode === 'claim'
-            ? defaultExpenseAccountId
-            : accountId
-    retargetAmount(accountId, nextAccountId)
-    setMode(nextMode)
-    if (nextMode === 'transfer') {
-      setAccountId(defaultTransferFromAccountId)
-      setToAccountId(defaultTransferToAccountId)
-    } else if (mode === 'transfer' || nextMode === 'claim') {
-      setAccountId(nextAccountId)
-    }
-    if (nextMode === 'claim' && !debtId && activeDebts[0]) {
-      setDebtId(activeDebts[0].id)
-      setClaimAction(defaultClaimAction(activeDebts[0].direction))
-    }
-    if (nextMode === 'income' && !sourceId && !isEditing) {
-      setSourceId(defaultIncomeSourceId(incomeSources))
-    }
-  }
 
   return (
     <Dialog
@@ -952,16 +576,11 @@ export function QuickAddSheet({
           >
             {amountDisplay}
           </p>
-          {mode === 'transfer' &&
-          fromAccount &&
-          toAccount &&
-          fromAccount.currency !== toAccount.currency &&
-          conversionRate > 0 &&
-          amountMwk > 0 ? (
+          {transferLegs ? (
             <p className="mt-2 text-sm text-sea-ink-soft">
-              {formatTransferLeg(fromAccount, amountMwk, conversionRate, '−')}
+              {transferLegs.from}
               {' → '}
-              {formatTransferLeg(toAccount, amountMwk, conversionRate, '+')}
+              {transferLegs.to}
               <span className="mt-0.5 block text-xs">
                 at K{conversionRate.toLocaleString('en-US')}/$
               </span>
@@ -982,7 +601,7 @@ export function QuickAddSheet({
                 variant="secondary"
                 aria-label={key === '.' ? 'Decimal point' : undefined}
                 className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
-                onClick={() => appendDigits(key)}
+                onClick={() => appendDigit(key)}
               >
                 {key}
               </Button>
@@ -993,7 +612,7 @@ export function QuickAddSheet({
             aria-label="Delete digit"
             variant="secondary"
             className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
-            onClick={() => setDigits((current) => current.slice(0, -1))}
+            onClick={deleteDigit}
           >
             <Delete className="size-5" />
           </Button>
@@ -1060,13 +679,7 @@ export function QuickAddSheet({
             fromSavings={fromSavings}
             lockIdentity={isEditing}
             nextRemaining={nextRemaining}
-            onDebtId={(id) => {
-              setDebtId(id)
-              const debt = debts.find((item) => item.id === id)
-              if (debt && !isEditing) {
-                setClaimAction(defaultClaimAction(debt.direction))
-              }
-            }}
+            onDebtId={selectDebt}
             onClaimAction={setClaimAction}
             onAdjustPolarity={setAdjustPolarity}
             onAccountId={setAccountId}
@@ -1085,12 +698,7 @@ export function QuickAddSheet({
                   size="sm"
                   aria-pressed={!sourceId}
                   className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
-                  onClick={() => {
-                    // Start an unassigned income without retaining the source
-                    // description that was selected before this action.
-                    setPayee('')
-                    setSourceId('')
-                  }}
+                  onClick={clearIncomeSource}
                 >
                   Unassigned
                 </Button>
@@ -1115,19 +723,7 @@ export function QuickAddSheet({
                     size="sm"
                     aria-pressed={sourceId === source.id}
                     className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
-                    onClick={() => {
-                      const previous = incomeSources.find(
-                        (item) => item.id === sourceId,
-                      )
-                      setSourceId(source.id)
-                      if (
-                        !payee.trim() ||
-                        payee.trim().toLowerCase() ===
-                          previous?.name.toLowerCase()
-                      ) {
-                        setPayee(source.name)
-                      }
-                    }}
+                    onClick={() => selectIncomeSource(source)}
                   >
                     <span className="truncate">{source.name}</span>
                   </Button>
@@ -1154,7 +750,7 @@ export function QuickAddSheet({
             aria-expanded={detailsOpen}
             aria-controls="quick-add-details"
             className="group mt-4 h-11 w-full min-w-0 justify-between rounded-xl px-3 sm:h-10"
-            onClick={() => setShowDetails((current) => !current)}
+            onClick={toggleDetails}
           >
             <span className="shrink-0">More details</span>
             <span className="flex min-w-0 items-center gap-1.5">
@@ -1253,7 +849,7 @@ export function QuickAddSheet({
                 variant="secondary"
                 aria-pressed={excludeFromBudget}
                 className="mt-4 h-auto w-full min-w-0 justify-start whitespace-normal rounded-xl px-4 py-3 text-left aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
-                onClick={() => setExcludeFromBudget((current) => !current)}
+                onClick={toggleExcludeFromBudget}
               >
                 <span
                   aria-hidden="true"
