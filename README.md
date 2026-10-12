@@ -9,7 +9,8 @@ To run this application:
 
 ```bash
 pnpm install
-cp .env.example .env.local
+cp apps/web/.env.example apps/web/.env.local
+cp packages/backend/.env.example packages/backend/.env.local
 pnpm dev
 ```
 
@@ -18,25 +19,25 @@ pnpm dev
 Build and run the Nitro server locally with:
 
 ```bash
-pnpm build
-node .output/server/index.mjs
+pnpm --filter @misi/web build
+node apps/web/.output/server/index.mjs
 ```
 
-The production artifact is `.output/server/index.mjs`, not `dist/server`.
+The production artifact is `apps/web/.output/server/index.mjs`, not `dist/server`.
 The public Convex URL is baked into the server bundle during the build, while
 runtime values may still override it when explicitly configured.
 
 ## Convex development
 
-Set `VITE_CONVEX_URL` in `.env.local` to the public `*.convex.cloud` URL for
+Set `VITE_CONVEX_URL` in `apps/web/.env.local` to the public `*.convex.cloud` URL for
 the Convex deployment you are using. `VITE_CONVEX_SITE_URL` is optional when
 that URL follows Convex's standard `*.convex.cloud`/`*.convex.site` naming.
 
-For local Convex development, set `CONVEX_DEPLOYMENT` to the deployment
-selected by `pnpm dlx convex dev` and run:
+For local Convex development, set `CONVEX_DEPLOYMENT` in
+`packages/backend/.env.local` to the deployment selected by `convex dev` and run:
 
 ```bash
-pnpm dlx convex dev
+pnpm --filter @misi/backend dev
 ```
 
 `CONVEX_DEPLOYMENT` is a local development setting. Do not use it as the
@@ -45,11 +46,11 @@ Vercel deploy credential.
 ## Authentication configuration
 
 Authentication is hosted by the Convex Better Auth component. Set these
-variables on the Convex deployment, not only in the web app's `.env.local`:
+variables on the Convex deployment, not only in `apps/web/.env.local`:
 
 ```bash
-pnpm dlx convex env set SITE_URL http://localhost:3000
-pnpm dlx convex env set BETTER_AUTH_SECRET '<a long random secret>'
+pnpm --filter @misi/backend exec convex env set SITE_URL http://localhost:3000
+pnpm --filter @misi/backend exec convex env set BETTER_AUTH_SECRET '<a long random secret>'
 ```
 
 `SITE_URL` must be the public origin where Misi is served. For production,
@@ -60,8 +61,8 @@ Google sign-in is optional. Configure both variables together, or leave both
 unset:
 
 ```bash
-pnpm dlx convex env set GOOGLE_CLIENT_ID '<client id>'
-pnpm dlx convex env set GOOGLE_CLIENT_SECRET '<client secret>'
+pnpm --filter @misi/backend exec convex env set GOOGLE_CLIENT_ID '<client id>'
+pnpm --filter @misi/backend exec convex env set GOOGLE_CLIENT_SECRET '<client secret>'
 ```
 
 The Google OAuth redirect URI is
@@ -70,14 +71,16 @@ the web app only after both Google credentials are present on Convex.
 
 ## PostHog (optional)
 
-Set `VITE_POSTHOG_KEY` in `.env.local` to enable analytics. The default host is
+Set `VITE_POSTHOG_KEY` in `apps/web/.env.local` to enable analytics. The default host is
 `https://us.i.posthog.com`; set `VITE_POSTHOG_HOST` for another PostHog Cloud
 region or a self-hosted instance.
 
 ## Vercel deployment
 
-`vercel.json` uses `pnpm run vercel-build`. That script deploys the Convex
-functions and then builds the app, so configure a Convex deploy key in Vercel:
+The Vercel project's Root Directory is `apps/web`. `apps/web/vercel.json` uses
+`pnpm run vercel-build`. That script deploys the Convex functions from
+`packages/backend` and then builds the web app, so configure a Convex deploy key
+in Vercel:
 
 ```text
 CONVEX_DEPLOY_KEY=prod:...    # production
@@ -99,16 +102,16 @@ pnpm test
 pnpm typecheck
 pnpm lint
 pnpm check
-pnpm build
+pnpm --filter @misi/web build
 ```
 
 ## Routing
 
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
+This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `apps/web/src/routes`.
 
 ### Adding A Route
 
-To add a new route to your application just add a new file in the `./src/routes` directory.
+To add a new route to your application just add a new file in the `apps/web/src/routes` directory.
 
 TanStack will automatically generate the content of the route file for you.
 
@@ -134,7 +137,7 @@ More information on the `Link` component can be found in the [Link documentation
 
 ### Using A Layout
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
+In the File Based Routing setup the layout is located in `apps/web/src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
 
 Here is an example layout that includes a header:
 

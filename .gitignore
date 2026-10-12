@@ -11,4 +11,4 @@ dist-ssr
 .vinxi
 __unconfig*
 todos.json
-public/splash
+apps/web/public/splash

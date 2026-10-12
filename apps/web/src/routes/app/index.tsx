@@ -1,0 +1,658 @@
+import { convexQuery } from '@convex-dev/react-query'
+import { useSuspenseQuery } from '@tanstack/react-query'
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useHydrated,
+  useNavigate,
+} from '@tanstack/react-router'
+import { useMutation, usePaginatedQuery } from 'convex/react'
+import { ReceiptText, WalletCards, Waves } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { z } from 'zod'
+
+import { api } from '@misi/backend/_generated/api'
+import {
+  incomeSourceStatus,
+  landedAmountForSource,
+  totalActualIncome,
+} from '@misi/shared/income'
+import { spendingEnvelopeBalance } from '@misi/shared/savings'
+import { greeting } from '#/lib/greeting'
+import { AppProviders } from '#/components/app/app-providers'
+import { AutoSaveCard } from '#/components/app/auto-save-card'
+import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
+import { NetWorthCard } from '#/components/app/net-worth-card'
+import { useQuickAdd } from '#/components/app/quick-add-provider'
+import { TransactionsCard } from '#/components/app/transactions-card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
+import {
+  accountMwkValue,
+  canMutateTransaction,
+  formatK,
+  spendableTotalMwk,
+} from '#/lib/app-data'
+import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { mutationErrorMessage } from '#/lib/use-quick-add-sheet'
+
+import type { FunctionReturnType } from 'convex/server'
+import type { Doc, Id } from '@misi/backend/_generated/dataModel'
+import type { AutoSaveStatus } from '#/components/app/auto-save-card'
+import type { PulseIncomeSource } from '#/components/app/cycle-pulse-card'
+import type { Account, Txn, Wallet } from '#/lib/app-data'
+import type { Category } from '#/lib/categories'
+
+const DAY_MS = 86_400_000
+
+/** Reuse date formatters across the transaction feed instead of constructing
+ * a new Intl.DateTimeFormat for every rendered row. */
+const dayLabelFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+})
+
+const dayLabelWithYearFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+const FEED_PAGE_SIZE = 50
+
+const HOME_TABS = ['activity', 'balances'] as const
+
+/** Below `lg` only one tab shows at a time; wide layouts show both columns. */
+const tabPanelClassName =
+  'min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:block'
+
+const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'Africa/Blantyre',
+})
+
+const greetingDateFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+})
+
+type BootstrapData = NonNullable<FunctionReturnType<typeof api.misi.bootstrap>>
+type ReadyBootstrapData = Omit<BootstrapData, 'oneTapRecents'> & {
+  settings: NonNullable<BootstrapData['settings']>
+  currentCycle: NonNullable<BootstrapData['currentCycle']>
+  oneTapRecents?: BootstrapData['oneTapRecents']
+}
+
+interface AutoSaveUiState {
+  transactionId: string
+  status: AutoSaveStatus
+  amount: number
+  sourceName: string
+  savingsRate: number
+  occurredAt: number
+}
+
+export const Route = createFileRoute('/app/')({
+  validateSearch: z.object({
+    tab: z.enum(HOME_TABS).optional().catch(undefined),
+  }),
+  loader: async ({ context }) => {
+    const data = await context.queryClient.ensureQueryData(
+      convexQuery(api.misi.bootstrap, {}),
+    )
+    if (data === null || !data.settings?.onboardedAt) {
+      throw redirect({ to: '/onboarding' })
+    }
+    return { now: Date.now() }
+  },
+  component: AppHome,
+})
+
+function sameCalendarDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  )
+}
+
+function transactionDayLabel(occurredAt: number, now: number) {
+  const date = new Date(occurredAt)
+  const today = new Date(now)
+  if (sameCalendarDay(date, today)) return 'Today'
+
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (sameCalendarDay(date, yesterday)) return 'Yesterday'
+
+  const format =
+    date.getFullYear() === today.getFullYear()
+      ? dayLabelFormat
+      : dayLabelWithYearFormat
+  return format.format(date).replace(',', '')
+}
+
+function toTxn(transaction: Doc<'transactions'>, now: number): Txn {
+  return {
+    id: transaction._id,
+    type: transaction.type,
+    amount: transaction.amount,
+    fxRate: transaction.fxRate,
+    payee: transaction.payee,
+    categoryId: transaction.categoryId,
+    accountId: transaction.accountId,
+    toAccountId: transaction.toAccountId,
+    direction: transaction.direction,
+    walletId: transaction.walletId,
+    sourceId: transaction.sourceId,
+    items: transaction.items,
+    note: transaction.note,
+    excludeFromBudget: transaction.excludeFromBudget,
+    occurredAt: transaction.occurredAt,
+    day: transactionDayLabel(transaction.occurredAt, now),
+    debtId: transaction.debtId,
+    claimAction: transaction.claimAction,
+    adjustPolarity: transaction.adjustPolarity,
+    adjustment: transaction.adjustment ? true : undefined,
+    autoSave: transaction.autoSave ? true : undefined,
+  }
+}
+
+/** Distance from the bottom of the (sticky) tab bar to the top of the active
+ * panel; negative once the panel has scrolled underneath the bar. */
+function activePanelOffset(
+  tabs: HTMLElement | null,
+  tabList: HTMLElement | null,
+) {
+  const panel = tabs?.querySelector('[role="tabpanel"][data-state="active"]')
+  if (!panel || !tabList) return null
+  return (
+    panel.getBoundingClientRect().top - tabList.getBoundingClientRect().bottom
+  )
+}
+
+function shortDate(timestamp: number) {
+  return shortDateFormat.format(new Date(timestamp))
+}
+
+function LoadingState({ children }: { children: string }) {
+  return (
+    <div className="page-wrap py-20 text-center text-sea-ink-soft">
+      {children}
+    </div>
+  )
+}
+
+function AppHome() {
+  const { now } = Route.useLoaderData()
+  const { data } = useSuspenseQuery(convexQuery(api.misi.bootstrap, {}))
+  const ensureSeedData = useMutation(api.misi.ensureSeedData)
+  const requestedSeed = useRef(false)
+  const [setupError, setSetupError] = useState<string | null>(null)
+
+  const cycleNeedsRollover =
+    data?.currentCycle != null && data.currentCycle.endsAt < now
+
+  useEffect(() => {
+    if (requestedSeed.current || !cycleNeedsRollover) return
+    requestedSeed.current = true
+    void ensureSeedData({}).catch((error) => {
+      requestedSeed.current = false
+      setSetupError(
+        mutationErrorMessage(error, 'Unable to set up your Misi data'),
+      )
+      console.error('Unable to set up Misi data', error)
+    })
+  }, [cycleNeedsRollover, ensureSeedData])
+
+  if (data === null) {
+    return <LoadingState>Loading your accounts…</LoadingState>
+  }
+
+  if (cycleNeedsRollover) {
+    return (
+      <LoadingState>{setupError ?? 'Starting your new cycle…'}</LoadingState>
+    )
+  }
+
+  if (!data.settings || !data.currentCycle) {
+    return <LoadingState>Loading your accounts…</LoadingState>
+  }
+
+  return (
+    <AppProviders>
+      <AppDashboard data={data as ReadyBootstrapData} now={now} />
+    </AppProviders>
+  )
+}
+
+function AppDashboard({
+  data,
+  now,
+}: {
+  data: ReadyBootstrapData
+  now: number
+}) {
+  const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
+  const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
+  const moveSavingsMutation = useMutation(api.misi.moveSavings)
+  const setAccountSpendableMutation = useMutation(api.misi.setAccountSpendable)
+  const [localAutoSaveUi, setLocalAutoSaveUi] =
+    useState<AutoSaveUiState | null>(null)
+  const { tab = 'activity' } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const tabListRef = useRef<HTMLDivElement>(null)
+  const pinTabPanel = useRef(false)
+
+  // When switching tabs while scrolled under the pinned tab bar, start the new
+  // tab at its top instead of wherever the old tab's scroll position lands.
+  useLayoutEffect(() => {
+    if (!pinTabPanel.current) return
+    pinTabPanel.current = false
+    const offset = activePanelOffset(tabsRef.current, tabListRef.current)
+    if (offset !== null) window.scrollBy({ top: offset - 12 })
+  }, [tab])
+
+  function selectTab(value: string) {
+    const next = HOME_TABS.find((item) => item === value)
+    if (!next || next === tab) return
+    const offset = activePanelOffset(tabsRef.current, tabListRef.current)
+    pinTabPanel.current = offset !== null && offset < 0
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        tab: next === 'activity' ? undefined : next,
+      }),
+      replace: true,
+      resetScroll: false,
+    })
+  }
+
+  const accounts = useMemo<Account[]>(
+    () =>
+      data.accounts.map((account) => ({
+        id: account._id,
+        name: account.name,
+        kind: account.kind,
+        currency: account.currency,
+        balance: account.balance,
+        includeInSpendable: account.includeInSpendable,
+      })),
+    [data.accounts],
+  )
+
+  const categories = useMemo<Category[]>(
+    () =>
+      data.categories.map((category) => ({
+        id: category._id,
+        key: category.key,
+        name: category.name,
+        icon: resolveCategoryIcon(category.icon),
+        color: resolveCategoryColor(category.color),
+        budgetGroup: category.budgetGroup,
+        isSystem: category.isSystem,
+        archived: category.archivedAt !== undefined,
+      })),
+    [data.categories],
+  )
+
+  const transactions = useMemo<Txn[]>(
+    () => data.transactions.map((transaction) => toTxn(transaction, now)),
+    [data.transactions, now],
+  )
+
+  // The feed pages through all history; until the first page lands, show the
+  // current cycle from bootstrap so the card never flashes empty.
+  const feed = usePaginatedQuery(
+    api.misi.listTransactions,
+    {},
+    { initialNumItems: FEED_PAGE_SIZE },
+  )
+  const feedTransactions = useMemo<Txn[]>(
+    () =>
+      feed.status === 'LoadingFirstPage'
+        ? transactions
+        : feed.results.map((transaction) => toTxn(transaction, now)),
+    [feed.status, feed.results, transactions, now],
+  )
+
+  const cycleInfo = useMemo(() => {
+    const cycle = data.currentCycle
+    const totalDays = Math.max(
+      1,
+      Math.ceil((cycle.endsAt + 1 - cycle.startsAt) / DAY_MS),
+    )
+    const dayNumber = Math.min(
+      totalDays,
+      Math.max(1, Math.floor((now - cycle.startsAt) / DAY_MS) + 1),
+    )
+    const daysRemaining = Math.max(0, Math.ceil((cycle.endsAt - now) / DAY_MS))
+    const today = new Date(now)
+
+    return {
+      label: cycle.label,
+      spendingLimit: cycle.spendingLimit,
+      totalDays,
+      dayNumber,
+      daysRemaining,
+      dayOf: `day ${dayNumber} of ${totalDays}`,
+      headerBadge: `${cycle.label} · day ${dayNumber}`,
+      greetingDate: greetingDateFormat.format(today),
+      endsOn: shortDate(cycle.endsAt),
+      cycleGain: data.transactions.reduce((sum, transaction) => {
+        if (transaction.type === 'income') return sum + transaction.amount
+        if (transaction.type === 'expense') return sum - transaction.amount
+        return sum
+      }, 0),
+    }
+  }, [data.currentCycle, data.transactions, now])
+
+  const totalSpent = data.transactions
+    .filter(
+      (transaction) =>
+        transaction.type === 'expense' &&
+        transaction.excludeFromBudget !== true,
+    )
+    .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const spendingLeft = cycleInfo.spendingLimit - totalSpent
+  const perDay =
+    cycleInfo.daysRemaining > 0
+      ? Math.max(0, Math.round(spendingLeft / cycleInfo.daysRemaining))
+      : 0
+  const activeDebts = data.debts.filter((debt) => debt.archivedAt === undefined)
+  const youOwe = activeDebts
+    .filter((debt) => debt.direction === 'you_owe')
+    .reduce((sum, debt) => sum + debt.remaining, 0)
+  const owedToYou = activeDebts
+    .filter((debt) => debt.direction === 'owed_to_you')
+    .reduce((sum, debt) => sum + debt.remaining, 0)
+  const netWorth =
+    accounts.reduce(
+      (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
+      0,
+    ) +
+    owedToYou -
+    youOwe
+  const spendable = spendableTotalMwk(accounts, data.settings.usdRate)
+  const savingsBalance =
+    data.savingsBalance ?? data.settings.savingsOpeningBalance
+  const spendingEnvelope = spendingEnvelopeBalance(spendable, savingsBalance)
+
+  const incomeSources = useMemo<PulseIncomeSource[]>(
+    () =>
+      data.cycleIncomePlans.map((plan) => {
+        const landedAmount = landedAmountForSource(
+          data.transactions,
+          plan.sourceId,
+        )
+        return {
+          id: plan.sourceId,
+          name: plan.sourceName,
+          expectedAmount: plan.expectedAmount,
+          expectedAmountMax: plan.expectedAmountMax,
+          landedAmount,
+          status: incomeSourceStatus(landedAmount, plan.expectedAmount),
+        }
+      }),
+    [data.cycleIncomePlans, data.transactions],
+  )
+  const incomeLanded = totalActualIncome(data.transactions)
+
+  const envelopes: Wallet[] = [
+    {
+      id: 'spending',
+      name: 'Spending',
+      balance: spendingEnvelope,
+      currency: 'MWK',
+      detail:
+        spendingEnvelope < 0
+          ? 'Cutting into savings'
+          : 'Unallocated spendable money',
+    },
+    {
+      id: 'savings',
+      name: 'Savings',
+      balance: savingsBalance,
+      currency: 'MWK',
+    },
+  ]
+  const hydrated = useHydrated()
+  const { openSheet, requestDelete } = useQuickAdd()
+
+  const pendingAutoSave = data.pendingAutoSave
+  const autoSaveUi: AutoSaveUiState | null = pendingAutoSave
+    ? localAutoSaveUi?.transactionId === pendingAutoSave.transactionId
+      ? localAutoSaveUi
+      : {
+          transactionId: pendingAutoSave.transactionId,
+          status: 'proposed',
+          amount: pendingAutoSave.amount,
+          sourceName: pendingAutoSave.sourceName,
+          savingsRate: pendingAutoSave.savingsRate,
+          occurredAt: pendingAutoSave.occurredAt,
+        }
+    : localAutoSaveUi?.status === 'saved' ||
+        localAutoSaveUi?.status === 'dismissed'
+      ? localAutoSaveUi
+      : null
+
+  function editTransaction(transaction: Txn) {
+    if (!canMutateTransaction(transaction)) return
+    openSheet(
+      {
+        transactionId: transaction.id,
+        mode: transaction.type,
+        amount: transaction.amount,
+        fxRate: transaction.fxRate,
+        categoryId: transaction.categoryId,
+        accountId: transaction.accountId,
+        toAccountId: transaction.toAccountId,
+        payee: transaction.payee,
+        sourceId: transaction.sourceId,
+        items: transaction.items,
+        note: transaction.note,
+        occurredAt: transaction.occurredAt,
+        excludeFromBudget: transaction.excludeFromBudget,
+        autoSave: transaction.autoSave,
+        fromSavings:
+          transaction.walletId === 'savings' &&
+          transaction.type !== 'allocation',
+        debtId: transaction.debtId,
+        claimAction: transaction.claimAction,
+        adjustPolarity: transaction.adjustPolarity,
+      },
+      transaction,
+    )
+  }
+
+  async function confirmAutoSave() {
+    if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
+    try {
+      await confirmAutoSaveMutation({
+        transactionId: autoSaveUi.transactionId as Id<'transactions'>,
+        amount: autoSaveUi.amount,
+      })
+      setLocalAutoSaveUi({ ...autoSaveUi, status: 'saved' })
+      toast.success('Saved to savings')
+    } catch (error) {
+      toast.error(
+        mutationErrorMessage(error, 'Unable to confirm auto-save. Try again.'),
+      )
+      console.error('Unable to confirm auto-save', error)
+    }
+  }
+
+  async function dismissAutoSave() {
+    if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
+    try {
+      await dismissAutoSaveMutation({
+        transactionId: autoSaveUi.transactionId as Id<'transactions'>,
+        amount: autoSaveUi.amount,
+      })
+      setLocalAutoSaveUi({ ...autoSaveUi, status: 'dismissed' })
+    } catch (error) {
+      toast.error(
+        mutationErrorMessage(error, 'Unable to dismiss auto-save. Try again.'),
+      )
+      console.error('Unable to dismiss auto-save', error)
+    }
+  }
+
+  async function moveSavings(input: {
+    amount: number
+    direction: 'toSavings' | 'toSpending'
+  }) {
+    try {
+      await moveSavingsMutation(input)
+      toast.success('Money moved')
+    } catch (error) {
+      toast.error(
+        mutationErrorMessage(error, 'Unable to move money. Try again.'),
+      )
+      console.error('Unable to move money', error)
+      throw error
+    }
+  }
+
+  function setAccountSpendable(accountId: string, includeInSpendable: boolean) {
+    void setAccountSpendableMutation({
+      accountId: accountId as Id<'accounts'>,
+      includeInSpendable,
+    }).catch((error) => {
+      toast.error(
+        mutationErrorMessage(error, 'Unable to update account. Try again.'),
+      )
+      console.error('Unable to update account spendable flag', error)
+    })
+  }
+
+  return (
+    <div className="min-h-screen">
+      <main className="page-wrap py-6 sm:py-8">
+        {/* Phones and tablets get Activity / Balances tabs under a sticky bar;
+            from `lg` both panels sit side by side as two columns. Flex (not
+            grid) below `lg` so the sticky bar can pin across either panel. */}
+        <Tabs
+          ref={tabsRef}
+          value={tab}
+          onValueChange={selectTab}
+          className="gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:items-start"
+        >
+          <div className="min-w-0 space-y-5">
+            <section>
+              <p className="island-kicker">
+                {cycleInfo.greetingDate} · {cycleInfo.label} · {cycleInfo.dayOf}
+              </p>
+              <h1 className="font-display mt-2 text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
+                {greeting(hydrated ? new Date() : null, data.userName)}
+              </h1>
+              <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
+                <span className="font-mono font-semibold text-sea-ink tabular-nums">
+                  {formatK(spendingLeft)}
+                </span>{' '}
+                left in Spending —{' '}
+                <span className="font-mono font-semibold text-sea-ink tabular-nums">
+                  {formatK(perDay)}
+                </span>
+                /day until {cycleInfo.endsOn}.
+              </p>
+            </section>
+            {autoSaveUi && (
+              <AutoSaveCard
+                status={autoSaveUi.status}
+                amount={autoSaveUi.amount}
+                sourceName={autoSaveUi.sourceName}
+                rateLabel={`${Math.round(autoSaveUi.savingsRate * 100)}%`}
+                landedLabel={transactionDayLabel(autoSaveUi.occurredAt, now)}
+                onAmountChange={(amount) =>
+                  setLocalAutoSaveUi({ ...autoSaveUi, amount })
+                }
+                onConfirm={() => void confirmAutoSave()}
+                onDismiss={() => void dismissAutoSave()}
+                animationDelay="60ms"
+              />
+            )}
+          </div>
+          <TabsList
+            ref={tabListRef}
+            aria-label="Home sections"
+            className="sticky top-[calc(4.3125rem+env(safe-area-inset-top))] z-10 h-11 w-full bg-(--surface-strong) shadow-sm backdrop-blur-md lg:hidden"
+          >
+            <TabsTrigger value="activity">
+              <ReceiptText />
+              Activity
+            </TabsTrigger>
+            <TabsTrigger value="balances">
+              <WalletCards />
+              Balances
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="activity"
+            forceMount
+            className={`${tabPanelClassName} lg:col-start-1`}
+          >
+            <TransactionsCard
+              transactions={feedTransactions}
+              accounts={accounts}
+              categories={categories}
+              status={feed.status}
+              onLoadMore={() => feed.loadMore(FEED_PAGE_SIZE)}
+              animationDelay="90ms"
+              onEdit={editTransaction}
+              onDelete={requestDelete}
+            />
+          </TabsContent>
+          <TabsContent
+            value="balances"
+            forceMount
+            className={`${tabPanelClassName} space-y-5 lg:col-start-2 lg:row-span-2 lg:row-start-1`}
+          >
+            <NetWorthCard
+              accounts={accounts}
+              envelopes={envelopes}
+              youOwe={youOwe}
+              owedToYou={owedToYou}
+              activeDebtCount={activeDebts.length}
+              netWorth={netWorth}
+              spendable={spendable}
+              savingsBalance={savingsBalance}
+              cycleGain={cycleInfo.cycleGain}
+              usdRate={data.settings.usdRate}
+              animationDelay="120ms"
+              onMoveSavings={moveSavings}
+              onSetAccountSpendable={setAccountSpendable}
+            />
+            <CyclePulseCard
+              cycleLabel={cycleInfo.label}
+              spendingLimit={cycleInfo.spendingLimit}
+              totalSpent={totalSpent}
+              spendingLeft={spendingLeft}
+              perDay={perDay}
+              dayNumber={cycleInfo.dayNumber}
+              totalDays={cycleInfo.totalDays}
+              incomeLanded={incomeLanded}
+              incomeSources={incomeSources}
+              animationDelay="150ms"
+            />
+          </TabsContent>
+        </Tabs>
+        <footer className="mt-10 flex flex-col items-start justify-between gap-2 border-t border-(--line) pt-5 text-[0.8rem] text-sea-ink-soft sm:flex-row sm:items-center">
+          <span className="flex items-center gap-2">
+            <Waves className="size-4 text-lagoon-deep" />
+            <span className="font-display font-bold text-sea-ink">Misi</span>
+          </span>
+          <Link to="/" className="font-bold text-lagoon-deep no-underline">
+            ← Back to site
+          </Link>
+        </footer>
+      </main>
+    </div>
+  )
+}
