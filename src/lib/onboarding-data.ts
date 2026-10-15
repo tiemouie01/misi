@@ -107,6 +107,29 @@ export function newKey() {
   return crypto.randomUUID()
 }
 
+export function newDraftAccount(): DraftAccount {
+  return {
+    key: newKey(),
+    name: '',
+    kind: 'bank',
+    currency: 'MWK',
+    balance: '',
+    isPreset: false,
+    includeInSpendable: true,
+  }
+}
+
+/** The `createAccount` / `completeOnboarding` payload for one draft account. */
+export function draftAccountInput(account: DraftAccount) {
+  return {
+    name: account.name.trim(),
+    kind: account.kind,
+    currency: account.currency,
+    balance: parseAmount(account.balance),
+    includeInSpendable: account.includeInSpendable,
+  }
+}
+
 export function parseAmount(value: string): number {
   const parsed = Number(value.replace(/,/g, ''))
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0

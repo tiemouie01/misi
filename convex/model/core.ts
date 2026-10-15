@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import type { SavingsMovement } from '../../shared/savings'
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
@@ -6,13 +7,13 @@ export type ReadCtx = QueryCtx | MutationCtx
 
 export function assertPositiveAmount(amount: number) {
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('Amount must be a positive number')
+    throw new ConvexError('Enter an amount greater than zero')
   }
 }
 
 export function assertNonnegativeFinite(value: number, label: string) {
   if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`${label} must be zero or more`)
+    throw new ConvexError(`${label} must be zero or more`)
   }
 }
 

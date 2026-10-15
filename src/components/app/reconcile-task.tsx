@@ -9,10 +9,8 @@ import { QuickAddSheet } from '#/components/app/quick-add'
 import { ReconcileCard } from '#/components/app/reconcile-card'
 import { isSpendableAccount, USD_RATE } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
-import {
-  mutationErrorMessage,
-  useQuickAddSheet,
-} from '#/lib/use-quick-add-sheet'
+import { errorMessage } from '#/lib/error-message'
+import { useQuickAddSheet } from '#/lib/use-quick-add-sheet'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Account, ReconcileBalance } from '#/lib/app-data'
@@ -138,10 +136,7 @@ export function ReconcileTask() {
       toast.success('Balance adjusted')
     } catch (error) {
       toast.error(
-        mutationErrorMessage(
-          error,
-          'Unable to absorb balance adjustment. Try again.',
-        ),
+        errorMessage(error, 'Unable to absorb balance adjustment. Try again.'),
       )
       console.error('Unable to absorb balance adjustment', error)
     }

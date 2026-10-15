@@ -21,17 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog'
+import { errorMessage } from '#/lib/error-message'
 
 const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
 
 const APP_TASKS = ['reconcile', 'income-sources'] as const
 
 export type AppTask = (typeof APP_TASKS)[number]
-
-function mutationErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
-}
 
 export const Route = createFileRoute('/app')({
   validateSearch: (search): { task?: AppTask } => ({
@@ -156,9 +152,7 @@ function AppLayout() {
       })
       .catch((error) => {
         requestedCategorySeed.current = false
-        setSetupError(
-          mutationErrorMessage(error, 'Unable to set up your categories'),
-        )
+        setSetupError(errorMessage(error, 'Unable to set up your categories'))
         console.error('Unable to set up categories', error)
       })
   }, [categoryCount, data, ensureDefaultCategories, queryClient])

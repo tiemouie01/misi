@@ -53,10 +53,8 @@ import {
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { mapDebt } from '#/lib/debts'
 import { formatAmountInput, parseAmount } from '#/lib/onboarding-data'
-import {
-  mutationErrorMessage,
-  useQuickAddSheet,
-} from '#/lib/use-quick-add-sheet'
+import { errorMessage } from '#/lib/error-message'
+import { useQuickAddSheet } from '#/lib/use-quick-add-sheet'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Account, Txn } from '#/lib/app-data'
@@ -226,7 +224,7 @@ function DebtDetailPage() {
       setEditorOpen(false)
       toast.success('Debt updated')
     } catch (caught) {
-      setError(mutationErrorMessage(caught, 'Unable to update debt'))
+      setError(errorMessage(caught, 'Unable to update debt'))
     } finally {
       setSaving(false)
     }
@@ -238,7 +236,7 @@ function DebtDetailPage() {
       await invalidate()
       toast.success('Debt archived')
     } catch (caught) {
-      toast.error(mutationErrorMessage(caught, 'Unable to archive debt'))
+      toast.error(errorMessage(caught, 'Unable to archive debt'))
     }
   }
 
@@ -248,7 +246,7 @@ function DebtDetailPage() {
       await invalidate()
       toast.success('Debt restored')
     } catch (caught) {
-      toast.error(mutationErrorMessage(caught, 'Unable to restore debt'))
+      toast.error(errorMessage(caught, 'Unable to restore debt'))
     }
   }
 
@@ -275,7 +273,7 @@ function DebtDetailPage() {
         params: { debtId: mergeTarget.id },
       })
     } catch (caught) {
-      setMergeError(mutationErrorMessage(caught, 'Unable to merge debts'))
+      setMergeError(errorMessage(caught, 'Unable to merge debts'))
     } finally {
       setMerging(false)
     }

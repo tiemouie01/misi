@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import { foldSavingsBalance } from '../../shared/savings'
 import { resolveCheckpointForRead } from './checkpoints'
 import { requireSettings, toSavingsMovement } from './core'
@@ -81,6 +82,6 @@ export async function assertSavingsHasAmount(
     excludeTransactionId,
   )
   if (amount > savingsBalance) {
-    throw new Error('Not enough in savings')
+    throw new ConvexError('Not enough in savings')
   }
 }

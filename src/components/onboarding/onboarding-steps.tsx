@@ -1,6 +1,7 @@
 import { CalendarIcon, Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { AccountDraftFields } from '#/components/account-draft-fields'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -16,21 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select'
-import { Switch } from '#/components/ui/switch'
 import { formatK } from '#/lib/app-data'
 import {
-  ACCOUNT_KIND_LABELS,
   ACCOUNT_PRESETS,
   BUDGETABLE_CATEGORIES,
   BUDGET_GROUP_LABELS,
   formatAmountInput,
+  newDraftAccount,
   newKey,
   parseAmount,
   validateIncomeSources,
 } from '#/lib/onboarding-data'
 import { cn } from '#/lib/utils'
 
-import type { Account } from '#/lib/app-data'
 import type {
   DraftAccount,
   IncomeSourceIssue,
@@ -45,8 +44,6 @@ export interface StepProps {
   goToStep: (step: OnboardingStep) => void
   error?: string | null
 }
-
-const accountKinds: Account['kind'][] = ['bank', 'mobile', 'cash', 'investment']
 
 function ordinal(day: number) {
   if (day >= 11 && day <= 13) return `${day}th`
@@ -501,121 +498,22 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
       {draft.accounts.length > 0 && (
         <div className="space-y-3">
           {draft.accounts.map((account) => (
-            <div
+            <AccountDraftFields
               key={account.key}
-              className="space-y-2 rounded-2xl border border-(--line) p-3"
-            >
-              {!account.isPreset ? (
-                <div className="flex items-start gap-2">
-                  <Input
-                    aria-label="Account name"
-                    placeholder="Account name"
-                    value={account.name}
-                    onChange={(event) =>
-                      updateAccount(account.key, { name: event.target.value })
-                    }
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${account.name || 'account'}`}
-                    onClick={() =>
+              account={account}
+              onChange={(patch) => updateAccount(account.key, patch)}
+              onRemove={
+                account.isPreset
+                  ? undefined
+                  : () =>
                       setDraft((current) => ({
                         ...current,
                         accounts: current.accounts.filter(
                           (item) => item.key !== account.key,
                         ),
                       }))
-                    }
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-[0.9rem] font-semibold text-sea-ink">
-                  {account.name}
-                </p>
-              )}
-              <div className="flex gap-2">
-                {!account.isPreset && (
-                  <>
-                    <Select
-                      value={account.kind}
-                      onValueChange={(value) =>
-                        updateAccount(account.key, {
-                          kind: value as Account['kind'],
-                          includeInSpendable: value !== 'investment',
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label="Account type"
-                        className="h-10 w-auto rounded-xl"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accountKinds.map((kind) => (
-                          <SelectItem key={kind} value={kind}>
-                            {ACCOUNT_KIND_LABELS[kind]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={account.currency}
-                      onValueChange={(value) =>
-                        updateAccount(account.key, {
-                          currency: value as Account['currency'],
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label="Currency"
-                        className="h-10 w-auto rounded-xl"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MWK">MWK</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
-                <Input
-                  aria-label={`${account.name || 'Account'} balance`}
-                  inputMode="numeric"
-                  placeholder={
-                    account.currency === 'USD' ? 'Balance ($)' : 'Balance (K)'
-                  }
-                  value={account.balance}
-                  onChange={(event) =>
-                    updateAccount(account.key, {
-                      balance: formatAmountInput(event.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <Label
-                  htmlFor={`ob-spendable-${account.key}`}
-                  className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
-                >
-                  Counts toward spendable
-                </Label>
-                <Switch
-                  id={`ob-spendable-${account.key}`}
-                  checked={account.includeInSpendable}
-                  onCheckedChange={(checked) =>
-                    updateAccount(account.key, {
-                      includeInSpendable: checked,
-                    })
-                  }
-                />
-              </div>
-            </div>
+              }
+            />
           ))}
         </div>
       )}
@@ -626,18 +524,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
         onClick={() =>
           setDraft((current) => ({
             ...current,
-            accounts: [
-              ...current.accounts,
-              {
-                key: newKey(),
-                name: '',
-                kind: 'bank',
-                currency: 'MWK',
-                balance: '',
-                isPreset: false,
-                includeInSpendable: true,
-              },
-            ],
+            accounts: [...current.accounts, newDraftAccount()],
           }))
         }
       >

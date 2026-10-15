@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import {
   CATEGORY_COLOR_IDS,
   CATEGORY_ICON_IDS,
@@ -73,7 +74,7 @@ export async function seedDefaultCategoriesForUser(
 
 export function validateCategoryName(name: string) {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error('Category name cannot be empty')
+  if (!trimmed) throw new ConvexError('Give this category a name')
   return trimmed
 }
 
@@ -102,7 +103,8 @@ export async function assertUniqueCategoryName(
       category.archivedAt === undefined &&
       category.name.toLowerCase() === name.toLowerCase(),
   )
-  if (duplicate) throw new Error('A category with this name already exists')
+  if (duplicate)
+    throw new ConvexError('You already have a category with this name')
 }
 
 export async function requireOwnedCategory(

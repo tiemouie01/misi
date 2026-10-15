@@ -13,6 +13,7 @@ import { Card } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { authClient } from '#/lib/auth-client'
+import { errorMessage } from '#/lib/error-message'
 
 import type { FormEvent } from 'react'
 
@@ -83,11 +84,10 @@ function LoginPage() {
       }
     } catch (caughtError) {
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : mode === 'sign-in'
-            ? 'Sign-in failed'
-            : 'Sign-up failed',
+        errorMessage(
+          caughtError,
+          mode === 'sign-in' ? 'Sign-in failed' : 'Sign-up failed',
+        ),
       )
       setPending(null)
     }
@@ -105,11 +105,7 @@ function LoginPage() {
         callbackURL: '/app',
       })
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : 'Google sign-in failed',
-      )
+      setError(errorMessage(caughtError, 'Google sign-in failed'))
       setPending(null)
     }
   }

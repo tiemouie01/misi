@@ -3,9 +3,11 @@ import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../convex/_generated/api'
+import { addTransactionOptimistically } from '#/lib/optimistic-transactions'
 
 import type { Id } from '../../convex/_generated/dataModel'
 import type { Account, QuickAddInitial, QuickAddPayload } from '#/lib/app-data'
+import { errorMessage } from '#/lib/error-message'
 
 interface QuickAddSheetOptions {
   accounts: Account[]
@@ -14,18 +16,15 @@ interface QuickAddSheetOptions {
   defaultExpenseAccountId: string
 }
 
-export function mutationErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
-}
-
 export function useQuickAddSheet({
   accounts,
   incomePlans,
   defaultSavingsRate,
   defaultExpenseAccountId,
 }: QuickAddSheetOptions) {
-  const addTransaction = useMutation(api.misi.addTransaction)
+  const addTransaction = useMutation(
+    api.misi.addTransaction,
+  ).withOptimisticUpdate(addTransactionOptimistically)
   const updateTransaction = useMutation(api.misi.updateTransaction)
   const removeTransaction = useMutation(api.misi.deleteTransaction)
   const [sheet, setSheet] = useState<{
@@ -172,7 +171,7 @@ export function useQuickAddSheet({
       }
       if (!isNew) closeSheet()
     } catch (caught) {
-      const message = mutationErrorMessage(
+      const message = errorMessage(
         caught,
         'Unable to save transaction. Check the details and try again.',
       )
@@ -199,12 +198,7 @@ export function useQuickAddSheet({
       closeSheet()
       return true
     } catch (caught) {
-      setError(
-        mutationErrorMessage(
-          caught,
-          'Unable to delete transaction. Try again.',
-        ),
-      )
+      setError(errorMessage(caught, 'Unable to delete transaction. Try again.'))
       console.error('Unable to delete transaction', caught)
       return false
     }

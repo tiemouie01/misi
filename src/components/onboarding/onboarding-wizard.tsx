@@ -22,6 +22,7 @@ import {
   ONBOARDING_STEPS,
   clearDraft,
   defaultDraft,
+  draftAccountInput,
   firstIncompleteStep,
   formatAmountInput,
   loadDraft,
@@ -30,6 +31,7 @@ import {
   validateIncomeSources,
   validateStep,
 } from '#/lib/onboarding-data'
+import { errorMessage } from '#/lib/error-message'
 
 import type { FunctionReturnType } from 'convex/server'
 import type { OnboardingDraft, OnboardingStep } from '#/lib/onboarding-data'
@@ -212,13 +214,7 @@ export function OnboardingWizard({
         paydayDay: draft.paydayDay,
         savingsOpeningBalance: parseAmount(draft.savingsOpeningBalance),
         spendingLimit,
-        accounts: draft.accounts.map((account) => ({
-          name: account.name.trim(),
-          kind: account.kind,
-          currency: account.currency,
-          balance: parseAmount(account.balance),
-          includeInSpendable: account.includeInSpendable,
-        })),
+        accounts: draft.accounts.map(draftAccountInput),
         incomeSources: draft.incomeSources.map((source) => ({
           name: source.name.trim(),
           expectedDayStart: Number(source.expectedDayStart),
@@ -235,11 +231,7 @@ export function OnboardingWizard({
       clearDraft(userKey)
       onComplete()
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : 'Unable to finish setup. Try again.',
-      )
+      setError(errorMessage(caughtError, 'Unable to finish setup. Try again.'))
       setSubmitting(false)
     }
   }

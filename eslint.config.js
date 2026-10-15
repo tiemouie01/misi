@@ -18,6 +18,7 @@ export default [
   },
   {
     ignores: [
+      '.claude/**',
       '.output/**',
       'convex/_generated/**',
       'eslint.config.js',

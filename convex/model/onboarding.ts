@@ -1,4 +1,4 @@
-import { v } from 'convex/values'
+import { ConvexError, v } from 'convex/values'
 
 import { assertCategoryPlansFitLimit, getCyclePeriod } from './cycles'
 
@@ -53,10 +53,12 @@ export function validateIncomeSources(
   const seenNames = new Set<string>()
   for (const source of incomeSources) {
     const sourceName = source.name.trim()
-    if (!sourceName) throw new Error('Income source names cannot be empty')
+    if (!sourceName) throw new ConvexError('Every income source needs a name')
     const sourceKey = sourceName.toLowerCase()
     if (seenNames.has(sourceKey)) {
-      throw new Error(`Duplicate income source: ${sourceName}`)
+      throw new ConvexError(
+        `You already have an income source named ${sourceName}`,
+      )
     }
     seenNames.add(sourceKey)
     if (
@@ -67,7 +69,7 @@ export function validateIncomeSources(
       source.expectedDayEnd < source.expectedDayStart ||
       source.expectedDayEnd > 31
     ) {
-      throw new Error('Income landing days must be between 1 and 31')
+      throw new ConvexError('Income days must be between 1 and 31')
     }
     if (
       !Number.isFinite(source.expectedAmount) ||
@@ -76,63 +78,72 @@ export function validateIncomeSources(
         (!Number.isFinite(source.expectedAmountMax) ||
           source.expectedAmountMax < source.expectedAmount))
     ) {
-      throw new Error('Expected income amounts must be valid and nonnegative')
+      throw new ConvexError('Expected income amounts must be zero or more')
     }
     if (
       !Number.isFinite(source.savingsRate) ||
       source.savingsRate < 0 ||
       source.savingsRate > 1
     ) {
-      throw new Error('Income savings rates must be between 0% and 100%')
+      throw new ConvexError('Savings rates must be between 0% and 100%')
     }
   }
 }
 
+/** Validates one account and returns its trimmed name. */
+export function validateAccountInput(account: OnboardingAccountInput) {
+  const name = account.name.trim()
+  if (!name) throw new ConvexError('Every account needs a name')
+  if (!Number.isFinite(account.balance) || account.balance < 0) {
+    throw new ConvexError('Account balances must be zero or more')
+  }
+  return name
+}
+
 export function validateOnboardingArgs(args: CompleteOnboardingArgs) {
   if (args.accounts.length === 0) {
-    throw new Error('Add at least one account')
+    throw new ConvexError('Add at least one account')
   }
   const seenNames = new Set<string>()
   for (const account of args.accounts) {
-    const name = account.name.trim()
-    if (!name) throw new Error('Account names cannot be empty')
+    const name = validateAccountInput(account)
     const key = name.toLowerCase()
-    if (seenNames.has(key)) throw new Error(`Duplicate account: ${name}`)
+    if (seenNames.has(key))
+      throw new ConvexError(`You already have an account named ${name}`)
     seenNames.add(key)
-    if (!Number.isFinite(account.balance) || account.balance < 0) {
-      throw new Error('Account balances must be zero or more')
-    }
   }
   if (
     !Number.isInteger(args.paydayDay) ||
     args.paydayDay < 1 ||
     args.paydayDay > 28
   ) {
-    throw new Error('Payday must be a day of the month between 1 and 28')
+    throw new ConvexError(
+      'Payday must be between day 1 and day 28 of the month',
+    )
   }
   if (!Number.isFinite(args.usdRate) || args.usdRate <= 0) {
-    throw new Error('USD rate must be a positive number')
+    throw new ConvexError('Enter a USD rate greater than zero')
   }
   if (
     !Number.isFinite(args.defaultSavingsRate) ||
     args.defaultSavingsRate < 0 ||
     args.defaultSavingsRate > 1
   ) {
-    throw new Error('Default savings rate must be between 0% and 100%')
+    throw new ConvexError('Savings rate must be between 0% and 100%')
   }
   if (
     !Number.isFinite(args.savingsOpeningBalance) ||
     args.savingsOpeningBalance < 0
   ) {
-    throw new Error('Savings balance must be zero or more')
+    throw new ConvexError('Savings balance must be zero or more')
   }
   if (!Number.isFinite(args.spendingLimit) || args.spendingLimit < 0) {
-    throw new Error('Spending limit must be zero or more')
+    throw new ConvexError('Spending limit must be zero or more')
   }
   validateIncomeSources(args.incomeSources)
   for (const budget of args.budgets) {
     if (!Number.isFinite(budget.plannedAmount) || budget.plannedAmount < 0) {
-      throw new Error('Planned amounts must be zero or more')
+      throw new ConvexError('Planned amounts must be zero or more')
     }
   }
   assertCategoryPlansFitLimit(args.budgets, args.spendingLimit)
@@ -211,6 +222,38 @@ export async function reconcileAccounts(
   }
 
   return { accountIds, keptAccountIds }
+}
+
+/** Adds one account after onboarding, appended to the end of the list. */
+export async function createAccount(
+  ctx: MutationCtx,
+  userId: string,
+  input: OnboardingAccountInput,
+) {
+  const name = validateAccountInput(input)
+  const existingAccounts = await ctx.db
+    .query('accounts')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect()
+  if (
+    existingAccounts.some(
+      (account) => account.name.toLowerCase() === name.toLowerCase(),
+    )
+  ) {
+    throw new ConvexError(`You already have an account named ${name}`)
+  }
+  return await ctx.db.insert('accounts', {
+    userId,
+    name,
+    kind: input.kind,
+    currency: input.currency,
+    balance: input.balance,
+    sortOrder:
+      Math.max(-1, ...existingAccounts.map((account) => account.sortOrder)) + 1,
+    ...(input.includeInSpendable !== undefined
+      ? { includeInSpendable: input.includeInSpendable }
+      : {}),
+  })
 }
 
 export async function reconcileIncomeSources(

@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import {
   collectBudgetableSeeds,
   seedCycleBudgetsFromPrevious,
@@ -316,7 +317,9 @@ export function assertCategoryPlansFitLimit(
 ) {
   const total = plans.reduce((sum, plan) => sum + plan.plannedAmount, 0)
   if (total > spendingLimit) {
-    throw new Error('Category plans cannot exceed the spending limit')
+    throw new ConvexError(
+      'Category plans cannot add up to more than the spending limit',
+    )
   }
 }
 
@@ -333,7 +336,7 @@ export async function validateCycleIncomePlans(
       (!Number.isFinite(plan.expectedAmountMax) ||
         plan.expectedAmountMax < plan.expectedAmount)
     ) {
-      throw new Error(
+      throw new ConvexError(
         'Maximum expected income must be at least the expected amount',
       )
     }
@@ -342,7 +345,7 @@ export async function validateCycleIncomePlans(
       plan.savingsRate < 0 ||
       plan.savingsRate > 1
     ) {
-      throw new Error('Savings rate must be between 0% and 100%')
+      throw new ConvexError('Savings rate must be between 0% and 100%')
     }
     if (seen.has(plan.sourceId)) {
       throw new Error(`Duplicate income plan: ${plan.sourceId}`)

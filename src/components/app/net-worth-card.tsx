@@ -1,7 +1,8 @@
-import { Droplets, Scale, Settings2 } from 'lucide-react'
+import { Droplets, Plus, Scale, Settings2 } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 
+import { AccountDraftFields } from '#/components/account-draft-fields'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
@@ -27,10 +28,18 @@ import {
   formatK,
   isSpendableAccount,
 } from '#/lib/app-data'
-import { mutationErrorMessage } from '#/lib/use-quick-add-sheet'
+import {
+  ACCOUNT_PRESETS,
+  draftAccountInput,
+  newDraftAccount,
+} from '#/lib/onboarding-data'
+import { errorMessage } from '#/lib/error-message'
 import { cn } from '#/lib/utils'
 
 import type { Account, AllocationDirection, Wallet } from '#/lib/app-data'
+import type { DraftAccount } from '#/lib/onboarding-data'
+
+export type NewAccountInput = ReturnType<typeof draftAccountInput>
 
 interface NetWorthCardProps {
   accounts: Account[]
@@ -52,6 +61,7 @@ interface NetWorthCardProps {
     accountId: string,
     includeInSpendable: boolean,
   ) => void
+  onCreateAccount: (input: NewAccountInput) => Promise<void>
 }
 
 interface DisplayRow {
@@ -185,7 +195,7 @@ function MoveMoneyDialog({
       reset()
       onOpenChange(false)
     } catch (caught) {
-      setError(mutationErrorMessage(caught, 'Unable to move money. Try again.'))
+      setError(errorMessage(caught, 'Unable to move money. Try again.'))
       setBusy(false)
     }
   }
@@ -305,6 +315,136 @@ function MoveMoneyDialog({
   )
 }
 
+function AddAccountDialog({
+  open,
+  accounts,
+  onOpenChange,
+  onCreateAccount,
+}: {
+  open: boolean
+  accounts: Account[]
+  onOpenChange: (open: boolean) => void
+  onCreateAccount: (input: NewAccountInput) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<DraftAccount>(newDraftAccount)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const existingNames = new Set(
+    accounts.map((account) => account.name.toLowerCase()),
+  )
+  const presets = ACCOUNT_PRESETS.filter(
+    (preset) => !existingNames.has(preset.name.toLowerCase()),
+  )
+  const name = draft.name.trim()
+  const duplicate = existingNames.has(name.toLowerCase())
+  const shownError =
+    error ?? (duplicate ? `You already have an account named ${name}.` : null)
+  const canSubmit = name !== '' && !duplicate && !busy
+
+  function reset() {
+    setDraft(newDraftAccount())
+    setError(null)
+    setBusy(false)
+  }
+
+  async function submit() {
+    if (!canSubmit) return
+    setError(null)
+    setBusy(true)
+    try {
+      await onCreateAccount(draftAccountInput(draft))
+      reset()
+      onOpenChange(false)
+    } catch (caught) {
+      setError(errorMessage(caught, 'Unable to add account. Try again.'))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && busy) return
+        if (!nextOpen) reset()
+        onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent
+        sheet
+        className="rounded-3xl border-(--line) bg-(--surface-strong) sm:max-w-md"
+      >
+        <DialogHeader>
+          <DialogTitle>Add account</DialogTitle>
+          <DialogDescription>
+            Pick a common account or name your own, then enter today's balance.
+          </DialogDescription>
+        </DialogHeader>
+        {presets.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {presets.map((preset) => {
+              const selected =
+                draft.name.trim().toLowerCase() === preset.name.toLowerCase()
+              return (
+                <Button
+                  key={preset.name}
+                  type="button"
+                  variant={selected ? 'default' : 'outline'}
+                  size="sm"
+                  aria-pressed={selected}
+                  className="hover:translate-y-0 max-sm:h-10 max-sm:px-4 max-sm:text-sm"
+                  onClick={() =>
+                    setDraft((current) => ({
+                      ...current,
+                      name: preset.name,
+                      kind: preset.kind,
+                      currency: preset.currency,
+                      includeInSpendable: preset.kind !== 'investment',
+                    }))
+                  }
+                >
+                  {preset.name}
+                </Button>
+              )
+            })}
+          </div>
+        )}
+        <AccountDraftFields
+          account={draft}
+          onChange={(patch) =>
+            setDraft((current) => ({ ...current, ...patch }))
+          }
+        />
+        {shownError && (
+          <p
+            role="alert"
+            className="rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+          >
+            {shownError}
+          </p>
+        )}
+        <DialogFooter sticky>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => void submit()}
+          >
+            {busy ? 'Adding…' : 'Add account'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ManageAccountsDialog({
   open,
   accounts,
@@ -381,10 +521,12 @@ export function NetWorthCard({
   animationDelay,
   onMoveSavings,
   onSetAccountSpendable,
+  onCreateAccount,
 }: NetWorthCardProps) {
   const [view, setView] = useState<'accounts' | 'wallets'>('accounts')
   const [moveOpen, setMoveOpen] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   const accountRows: DisplayRow[] = accounts.map((account) => {
     const spendableAccount = isSpendableAccount(account)
@@ -490,6 +632,16 @@ export function NetWorthCard({
         </TabsList>
         <TabsContent value="accounts">
           <BalanceRows rows={accountRows} />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="mt-4"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="size-4" />
+            Add account
+          </Button>
         </TabsContent>
         <TabsContent value="wallets">
           <BalanceRows rows={envelopeRows} />
@@ -536,6 +688,12 @@ export function NetWorthCard({
         accounts={accounts}
         onOpenChange={setManageOpen}
         onSetAccountSpendable={onSetAccountSpendable}
+      />
+      <AddAccountDialog
+        open={addOpen}
+        accounts={accounts}
+        onOpenChange={setAddOpen}
+        onCreateAccount={onCreateAccount}
       />
     </Card>
   )

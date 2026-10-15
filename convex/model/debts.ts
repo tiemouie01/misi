@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import { checkpointDebtOpeningBalance } from '../../shared/checkpoints'
 import { computeClaimRemaining } from '../../shared/claim'
 import { resolveCheckpointForRead } from './checkpoints'
@@ -9,7 +10,7 @@ import type { ReadCtx } from './core'
 
 export function validateDebtName(name: string) {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error('Every debt needs a name')
+  if (!trimmed) throw new ConvexError('Every debt needs a name')
   return trimmed
 }
 
@@ -34,7 +35,7 @@ export async function assertUniqueDebtName(
   )
   if (duplicate) {
     const label = direction === 'you_owe' ? 'You owe' : 'Owed to you'
-    throw new Error(`A debt named ${name} already exists under ${label}`)
+    throw new ConvexError(`A debt named ${name} already exists under ${label}`)
   }
 }
 
@@ -121,7 +122,7 @@ export async function computeDebtRemaining(
 
 export function assertRemainingNonNegative(remaining: number) {
   if (remaining < 0) {
-    throw new Error('This would take the remaining below zero')
+    throw new ConvexError('This would take the remaining balance below zero')
   }
 }
 

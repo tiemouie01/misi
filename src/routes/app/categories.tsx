@@ -37,6 +37,7 @@ import {
   CATEGORY_BUDGET_GROUP_LABELS,
   CATEGORY_BUDGET_GROUPS,
 } from '../../../shared/category-defs'
+import { errorMessage } from '#/lib/error-message'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Category } from '#/lib/categories'
@@ -73,11 +74,6 @@ export const Route = createFileRoute('/app/categories')({
   },
   component: CategoriesPage,
 })
-
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
-}
 
 function CategoriesPage() {
   const queryClient = useQueryClient()

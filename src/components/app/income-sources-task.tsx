@@ -15,6 +15,7 @@ import {
   validateIncomeSources,
   validateStep,
 } from '#/lib/onboarding-data'
+import { errorMessage } from '#/lib/error-message'
 
 import type { OnboardingDraft } from '#/lib/onboarding-data'
 
@@ -98,9 +99,7 @@ export function IncomeSourcesTask({ onClose }: { onClose: () => void }) {
       onClose()
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to save income sources',
+        errorMessage(caught, 'Unable to save income sources. Try again.'),
       )
       setSaving(false)
     }

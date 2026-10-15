@@ -4,7 +4,7 @@
  * implementation can move freely.
  */
 import { paginationOptsValidator } from 'convex/server'
-import { v } from 'convex/values'
+import { ConvexError, v } from 'convex/values'
 
 import { spentByCategory, totalBudgetSpending } from '../shared/budget-rollover'
 import {
@@ -84,6 +84,7 @@ import {
   withCapturedFxRate,
 } from './model/transactions'
 import {
+  createAccount as createAccountForUser,
   onboardingAccount,
   reconcileAccounts,
   reconcileIncomeSources,
@@ -524,7 +525,7 @@ export const completeOnboarding = mutation({
     const user = await requireAuthUser(ctx)
     const existingSettings = await getSettings(ctx, user._id)
     if (existingSettings?.onboardedAt !== undefined) {
-      throw new Error('Onboarding has already been completed')
+      throw new ConvexError("You've already finished setup")
     }
 
     validateOnboardingArgs(args)
@@ -620,7 +621,9 @@ export const completeOnboarding = mutation({
       0,
     )
     if (preservedCustomTotal + submittedTotal > args.spendingLimit) {
-      throw new Error('Category plans cannot exceed the spending limit')
+      throw new ConvexError(
+        'Category plans cannot add up to more than the spending limit',
+      )
     }
     for (const budget of existingBudgets) {
       if (
@@ -804,7 +807,9 @@ export const saveCyclePlan = mutation({
     const user = await requireAuthUser(ctx)
     const cycle = await requireOwnedCycle(ctx, user._id, args.cycleId)
     if (cycle.endsAt < Date.now()) {
-      throw new Error('Closed cycle plans cannot be edited')
+      throw new ConvexError(
+        'This cycle has closed, so its plan can no longer be edited',
+      )
     }
     assertNonnegativeFinite(args.spendingLimit, 'Spending limit')
     await validateCategoryPlans(ctx, user._id, args.categoryPlans)
@@ -1381,7 +1386,7 @@ export const archiveDebt = mutation({
     if (debt.archivedAt !== undefined) return debt._id
     const remaining = await computeDebtRemaining(ctx, user._id, debt)
     if (remaining !== 0) {
-      throw new Error(
+      throw new ConvexError(
         'Settle or adjust the remaining balance to zero before archiving',
       )
     }
@@ -1408,17 +1413,17 @@ export const mergeDebt = mutation({
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
     if (args.sourceId === args.targetId) {
-      throw new Error('Pick a different debt to merge into')
+      throw new ConvexError('Pick a different debt to merge into')
     }
     const [source, target] = await Promise.all([
       requireOwnedDebt(ctx, user._id, args.sourceId),
       requireOwnedDebt(ctx, user._id, args.targetId),
     ])
     if (source.archivedAt !== undefined || target.archivedAt !== undefined) {
-      throw new Error('Restore archived debts before merging')
+      throw new ConvexError('Restore archived debts before merging')
     }
     if (source.direction !== target.direction) {
-      throw new Error('Only debts in the same direction can be merged')
+      throw new ConvexError('Only debts in the same direction can be merged')
     }
     await mergeDebtClaims(ctx, user._id, source, target)
     await ctx.db.patch(target._id, {
@@ -1486,11 +1491,13 @@ export const confirmAutoSave = mutation({
     const cycle = await ensureCurrentCycle(ctx, user._id)
 
     if (incomeTransaction.cycleId !== cycle._id) {
-      throw new Error('Income transaction is not in the current cycle')
+      throw new ConvexError(
+        'This income is from an earlier cycle, so its auto-save can no longer change',
+      )
     }
 
     if (args.amount > incomeTransaction.amount) {
-      throw new Error('Auto-save amount cannot exceed income amount')
+      throw new ConvexError('Auto-save cannot be more than the income amount')
     }
 
     await assertNoAutoSaveEvent(ctx, args.transactionId)
@@ -1549,7 +1556,9 @@ export const dismissAutoSave = mutation({
     const cycle = await ensureCurrentCycle(ctx, user._id)
 
     if (incomeTransaction.cycleId !== cycle._id) {
-      throw new Error('Income transaction is not in the current cycle')
+      throw new ConvexError(
+        'This income is from an earlier cycle, so its auto-save can no longer change',
+      )
     }
 
     await assertNoAutoSaveEvent(ctx, args.transactionId)
@@ -1578,7 +1587,7 @@ export const moveSavings = mutation({
     // Spending may go negative when moving to savings. That means the savings
     // earmark is larger than spendable cash — cutting into tangible savings.
     if (args.direction === 'toSpending' && args.amount > savingsBalance) {
-      throw new Error('Not enough in savings')
+      throw new ConvexError('Not enough in savings')
     }
 
     const cycle = await ensureCurrentCycle(ctx, user._id)
@@ -1596,6 +1605,14 @@ export const moveSavings = mutation({
       excludeFromBudget: true,
       occurredAt: Date.now(),
     })
+  },
+})
+
+export const createAccount = mutation({
+  args: onboardingAccount,
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    return await createAccountForUser(ctx, user._id, args)
   },
 })
 

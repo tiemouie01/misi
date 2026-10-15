@@ -23,7 +23,7 @@ import { Label } from '#/components/ui/label'
 import { formatK } from '#/lib/app-data'
 import { mapDebt } from '#/lib/debts'
 import { formatAmountInput, parseAmount } from '#/lib/onboarding-data'
-import { mutationErrorMessage } from '#/lib/use-quick-add-sheet'
+import { errorMessage } from '#/lib/error-message'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Debt, DebtDirection } from '#/lib/app-data'
@@ -92,7 +92,7 @@ function DebtsPage() {
       setDirection('you_owe')
       toast.success('Debt added')
     } catch (caught) {
-      setError(mutationErrorMessage(caught, 'Unable to add debt'))
+      setError(errorMessage(caught, 'Unable to add debt'))
     } finally {
       setSaving(false)
     }
@@ -104,7 +104,7 @@ function DebtsPage() {
       await invalidate()
       toast.success('Debt restored')
     } catch (caught) {
-      toast.error(mutationErrorMessage(caught, 'Unable to restore debt'))
+      toast.error(errorMessage(caught, 'Unable to restore debt'))
     }
   }
 

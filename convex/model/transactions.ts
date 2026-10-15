@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import {
   assertDebtClaimMutable,
   claimActionMatchesDirection,
@@ -108,8 +109,8 @@ export async function assertMutableUserTransaction(
     .withIndex('by_transaction', (q) => q.eq('transactionId', transaction._id))
     .first()
   if (autoSaveEvent) {
-    throw new Error(
-      `Income with a handled savings proposal cannot be ${action}`,
+    throw new ConvexError(
+      `This income's auto-save has already been handled, so it cannot be ${action}`,
     )
   }
 }
@@ -132,13 +133,17 @@ export async function assertHandledIncomeEdit(
     .first()
   if (!autoSaveEvent) return
   if (next.type !== 'income') {
-    throw new Error('Income with a handled savings proposal must stay income')
+    throw new ConvexError(
+      "This income's auto-save has already been handled, so it must stay income",
+    )
   }
   if (
     autoSaveEvent.status === 'confirmed' &&
     next.amount < autoSaveEvent.amount
   ) {
-    throw new Error('Income cannot be less than the amount already auto-saved')
+    throw new ConvexError(
+      'Income cannot be less than the amount already auto-saved',
+    )
   }
 }
 
@@ -171,7 +176,7 @@ export async function assertNoAutoSaveEvent(
     .first()
 
   if (existing) {
-    throw new Error('Auto-save proposal has already been handled')
+    throw new ConvexError('This auto-save has already been handled')
   }
 }
 
@@ -198,8 +203,8 @@ async function validateClaimInput(
   }
   if (input.claimAction === 'adjust') {
     if (!input.adjustPolarity) {
-      throw new Error(
-        'Choose whether this adjust increases or decreases the remaining',
+      throw new ConvexError(
+        'Choose whether this adjustment increases or decreases the remaining balance',
       )
     }
   } else if (input.adjustPolarity) {
@@ -208,7 +213,7 @@ async function validateClaimInput(
 
   const debt = await requireOwnedDebt(ctx, userId, input.debtId)
   if (debt.archivedAt !== undefined && !options?.allowArchived) {
-    throw new Error('Unarchive this debt before logging a movement')
+    throw new ConvexError('Unarchive this debt before logging a movement')
   }
   if (!claimActionMatchesDirection(input.claimAction, debt.direction)) {
     throw new Error('That action does not match this debt')
@@ -223,7 +228,7 @@ async function validateClaimInput(
   if (input.accountId) {
     const account = await requireOwnedAccount(ctx, userId, input.accountId)
     if (account.currency !== 'MWK') {
-      throw new Error('Debt cash movements can only use MWK accounts')
+      throw new ConvexError('Debt payments can only use MWK accounts')
     }
   }
 }
@@ -276,7 +281,7 @@ export async function validateTransactionInput(
 
   if (input.type === 'expense') {
     if (!input.categoryId) {
-      throw new Error('A category is required for expenses')
+      throw new ConvexError('Choose a category for this expense')
     }
     const category = (await getCategories(ctx, userId)).find(
       (candidate) => candidate.key === input.categoryId,
@@ -309,10 +314,10 @@ export async function validateTransactionInput(
 
   if (input.type === 'transfer') {
     if (!input.toAccountId) {
-      throw new Error('A destination account is required for transfers')
+      throw new ConvexError('Choose an account to move the money to')
     }
     if (input.toAccountId === input.accountId) {
-      throw new Error('Transfer accounts must be different')
+      throw new ConvexError('Choose two different accounts for a transfer')
     }
     await requireOwnedAccount(ctx, userId, input.toAccountId)
   } else if (input.toAccountId) {

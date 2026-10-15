@@ -35,11 +35,12 @@ import {
   spendableTotalMwk,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
-import { mutationErrorMessage } from '#/lib/use-quick-add-sheet'
+import { errorMessage } from '#/lib/error-message'
 
 import type { FunctionReturnType } from 'convex/server'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import type { AutoSaveStatus } from '#/components/app/auto-save-card'
+import type { NewAccountInput } from '#/components/app/net-worth-card'
 import type { PulseIncomeSource } from '#/components/app/cycle-pulse-card'
 import type { Account, Txn, Wallet } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
@@ -203,9 +204,7 @@ function AppHome() {
     requestedSeed.current = true
     void ensureSeedData({}).catch((error) => {
       requestedSeed.current = false
-      setSetupError(
-        mutationErrorMessage(error, 'Unable to set up your Misi data'),
-      )
+      setSetupError(errorMessage(error, 'Unable to set up your Misi data'))
       console.error('Unable to set up Misi data', error)
     })
   }, [cycleNeedsRollover, ensureSeedData])
@@ -242,6 +241,7 @@ function AppDashboard({
   const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
   const moveSavingsMutation = useMutation(api.misi.moveSavings)
   const setAccountSpendableMutation = useMutation(api.misi.setAccountSpendable)
+  const createAccountMutation = useMutation(api.misi.createAccount)
   const [localAutoSaveUi, setLocalAutoSaveUi] =
     useState<AutoSaveUiState | null>(null)
   const { tab = 'activity' } = Route.useSearch()
@@ -482,7 +482,7 @@ function AppDashboard({
       toast.success('Saved to savings')
     } catch (error) {
       toast.error(
-        mutationErrorMessage(error, 'Unable to confirm auto-save. Try again.'),
+        errorMessage(error, 'Unable to confirm auto-save. Try again.'),
       )
       console.error('Unable to confirm auto-save', error)
     }
@@ -498,7 +498,7 @@ function AppDashboard({
       setLocalAutoSaveUi({ ...autoSaveUi, status: 'dismissed' })
     } catch (error) {
       toast.error(
-        mutationErrorMessage(error, 'Unable to dismiss auto-save. Try again.'),
+        errorMessage(error, 'Unable to dismiss auto-save. Try again.'),
       )
       console.error('Unable to dismiss auto-save', error)
     }
@@ -512,9 +512,7 @@ function AppDashboard({
       await moveSavingsMutation(input)
       toast.success('Money moved')
     } catch (error) {
-      toast.error(
-        mutationErrorMessage(error, 'Unable to move money. Try again.'),
-      )
+      toast.error(errorMessage(error, 'Unable to move money. Try again.'))
       console.error('Unable to move money', error)
       throw error
     }
@@ -525,11 +523,14 @@ function AppDashboard({
       accountId: accountId as Id<'accounts'>,
       includeInSpendable,
     }).catch((error) => {
-      toast.error(
-        mutationErrorMessage(error, 'Unable to update account. Try again.'),
-      )
+      toast.error(errorMessage(error, 'Unable to update account. Try again.'))
       console.error('Unable to update account spendable flag', error)
     })
+  }
+
+  async function createAccount(input: NewAccountInput) {
+    await createAccountMutation(input)
+    toast.success(`${input.name} added`)
   }
 
   return (
@@ -628,6 +629,7 @@ function AppDashboard({
               animationDelay="120ms"
               onMoveSavings={moveSavings}
               onSetAccountSpendable={setAccountSpendable}
+              onCreateAccount={createAccount}
             />
             <CyclePulseCard
               cycleLabel={cycleInfo.label}

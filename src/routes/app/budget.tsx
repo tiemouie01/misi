@@ -10,6 +10,7 @@ import { incomeSourceStatus } from '../../../shared/income'
 import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { errorMessage } from '#/lib/error-message'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type {
@@ -50,11 +51,6 @@ function shortDate(timestamp: number) {
 function expectedWindow(start: number, end: number) {
   if (start === end) return `Expected on day ${start}`
   return `Expected days ${start}–${end}`
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
 }
 
 function BudgetRoute() {
