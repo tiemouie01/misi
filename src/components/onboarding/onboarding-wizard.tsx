@@ -249,7 +249,7 @@ export function OnboardingWizard({
             Misi
           </span>
         </span>
-        <ThemeToggle />
+        <ThemeToggle compact />
       </div>
 
       <main className="flex flex-1 items-start justify-center px-4 pt-2 sm:pt-10 sm:pb-16">

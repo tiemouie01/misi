@@ -4,6 +4,10 @@ import {
   seedCycleBudgetsFromPrevious,
   spentByCategory,
 } from '../../shared/budget-rollover'
+import {
+  DEFAULT_PAYDAY_DAY,
+  resolveCyclePeriod,
+} from '../../shared/cycle-period'
 import { ensureCheckpointForCycle } from './checkpoints'
 import { assertNonnegativeFinite, getSettings } from './core'
 import { getCategories } from './categories'
@@ -12,42 +16,7 @@ import type { Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import type { ReadCtx } from './core'
 
-export const DEFAULT_PAYDAY_DAY = 20
-const BLANTYRE_UTC_OFFSET_MS = 2 * 60 * 60 * 1000
-
-const monthLabels = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const
-
-export function getCyclePeriod(now: number, paydayDay = DEFAULT_PAYDAY_DAY) {
-  const today = new Date(now + BLANTYRE_UTC_OFFSET_MS)
-  const year = today.getUTCFullYear()
-  const month = today.getUTCMonth()
-  const day = today.getUTCDate()
-  const startMonth = day >= paydayDay ? month : month - 1
-  const startsAt =
-    Date.UTC(year, startMonth, paydayDay) - BLANTYRE_UTC_OFFSET_MS
-  const endsAt =
-    Date.UTC(year, startMonth + 1, paydayDay) - BLANTYRE_UTC_OFFSET_MS - 1
-  const startDate = new Date(startsAt + BLANTYRE_UTC_OFFSET_MS)
-
-  return {
-    label: `${monthLabels[startDate.getUTCMonth()]} cycle`,
-    startsAt,
-    endsAt,
-  }
-}
+export { DEFAULT_PAYDAY_DAY, getCyclePeriod } from '../../shared/cycle-period'
 
 /**
  * Prefer the newest started cycle that covers now, even if malformed or legacy
@@ -193,6 +162,13 @@ async function copyCyclePlans(
   }
 }
 
+/**
+ * The cycle a movement dated `occurredAt` belongs to. An existing cycle that
+ * covers the date always wins, even when it no longer matches the payday (a
+ * payday change only takes effect from the next cycle). Otherwise a new cycle
+ * is created after the latest one that started before the date, without
+ * overlapping it or any later cycle.
+ */
 export async function ensureCycleForDate(
   ctx: MutationCtx,
   userId: string,
@@ -201,47 +177,42 @@ export async function ensureCycleForDate(
   if (!Number.isFinite(occurredAt)) {
     throw new Error('Transaction date must be a finite number')
   }
-  const settings = await getSettings(ctx, userId)
-  const period = getCyclePeriod(
-    occurredAt,
-    settings?.paydayDay ?? DEFAULT_PAYDAY_DAY,
-  )
-  const [matchingPeriod, coveringCycle] = await Promise.all([
-    ctx.db
-      .query('cycles')
-      .withIndex('by_user_and_start', (q) =>
-        q.eq('userId', userId).eq('startsAt', period.startsAt),
-      )
-      .first(),
+  const startedCycles = () =>
     ctx.db
       .query('cycles')
       .withIndex('by_user_and_start', (q) =>
         q.eq('userId', userId).lte('startsAt', occurredAt),
       )
       .order('desc')
-      .filter((q) => q.gte(q.field('endsAt'), occurredAt))
-      .first(),
-  ])
-  if (matchingPeriod) {
-    await ensureCheckpointForCycle(ctx, userId, matchingPeriod)
-    return matchingPeriod
-  }
-
-  if (coveringCycle && occurredAt <= coveringCycle.endsAt) {
+  const coveringCycle = await startedCycles()
+    .filter((q) => q.gte(q.field('endsAt'), occurredAt))
+    .first()
+  if (coveringCycle) {
     await ensureCheckpointForCycle(ctx, userId, coveringCycle)
     return coveringCycle
   }
 
-  const previousCycle = await ctx.db
-    .query('cycles')
-    .withIndex('by_user_and_start', (q) =>
-      q.eq('userId', userId).lt('startsAt', period.startsAt),
-    )
-    .order('desc')
-    .first()
+  const [settings, previousCycle, nextCycle] = await Promise.all([
+    getSettings(ctx, userId),
+    startedCycles().first(),
+    ctx.db
+      .query('cycles')
+      .withIndex('by_user_and_start', (q) =>
+        q.eq('userId', userId).gt('startsAt', occurredAt),
+      )
+      .first(),
+  ])
+  const period = resolveCyclePeriod(
+    occurredAt,
+    settings?.paydayDay ?? DEFAULT_PAYDAY_DAY,
+    previousCycle,
+  )
   const cycleId = await ctx.db.insert('cycles', {
     userId,
     ...period,
+    endsAt: nextCycle
+      ? Math.min(period.endsAt, nextCycle.startsAt - 1)
+      : period.endsAt,
     spendingLimit: previousCycle?.spendingLimit ?? 0,
   })
 

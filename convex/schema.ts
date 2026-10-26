@@ -26,6 +26,7 @@ export default defineSchema({
     balance: v.number(),
     sortOrder: v.number(),
     includeInSpendable: v.optional(v.boolean()),
+    archivedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
   cycles: defineTable({
     userId: v.string(),
@@ -83,7 +84,9 @@ export default defineSchema({
     .index('by_user_and_type_and_time', ['userId', 'type', 'occurredAt'])
     .index('by_user_and_wallet_and_time', ['userId', 'walletId', 'occurredAt'])
     .index('by_user_and_category', ['userId', 'categoryId'])
-    .index('by_user_and_debt_and_time', ['userId', 'debtId', 'occurredAt']),
+    .index('by_user_and_debt_and_time', ['userId', 'debtId', 'occurredAt'])
+    .index('by_user_and_account', ['userId', 'accountId'])
+    .index('by_user_and_to_account', ['userId', 'toAccountId']),
   budgets: defineTable({
     userId: v.string(),
     cycleId: v.id('cycles'),

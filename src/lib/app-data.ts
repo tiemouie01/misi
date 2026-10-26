@@ -5,6 +5,64 @@ export interface Account {
   currency: 'MWK' | 'USD'
   balance: number
   includeInSpendable?: boolean
+  /** Archived accounts stay only so past transactions keep their names. */
+  archived: boolean
+}
+
+/** Maps a bootstrap account document to the UI shape. */
+export function mapAccount(account: {
+  _id: string
+  name: string
+  kind: Account['kind']
+  currency: Account['currency']
+  balance: number
+  includeInSpendable?: boolean
+  archivedAt?: number
+}): Account {
+  return {
+    id: account._id,
+    name: account.name,
+    kind: account.kind,
+    currency: account.currency,
+    balance: account.balance,
+    includeInSpendable: account.includeInSpendable,
+    archived: account.archivedAt !== undefined,
+  }
+}
+
+/**
+ * The accounts quick-add starts on. A saved default wins while its account is
+ * active; otherwise expense and transfer-from fall back to the first spendable
+ * account, and transfer-to to the next spendable one.
+ */
+export function resolveQuickAddDefaults(
+  accounts: Account[],
+  settings:
+    | {
+        defaultExpenseAccountId?: string
+        defaultTransferFromAccountId?: string
+        defaultTransferToAccountId?: string
+      }
+    | null
+    | undefined,
+) {
+  const active = accounts.filter((account) => !account.archived)
+  const saved = (id: string | undefined) =>
+    id !== undefined && active.some((account) => account.id === id)
+      ? id
+      : undefined
+  const spendableIds = active
+    .filter((account) => isSpendableAccount(account))
+    .map((account) => account.id)
+  const expense =
+    saved(settings?.defaultExpenseAccountId) ?? spendableIds.at(0) ?? ''
+  const transferFrom =
+    saved(settings?.defaultTransferFromAccountId) ?? spendableIds.at(0) ?? ''
+  const transferTo =
+    saved(settings?.defaultTransferToAccountId) ??
+    spendableIds.find((id) => id !== transferFrom) ??
+    transferFrom
+  return { expense, transferFrom, transferTo }
 }
 
 export type TxnType = 'expense' | 'income' | 'transfer' | 'allocation' | 'claim'
@@ -184,6 +242,7 @@ export const seedAccounts: Account[] = [
     kind: 'bank',
     currency: 'MWK',
     balance: 842100,
+    archived: false,
   },
   {
     id: 'fdh',
@@ -191,6 +250,7 @@ export const seedAccounts: Account[] = [
     kind: 'bank',
     currency: 'MWK',
     balance: 210450,
+    archived: false,
   },
   {
     id: 'airtel',
@@ -198,6 +258,7 @@ export const seedAccounts: Account[] = [
     kind: 'mobile',
     currency: 'MWK',
     balance: 96300,
+    archived: false,
   },
   {
     id: 'cash',
@@ -205,6 +266,7 @@ export const seedAccounts: Account[] = [
     kind: 'cash',
     currency: 'MWK',
     balance: 38500,
+    archived: false,
   },
   {
     id: 'unit-trust',
@@ -212,6 +274,7 @@ export const seedAccounts: Account[] = [
     kind: 'investment',
     currency: 'MWK',
     balance: 1412000,
+    archived: false,
   },
   {
     id: 'usd',
@@ -219,6 +282,7 @@ export const seedAccounts: Account[] = [
     kind: 'investment',
     currency: 'USD',
     balance: 420,
+    archived: false,
   },
 ]
 

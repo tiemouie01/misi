@@ -1,29 +1,15 @@
 import { Link } from '@tanstack/react-router'
-import {
-  ChartNoAxesCombined,
-  House,
-  LogOut,
-  Menu,
-  Scale,
-  Tags,
-} from 'lucide-react'
+import { ChartNoAxesCombined, House, Scale, Settings, Tags } from 'lucide-react'
 
 import { MisiMark } from '#/components/misi-mark'
-import { ThemeToggle } from '#/components/theme-toggle'
 import { Badge } from '#/components/ui/badge'
-import { Button } from '#/components/ui/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '#/components/ui/popover'
+import { buttonVariants } from '#/components/ui/button'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '#/components/ui/tooltip'
-import { clearOfflineData } from '#/integrations/tanstack-query/persist'
-import { authClient } from '#/lib/auth-client'
+import { cn } from '#/lib/utils'
 
 const DAY_MS = 86_400_000
 
@@ -55,14 +41,11 @@ const navItemClassName =
 const navItemActiveClassName =
   'bg-lagoon-deep/15 font-bold text-lagoon-deep shadow-sm ring-1 ring-lagoon-deep/35'
 
+const settingsLinkClassName =
+  'size-10 sm:size-9 data-[status=active]:border-lagoon-deep/35 data-[status=active]:bg-lagoon-deep/15 data-[status=active]:text-lagoon-deep'
+
 const bottomNavItemClassName =
   'flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl text-[0.6875rem] font-semibold text-sea-ink-soft no-underline outline-none transition-[background-color,color,box-shadow] hover:text-sea-ink focus-visible:ring-2 focus-visible:ring-lagoon/40 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0'
-
-async function signOut() {
-  await authClient.signOut()
-  await clearOfflineData()
-  window.location.href = '/login'
-}
 
 type CycleBadgeSource = {
   label: string
@@ -130,52 +113,22 @@ export function AppHeader({ cycle }: { cycle?: CycleBadgeSource | null }) {
             )
           })}
         </nav>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              aria-label="Menu"
-              className="size-10 sm:hidden"
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              to="/app/settings"
+              aria-label="Settings"
+              className={cn(
+                buttonVariants({ variant: 'secondary', size: 'icon' }),
+                settingsLinkClassName,
+              )}
+              activeProps={{ 'aria-current': 'page' }}
             >
-              <Menu className="size-5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-60 rounded-2xl border-(--line) bg-(--surface-strong) p-1.5 backdrop-blur-md"
-          >
-            <ThemeToggle withLabel />
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 w-full justify-start gap-3 px-3"
-              onClick={signOut}
-            >
-              <LogOut className="size-4" />
-              Sign out
-            </Button>
-          </PopoverContent>
-        </Popover>
-        <div className="hidden shrink-0 items-center gap-2 sm:flex">
-          <ThemeToggle />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon-sm"
-                aria-label="Sign out"
-                className="size-9"
-                onClick={signOut}
-              >
-                <LogOut className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Sign out</TooltipContent>
-          </Tooltip>
-        </div>
+              <Settings className="size-5 sm:size-4" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent className="max-sm:hidden">Settings</TooltipContent>
+        </Tooltip>
       </div>
     </header>
   )

@@ -34,7 +34,7 @@ import {
   newDraftAccount,
 } from '#/lib/onboarding-data'
 import { errorMessage } from '#/lib/error-message'
-import { cn } from '#/lib/utils'
+import { cn, ordinal } from '#/lib/utils'
 
 import type { Account, AllocationDirection, Wallet } from '#/lib/app-data'
 import type { DraftAccount } from '#/lib/onboarding-data'
@@ -52,6 +52,7 @@ interface NetWorthCardProps {
   savingsBalance: number
   cycleGain: number
   usdRate: number
+  paydayDay: number
   animationDelay: string
   onMoveSavings: (input: {
     amount: number
@@ -315,7 +316,9 @@ function MoveMoneyDialog({
   )
 }
 
-function AddAccountDialog({
+/** Adds an account; also used from Settings. `accounts` should include
+ * archived ones, since names stay taken while an account is archived. */
+export function AddAccountDialog({
   open,
   accounts,
   onOpenChange,
@@ -518,6 +521,7 @@ export function NetWorthCard({
   savingsBalance,
   cycleGain,
   usdRate,
+  paydayDay,
   animationDelay,
   onMoveSavings,
   onSetAccountSpendable,
@@ -528,7 +532,8 @@ export function NetWorthCard({
   const [manageOpen, setManageOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
 
-  const accountRows: DisplayRow[] = accounts.map((account) => {
+  const activeAccounts = accounts.filter((account) => !account.archived)
+  const accountRows: DisplayRow[] = activeAccounts.map((account) => {
     const spendableAccount = isSpendableAccount(account)
     return {
       id: account.id,
@@ -673,7 +678,7 @@ export function NetWorthCard({
           USD @ K{usdRate.toLocaleString('en-US')}
         </Badge>
         <Badge variant="secondary" className="border-transparent">
-          Cycle anchored to the 20th
+          Payday on the {ordinal(paydayDay)}
         </Badge>
       </div>
       <MoveMoneyDialog
@@ -685,7 +690,7 @@ export function NetWorthCard({
       />
       <ManageAccountsDialog
         open={manageOpen}
-        accounts={accounts}
+        accounts={activeAccounts}
         onOpenChange={setManageOpen}
         onSetAccountSpendable={onSetAccountSpendable}
       />

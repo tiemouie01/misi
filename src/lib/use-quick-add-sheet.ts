@@ -35,9 +35,19 @@ export function useQuickAddSheet({
   // Mirrors sheet.open for async callbacks; only openSheet/closeSheet set it.
   const sheetOpenRef = useRef(false)
 
+  /** Maps an account id to one a new entry may use. Archived accounts are
+   * only kept with `keepArchived`, so editing an old transaction leaves its
+   * account as it was (the server allows that). */
   const resolveAccountId = useCallback(
-    (accountId: string) => {
-      if (accounts.some((account) => account.id === accountId)) return accountId
+    (accountId: string, keepArchived = false) => {
+      if (
+        accounts.some(
+          (account) =>
+            account.id === accountId && (keepArchived || !account.archived),
+        )
+      ) {
+        return accountId
+      }
       const prototypeNames: Record<string, string> = {
         nbs: 'nbs bank',
         fdh: 'fdh bank',
@@ -46,8 +56,10 @@ export function useQuickAddSheet({
       }
       const expectedName = prototypeNames[accountId]
       return (
-        accounts.find((account) => account.name.toLowerCase() === expectedName)
-          ?.id ?? defaultExpenseAccountId
+        accounts.find(
+          (account) =>
+            !account.archived && account.name.toLowerCase() === expectedName,
+        )?.id ?? defaultExpenseAccountId
       )
     },
     [accounts, defaultExpenseAccountId],
@@ -73,6 +85,7 @@ export function useQuickAddSheet({
   )
 
   function openSheet(initial: QuickAddInitial) {
+    const isEditing = initial.transactionId !== undefined
     sheetOpenRef.current = true
     setError(null)
     setSheet({
@@ -81,10 +94,10 @@ export function useQuickAddSheet({
         ...initial,
         occurredAt: initial.occurredAt ?? Date.now(),
         accountId: initial.accountId
-          ? resolveAccountId(initial.accountId)
+          ? resolveAccountId(initial.accountId, isEditing)
           : undefined,
         toAccountId: initial.toAccountId
-          ? resolveAccountId(initial.toAccountId)
+          ? resolveAccountId(initial.toAccountId, isEditing)
           : undefined,
       },
     })

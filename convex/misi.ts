@@ -12,6 +12,7 @@ import {
   computeClaimRemaining,
   sortDebtsByRemaining,
 } from '../shared/claim'
+import { resolveCyclePeriod } from '../shared/cycle-period'
 import { currencyToMwk, roundMoney } from '../shared/fx'
 import { landedAmountForSource, totalActualIncome } from '../shared/income'
 import {
@@ -55,7 +56,6 @@ import {
   ensureCurrentCycle,
   ensureCycleForDate,
   getCycleIncomePlans,
-  getCyclePeriod,
   getLatestCycle,
   requireOwnedCycle,
   syncCycleIncomePlans,
@@ -83,6 +83,13 @@ import {
   validateTransactionInput,
   withCapturedFxRate,
 } from './model/transactions'
+import {
+  removeAccount as removeAccountForUser,
+  requireActiveAccount,
+  restoreAccount as restoreAccountForUser,
+  updateAccount as updateAccountForUser,
+} from './model/accounts'
+import { updateSettings as updateSettingsForUser } from './model/settings'
 import {
   createAccount as createAccountForUser,
   onboardingAccount,
@@ -129,6 +136,8 @@ const debtDirectionValidator = v.union(
   v.literal('you_owe'),
   v.literal('owed_to_you'),
 )
+
+const accountKind = onboardingAccount.fields.kind
 
 const allocationDirection = v.union(
   v.literal('toSavings'),
@@ -585,8 +594,37 @@ export const completeOnboarding = mutation({
         )
         .first()
       if (firstTransaction === null) {
-        const period = getCyclePeriod(now, args.paydayDay)
-        await ctx.db.patch(coveringCycle._id, period)
+        // Re-anchor the empty cycle on the new payday without overlapping
+        // the cycles on either side of it.
+        const [previousCycle, nextCycle] = await Promise.all([
+          ctx.db
+            .query('cycles')
+            .withIndex('by_user_and_start', (q) =>
+              q.eq('userId', user._id).lt('startsAt', now),
+            )
+            .order('desc')
+            .filter((q) =>
+              q.and(
+                q.neq(q.field('_id'), coveringCycle._id),
+                q.lt(q.field('endsAt'), now),
+              ),
+            )
+            .first(),
+          ctx.db
+            .query('cycles')
+            .withIndex('by_user_and_start', (q) =>
+              q.eq('userId', user._id).gt('startsAt', now),
+            )
+            .filter((q) => q.neq(q.field('_id'), coveringCycle._id))
+            .first(),
+        ])
+        const period = resolveCyclePeriod(now, args.paydayDay, previousCycle)
+        await ctx.db.patch(coveringCycle._id, {
+          ...period,
+          endsAt: nextCycle
+            ? Math.min(period.endsAt, nextCycle.startsAt - 1)
+            : period.endsAt,
+        })
       }
       // Budgets attach to the current covering cycle until rollover when it already has transactions.
     }
@@ -1190,6 +1228,10 @@ export const updateTransaction = mutation({
     await validateTransactionInput(ctx, user._id, nextInput, {
       allowArchivedDebt: type === 'claim',
       allowArchivedSourceId: transaction.sourceId,
+      allowArchivedAccounts: {
+        accountId: transaction.accountId,
+        toAccountId: transaction.toAccountId,
+      },
     })
     if (type === 'claim' && debtId && claimAction) {
       const debt = await requireOwnedDebt(ctx, user._id, debtId)
@@ -1616,6 +1658,54 @@ export const createAccount = mutation({
   },
 })
 
+export const updateAccount = mutation({
+  args: {
+    accountId: v.id('accounts'),
+    name: v.string(),
+    kind: accountKind,
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    return await updateAccountForUser(ctx, user._id, args.accountId, {
+      name: args.name,
+      kind: args.kind,
+    })
+  },
+})
+
+/** Deletes an unused empty account, or archives it if history references it. */
+export const removeAccount = mutation({
+  args: { accountId: v.id('accounts') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    return await removeAccountForUser(ctx, user._id, args.accountId)
+  },
+})
+
+export const restoreAccount = mutation({
+  args: { accountId: v.id('accounts') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    return await restoreAccountForUser(ctx, user._id, args.accountId)
+  },
+})
+
+export const updateSettings = mutation({
+  args: {
+    usdRate: v.optional(v.number()),
+    defaultSavingsRate: v.optional(v.number()),
+    paydayDay: v.optional(v.number()),
+    defaultExpenseAccountId: v.optional(v.id('accounts')),
+    defaultTransferFromAccountId: v.optional(v.id('accounts')),
+    defaultTransferToAccountId: v.optional(v.id('accounts')),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    await updateSettingsForUser(ctx, user._id, args)
+    return null
+  },
+})
+
 export const setAccountSpendable = mutation({
   args: {
     accountId: v.id('accounts'),
@@ -1639,7 +1729,7 @@ export const absorbAdjustment = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
-    const account = await requireOwnedAccount(ctx, user._id, args.accountId)
+    const account = await requireActiveAccount(ctx, user._id, args.accountId)
     const delta = args.actual - account.balance
 
     if (delta === 0) {

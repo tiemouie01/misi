@@ -129,7 +129,7 @@ function LoginPage() {
             Misi
           </span>
         </Link>
-        <ThemeToggle />
+        <ThemeToggle compact />
       </div>
 
       <main className="flex flex-1 items-center justify-center px-4 pb-16">

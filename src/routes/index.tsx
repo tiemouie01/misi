@@ -120,7 +120,7 @@ function Header() {
           </a>
         </nav>
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          <ThemeToggle compact />
           <Button asChild size="sm" className="h-9 px-4.5">
             <Link to="/app">Open app</Link>
           </Button>

@@ -540,12 +540,23 @@ export function QuickAddSheet({
   onDelete,
 }: QuickAddSheetProps) {
   const isEditing = initial.transactionId !== undefined
+  // Archived accounts only resolve names, except the ones an edited
+  // transaction already uses, which stay selectable so it keeps them.
+  const pickerAccounts = accounts.filter(
+    (account) =>
+      !account.archived ||
+      (isEditing &&
+        (account.id === initial.accountId ||
+          account.id === initial.toAccountId)),
+  )
   const defaultMwkAccountId =
-    accounts.find(
+    pickerAccounts.find(
       (account) =>
         account.id === defaultExpenseAccountId && account.currency === 'MWK',
     )?.id ??
-    accounts.find((account) => account.currency === 'MWK')?.id ??
+    pickerAccounts.find(
+      (account) => !account.archived && account.currency === 'MWK',
+    )?.id ??
     ''
   const initialAccountId =
     initial.accountId ??
@@ -651,7 +662,9 @@ export function QuickAddSheet({
     (debt) => !debt.archived || debt.id === (initial.debtId ?? debtId),
   )
   const activeDebts = debts.filter((debt) => !debt.archived)
-  const mwkAccounts = accounts.filter((account) => account.currency === 'MWK')
+  const mwkAccounts = pickerAccounts.filter(
+    (account) => account.currency === 'MWK',
+  )
   const claimNeedsAccount =
     mode === 'claim' && claimRequiresAccount(claimAction)
   const claimHidesAccount = mode === 'claim' && claimForbidsAccount(claimAction)
@@ -1027,14 +1040,14 @@ export function QuickAddSheet({
           <>
             <AccountPicker
               label="From account"
-              accounts={accounts}
+              accounts={pickerAccounts}
               selected={accountId}
               onSelect={selectAccount}
               includeAll
             />
             <AccountPicker
               label="To account"
-              accounts={accounts}
+              accounts={pickerAccounts}
               selected={toAccountId}
               onSelect={setToAccountId}
               includeAll
@@ -1044,7 +1057,7 @@ export function QuickAddSheet({
         {!isAutoSave && mode !== 'transfer' && mode !== 'claim' && (
           <AccountPicker
             label={mode === 'income' ? 'Into account' : 'From account'}
-            accounts={accounts}
+            accounts={pickerAccounts}
             selected={accountId}
             onSelect={selectAccount}
           />

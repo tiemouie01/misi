@@ -19,9 +19,13 @@ export function AccountPicker({
   className?: string
   includeAll?: boolean
 }) {
+  // Keep the selected account visible even when it is not spendable, e.g.
+  // when editing an old transaction, so the choice is never hidden.
   const visibleAccounts = includeAll
     ? accounts
-    : accounts.filter((account) => isSpendableAccount(account))
+    : accounts.filter(
+        (account) => isSpendableAccount(account) || account.id === selected,
+      )
 
   return (
     <fieldset className={cn('mt-5', className)}>

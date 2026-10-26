@@ -11,6 +11,7 @@ import {
   assertUsdRate,
   roundMoney,
 } from '../../shared/fx'
+import { requireActiveAccount } from './accounts'
 import { getCategories } from './categories'
 import {
   assertPositiveAmount,
@@ -184,7 +185,10 @@ async function validateClaimInput(
   ctx: ReadCtx,
   userId: string,
   input: TransactionInput,
-  options?: { allowArchived?: boolean },
+  options?: {
+    allowArchived?: boolean
+    allowArchivedAccountId?: Id<'accounts'>
+  },
 ) {
   if (!input.debtId) {
     throw new Error('A debt is required')
@@ -226,7 +230,12 @@ async function validateClaimInput(
     throw new Error('An account is required')
   }
   if (input.accountId) {
-    const account = await requireOwnedAccount(ctx, userId, input.accountId)
+    const account = await requireActiveAccount(
+      ctx,
+      userId,
+      input.accountId,
+      options?.allowArchivedAccountId,
+    )
     if (account.currency !== 'MWK') {
       throw new ConvexError('Debt payments can only use MWK accounts')
     }
@@ -240,6 +249,11 @@ export async function validateTransactionInput(
   options?: {
     allowArchivedDebt?: boolean
     allowArchivedSourceId?: Id<'incomeSources'>
+    /** The accounts an edited transaction already used, archived or not. */
+    allowArchivedAccounts?: {
+      accountId?: Id<'accounts'>
+      toAccountId?: Id<'accounts'>
+    }
   },
 ) {
   assertPositiveAmount(input.amount)
@@ -266,6 +280,7 @@ export async function validateTransactionInput(
   if (input.type === 'claim') {
     await validateClaimInput(ctx, userId, input, {
       allowArchived: options?.allowArchivedDebt,
+      allowArchivedAccountId: options?.allowArchivedAccounts?.accountId,
     })
     return
   }
@@ -277,7 +292,12 @@ export async function validateTransactionInput(
   if (!input.accountId) {
     throw new Error('An account is required')
   }
-  await requireOwnedAccount(ctx, userId, input.accountId)
+  await requireActiveAccount(
+    ctx,
+    userId,
+    input.accountId,
+    options?.allowArchivedAccounts?.accountId,
+  )
 
   if (input.type === 'expense') {
     if (!input.categoryId) {
@@ -319,7 +339,12 @@ export async function validateTransactionInput(
     if (input.toAccountId === input.accountId) {
       throw new ConvexError('Choose two different accounts for a transfer')
     }
-    await requireOwnedAccount(ctx, userId, input.toAccountId)
+    await requireActiveAccount(
+      ctx,
+      userId,
+      input.toAccountId,
+      options?.allowArchivedAccounts?.toAccountId,
+    )
   } else if (input.toAccountId) {
     throw new Error('A destination account is only valid for transfers')
   }
@@ -430,6 +455,12 @@ export async function applyTransactionBalanceTransition(
   for (const [accountId, change] of changes) {
     if (change === 0) continue
     const account = await requireOwnedAccount(ctx, userId, accountId)
+    // Archived accounts stay at zero; moving their money needs a restore first.
+    if (account.archivedAt !== undefined) {
+      throw new ConvexError(
+        `Restore ${account.name} in Settings before changing how much moved through it`,
+      )
+    }
     await ctx.db.patch(account._id, {
       balance: roundMoney(account.balance + change),
     })

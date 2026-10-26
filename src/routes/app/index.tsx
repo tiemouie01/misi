@@ -20,6 +20,7 @@ import {
   totalActualIncome,
 } from '../../../shared/income'
 import { spendingEnvelopeBalance } from '../../../shared/savings'
+import { DEFAULT_PAYDAY_DAY } from '../../../shared/cycle-period'
 import { greeting } from '#/lib/greeting'
 import { AppProviders } from '#/components/app/app-providers'
 import { AutoSaveCard } from '#/components/app/auto-save-card'
@@ -32,6 +33,7 @@ import {
   accountMwkValue,
   canMutateTransaction,
   formatK,
+  mapAccount,
   spendableTotalMwk,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
@@ -274,16 +276,10 @@ function AppDashboard({
     })
   }
 
+  // Archived accounts stay in the list so history still shows their names;
+  // their balance is zero, so totals are unaffected.
   const accounts = useMemo<Account[]>(
-    () =>
-      data.accounts.map((account) => ({
-        id: account._id,
-        name: account.name,
-        kind: account.kind,
-        currency: account.currency,
-        balance: account.balance,
-        includeInSpendable: account.includeInSpendable,
-      })),
+    () => data.accounts.map(mapAccount),
     [data.accounts],
   )
 
@@ -626,6 +622,7 @@ function AppDashboard({
               savingsBalance={savingsBalance}
               cycleGain={cycleInfo.cycleGain}
               usdRate={data.settings.usdRate}
+              paydayDay={data.settings.paydayDay ?? DEFAULT_PAYDAY_DAY}
               animationDelay="120ms"
               onMoveSavings={moveSavings}
               onSetAccountSpendable={setAccountSpendable}

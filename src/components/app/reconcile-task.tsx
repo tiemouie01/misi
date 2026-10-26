@@ -7,7 +7,12 @@ import { toast } from 'sonner'
 import { api } from '../../../convex/_generated/api'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { ReconcileCard } from '#/components/app/reconcile-card'
-import { isSpendableAccount, USD_RATE } from '#/lib/app-data'
+import {
+  isSpendableAccount,
+  mapAccount,
+  resolveQuickAddDefaults,
+  USD_RATE,
+} from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { errorMessage } from '#/lib/error-message'
 import { useQuickAddSheet } from '#/lib/use-quick-add-sheet'
@@ -37,15 +42,7 @@ export function ReconcileTask() {
   >({})
 
   const accounts = useMemo<Account[]>(
-    () =>
-      (data?.accounts ?? []).map((account) => ({
-        id: account._id,
-        name: account.name,
-        kind: account.kind,
-        currency: account.currency,
-        balance: account.balance,
-        includeInSpendable: account.includeInSpendable,
-      })),
+    () => (data?.accounts ?? []).map(mapAccount),
     [data?.accounts],
   )
 
@@ -67,7 +64,7 @@ export function ReconcileTask() {
   const expectedBalances = useMemo(
     () =>
       accounts
-        .filter((account) => isSpendableAccount(account))
+        .filter((account) => !account.archived && isSpendableAccount(account))
         .map((account) => ({
           accountId: account.id,
           expected: account.balance,
@@ -89,20 +86,11 @@ export function ReconcileTask() {
     (balance) => balance.expected === balance.actual,
   )
 
-  const defaultExpenseAccountId =
-    data?.settings?.defaultExpenseAccountId ||
-    expectedBalances[0]?.accountId ||
-    ''
-  const defaultTransferFromAccountId =
-    data?.settings?.defaultTransferFromAccountId ||
-    expectedBalances[0]?.accountId ||
-    ''
-  const defaultTransferToAccountId =
-    data?.settings?.defaultTransferToAccountId ??
-    expectedBalances.find(
-      (balance) => balance.accountId !== defaultTransferFromAccountId,
-    )?.accountId ??
-    defaultTransferFromAccountId
+  const {
+    expense: defaultExpenseAccountId,
+    transferFrom: defaultTransferFromAccountId,
+    transferTo: defaultTransferToAccountId,
+  } = resolveQuickAddDefaults(accounts, data?.settings)
 
   const {
     sheet,

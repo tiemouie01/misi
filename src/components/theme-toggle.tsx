@@ -1,55 +1,62 @@
-import { Moon, Sun } from 'lucide-react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 
-import { Button } from '#/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '#/components/ui/tooltip'
-import { themeChangeEvent, useIsDarkTheme } from '#/lib/use-theme'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { setThemePreference, useThemePreference } from '#/lib/use-theme'
+import { cn } from '#/lib/utils'
 
-export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
-  const isDark = useIsDarkTheme()
+import type { LucideIcon } from 'lucide-react'
+import type { ThemePreference } from '#/lib/use-theme'
 
-  function toggleTheme() {
-    const nextIsDark = !isDark
-    document.documentElement.classList.toggle('dark', nextIsDark)
-    localStorage.setItem('misi-theme', nextIsDark ? 'dark' : 'light')
-    window.dispatchEvent(new Event(themeChangeEvent))
-  }
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'system', label: 'System', icon: Monitor },
+  { value: 'dark', label: 'Dark', icon: Moon },
+] as const satisfies ReadonlyArray<{
+  value: ThemePreference
+  label: string
+  icon: LucideIcon
+}>
 
-  const label = `Switch to ${isDark ? 'light' : 'dark'} mode`
-  const icon = isDark ? <Sun className="size-4" /> : <Moon className="size-4" />
+function isThemePreference(value: string): value is ThemePreference {
+  return THEME_OPTIONS.some((option) => option.value === value)
+}
 
-  if (withLabel) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        className="h-11 w-full justify-start gap-3 px-3"
-        onClick={toggleTheme}
-      >
-        {icon}
-        {label}
-      </Button>
-    )
-  }
+/**
+ * Light / System / Dark segmented control. `compact` hides the labels
+ * visually (they stay readable to screen readers) for tight page headers.
+ */
+export function ThemeToggle({
+  compact = false,
+  className,
+}: {
+  compact?: boolean
+  className?: string
+}) {
+  const preference = useThemePreference()
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-sm"
-          aria-label={label}
-          className="size-9"
-          onClick={toggleTheme}
+    <ToggleGroup
+      type="single"
+      aria-label="Theme"
+      size={compact ? 'sm' : 'default'}
+      value={preference}
+      onValueChange={(value) => {
+        // Radix clears the value when the selected item is pressed again.
+        if (isThemePreference(value)) setThemePreference(value)
+      }}
+      className={className}
+    >
+      {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+        <ToggleGroupItem
+          key={value}
+          value={value}
+          title={compact ? label : undefined}
+          className={cn(!compact && 'flex-1')}
         >
-          {icon}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+          <Icon />
+          <span className={cn(compact && 'sr-only')}>{label}</span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   )
 }

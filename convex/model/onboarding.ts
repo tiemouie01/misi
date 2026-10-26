@@ -1,6 +1,8 @@
 import { ConvexError, v } from 'convex/values'
 
+import { findAccountNamed, getAccounts, validateAccountName } from './accounts'
 import { assertCategoryPlansFitLimit, getCyclePeriod } from './cycles'
+import { validateSettingsValues } from './settings'
 
 import type { Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
@@ -92,8 +94,7 @@ export function validateIncomeSources(
 
 /** Validates one account and returns its trimmed name. */
 export function validateAccountInput(account: OnboardingAccountInput) {
-  const name = account.name.trim()
-  if (!name) throw new ConvexError('Every account needs a name')
+  const name = validateAccountName(account.name)
   if (!Number.isFinite(account.balance) || account.balance < 0) {
     throw new ConvexError('Account balances must be zero or more')
   }
@@ -112,25 +113,7 @@ export function validateOnboardingArgs(args: CompleteOnboardingArgs) {
       throw new ConvexError(`You already have an account named ${name}`)
     seenNames.add(key)
   }
-  if (
-    !Number.isInteger(args.paydayDay) ||
-    args.paydayDay < 1 ||
-    args.paydayDay > 28
-  ) {
-    throw new ConvexError(
-      'Payday must be between day 1 and day 28 of the month',
-    )
-  }
-  if (!Number.isFinite(args.usdRate) || args.usdRate <= 0) {
-    throw new ConvexError('Enter a USD rate greater than zero')
-  }
-  if (
-    !Number.isFinite(args.defaultSavingsRate) ||
-    args.defaultSavingsRate < 0 ||
-    args.defaultSavingsRate > 1
-  ) {
-    throw new ConvexError('Savings rate must be between 0% and 100%')
-  }
+  validateSettingsValues(args)
   if (
     !Number.isFinite(args.savingsOpeningBalance) ||
     args.savingsOpeningBalance < 0
@@ -231,15 +214,14 @@ export async function createAccount(
   input: OnboardingAccountInput,
 ) {
   const name = validateAccountInput(input)
-  const existingAccounts = await ctx.db
-    .query('accounts')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
-  if (
-    existingAccounts.some(
-      (account) => account.name.toLowerCase() === name.toLowerCase(),
+  const existingAccounts = await getAccounts(ctx, userId)
+  const existing = findAccountNamed(existingAccounts, name)
+  if (existing?.archivedAt !== undefined) {
+    throw new ConvexError(
+      `You have an archived account named ${existing.name} — restore it instead`,
     )
-  ) {
+  }
+  if (existing) {
     throw new ConvexError(`You already have an account named ${name}`)
   }
   return await ctx.db.insert('accounts', {

@@ -6,7 +6,11 @@ import { toast } from 'sonner'
 import { api } from '../../../convex/_generated/api'
 import { QuickAddFab, QuickAddSheet } from '#/components/app/quick-add'
 import { TransactionDeleteDialog } from '#/components/app/transactions-card'
-import { canDeleteTransaction, isSpendableAccount } from '#/lib/app-data'
+import {
+  canDeleteTransaction,
+  mapAccount,
+  resolveQuickAddDefaults,
+} from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { mapDebt } from '#/lib/debts'
 import { useQuickAddSheet } from '#/lib/use-quick-add-sheet'
@@ -64,15 +68,7 @@ function ReadyQuickAddProvider({
   const [deleting, setDeleting] = useState(false)
 
   const accounts = useMemo<Account[]>(
-    () =>
-      data.accounts.map((account) => ({
-        id: account._id,
-        name: account.name,
-        kind: account.kind,
-        currency: account.currency,
-        balance: account.balance,
-        includeInSpendable: account.includeInSpendable,
-      })),
+    () => data.accounts.map(mapAccount),
     [data.accounts],
   )
 
@@ -91,17 +87,11 @@ function ReadyQuickAddProvider({
     [data.categories],
   )
 
-  const spendableAccountIds = accounts
-    .filter((account) => isSpendableAccount(account))
-    .map((account) => account.id)
-  const defaultExpenseAccountId =
-    settings.defaultExpenseAccountId || spendableAccountIds[0] || ''
-  const defaultTransferFromAccountId =
-    settings.defaultTransferFromAccountId || spendableAccountIds[0] || ''
-  const defaultTransferToAccountId =
-    settings.defaultTransferToAccountId ??
-    spendableAccountIds.find((id) => id !== defaultTransferFromAccountId) ??
-    defaultTransferFromAccountId
+  const {
+    expense: defaultExpenseAccountId,
+    transferFrom: defaultTransferFromAccountId,
+    transferTo: defaultTransferToAccountId,
+  } = resolveQuickAddDefaults(accounts, settings)
 
   const {
     sheet,

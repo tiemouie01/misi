@@ -48,7 +48,8 @@ import {
   canDeleteTransaction,
   canMutateTransaction,
   formatK,
-  isSpendableAccount,
+  mapAccount,
+  resolveQuickAddDefaults,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { mapDebt } from '#/lib/debts'
@@ -120,15 +121,7 @@ function DebtDetailPage() {
 
   const debt = mapDebt(detail)
   const accounts = useMemo<Account[]>(
-    () =>
-      (data?.accounts ?? []).map((account) => ({
-        id: account._id,
-        name: account.name,
-        kind: account.kind,
-        currency: account.currency,
-        balance: account.balance,
-        includeInSpendable: account.includeInSpendable,
-      })),
+    () => (data?.accounts ?? []).map(mapAccount),
     [data?.accounts],
   )
   const categories = useMemo<Category[]>(
@@ -175,11 +168,10 @@ function DebtDetailPage() {
     [detail.movements],
   )
 
-  const expectedBalances = accounts.filter((account) =>
-    isSpendableAccount(account),
-  )
-  const defaultExpenseAccountId =
-    data?.settings?.defaultExpenseAccountId || expectedBalances[0]?.id || ''
+  const defaultExpenseAccountId = resolveQuickAddDefaults(
+    accounts,
+    data?.settings,
+  ).expense
   const {
     sheet,
     error: quickAddError,
