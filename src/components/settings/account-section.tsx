@@ -1,4 +1,4 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -24,7 +24,7 @@ export function AccountSection() {
   }
 
   return (
-    <SettingsSection title="Account">
+    <SettingsSection title="Signed in" icon={UserRound}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           {isPending && !user ? (

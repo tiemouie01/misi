@@ -213,29 +213,27 @@ function BudgetRoute() {
 
   return (
     <AppProviders>
-      <div className="min-h-screen">
-        <main className="page-wrap py-6 sm:py-8">
-          {cycleNeedsRollover ? (
-            <div className="py-20 text-center text-sea-ink-soft">
-              {rolloverError ?? 'Starting your new cycle…'}
-            </div>
-          ) : (
-            <BudgetPage
-              cycles={cycles}
-              history={history}
-              currentCycleId={selectedCycleId ?? cycles.at(0)?.id}
-              onCycleChange={setSelectedCycleId}
-              onManageIncomeSources={() =>
-                navigate({
-                  to: '.',
-                  search: (prev) => ({ ...prev, task: 'income-sources' }),
-                })
-              }
-              onSavePlan={savePlan}
-            />
-          )}
-        </main>
-      </div>
+      <main className="page-wrap py-6 sm:py-8">
+        {cycleNeedsRollover ? (
+          <p className="py-20 text-center text-sea-ink-soft">
+            {rolloverError ?? 'Starting your new cycle…'}
+          </p>
+        ) : (
+          <BudgetPage
+            cycles={cycles}
+            history={history}
+            currentCycleId={selectedCycleId ?? cycles.at(0)?.id}
+            onCycleChange={setSelectedCycleId}
+            onManageIncomeSources={() =>
+              navigate({
+                to: '.',
+                search: (prev) => ({ ...prev, task: 'income-sources' }),
+              })
+            }
+            onSavePlan={savePlan}
+          />
+        )}
+      </main>
     </AppProviders>
   )
 }

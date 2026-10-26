@@ -7,12 +7,23 @@ import {
   useNavigate,
 } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { Archive, ArchiveRestore, Merge, Pencil, Plus } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDownRight,
+  ArrowUpRight,
+  ChevronLeft,
+  CircleCheck,
+  Merge,
+  Pencil,
+  Plus,
+  ReceiptText,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { claimFeedTitle } from '../../../shared/claim'
+import { claimActionLabel, claimRemainingDelta } from '../../../shared/claim'
 import { AppProviders } from '#/components/app/app-providers'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { TransactionDeleteDialog } from '#/components/app/transactions-card'
@@ -37,6 +48,7 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import { Progress } from '#/components/ui/progress'
 import {
   Select,
   SelectContent,
@@ -56,6 +68,7 @@ import { mapDebt } from '#/lib/debts'
 import { formatAmountInput, parseAmount } from '#/lib/onboarding-data'
 import { errorMessage } from '#/lib/error-message'
 import { useQuickAddSheet } from '#/lib/use-quick-add-sheet'
+import { cn } from '#/lib/utils'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Account, Txn } from '#/lib/app-data'
@@ -91,6 +104,43 @@ export const Route = createFileRoute('/app/debts/$debtId')({
 
 function transactionDayLabel(occurredAt: number) {
   return transactionDayFormat.format(new Date(occurredAt))
+}
+
+/** One option in the "Manage" card: icon, plain label and a short hint. */
+function ManageAction({
+  icon: Icon,
+  label,
+  hint,
+  disabled,
+  title,
+  onClick,
+}: {
+  icon: typeof Pencil
+  label: string
+  hint: string
+  disabled?: boolean
+  title?: string
+  onClick: () => void
+}) {
+  return (
+    <li title={title}>
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={disabled}
+        className="h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2.5 text-left font-normal whitespace-normal hover:bg-(--chip-bg)"
+        onClick={onClick}
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-lagoon-deep/10 text-lagoon-deep">
+          <Icon className="size-[1.125rem]" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-sea-ink">{label}</span>
+          <span className="block text-[0.8rem] text-sea-ink-soft">{hint}</span>
+        </span>
+      </Button>
+    </li>
+  )
 }
 
 function DebtDetailPage() {
@@ -290,78 +340,229 @@ function DebtDetailPage() {
     return null
   }
 
+  const youOwe = debt.direction === 'you_owe'
+  // How far the balance has come down from where it started.
+  const paidSoFar = Math.min(
+    debt.openingBalance,
+    Math.max(0, debt.openingBalance - debt.remaining),
+  )
+
   return (
     <AppProviders>
-      <div className="min-h-screen">
-        <main className="page-wrap py-6 sm:py-8">
-          <p className="island-kicker">
-            <Link to="/app/debts" className="text-lagoon-deep no-underline">
-              Debts
+      <main className="page-wrap py-6 sm:py-8">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <Link
+              to="/app/debts"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-sea-ink-soft! no-underline hover:text-sea-ink!"
+            >
+              <ChevronLeft className="size-4" />
+              All debts
             </Link>
-            {' · '}
-            {debt.direction === 'you_owe' ? 'You owe' : 'Owed to you'}
-            {debt.archived ? ' · Archived' : ''}
+            <h1 className="font-display mt-1 text-[1.75rem] font-bold tracking-tight break-words text-sea-ink sm:text-4xl">
+              {debt.name}
+            </h1>
+          </div>
+          {!debt.archived && (
+            <Button
+              type="button"
+              size="lg"
+              onClick={() =>
+                openSheet({
+                  mode: 'claim',
+                  debtId: debt.id,
+                  claimAction: youOwe ? 'repay' : 'collect',
+                })
+              }
+            >
+              <Plus className="size-5" strokeWidth={2.6} />
+              Add a payment
+            </Button>
+          )}
+        </header>
+
+        {/* The amount left sits straight on the teal ground so it reads
+            first, like the home page's main number. */}
+        <section className="mt-5 flex max-w-2xl flex-col gap-3 py-1 sm:mt-6">
+          <h2 className="text-[0.95rem] font-semibold text-sea-ink-soft">
+            {youOwe ? 'You still owe' : 'Still owed to you'}
+          </h2>
+          <p className="text-[2.75rem] leading-none font-extrabold tracking-tight tabular-nums sm:text-6xl">
+            {formatK(debt.remaining)}
           </p>
-          <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
-                {debt.name}
-              </h1>
-              <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
-                Remaining{' '}
-                <span className="font-mono font-semibold text-sea-ink tabular-nums">
-                  {formatK(debt.remaining)}
+          {debt.openingBalance > 0 && (
+            <Progress
+              value={paidSoFar}
+              max={debt.openingBalance}
+              aria-label={
+                youOwe ? 'Share paid back so far' : 'Share paid to you so far'
+              }
+              className="h-2.5 bg-white/16 dark:bg-lagoon-deep/12 [&_[data-slot=progress-indicator]]:bg-none [&_[data-slot=progress-indicator]]:bg-lagoon"
+            />
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-sm text-sea-ink-soft tabular-nums">
+              {debt.openingBalance > 0
+                ? `${formatK(paidSoFar)} ${youOwe ? 'paid back' : 'paid to you'} · `
+                : ''}
+              Started at {formatK(debt.openingBalance)}
+            </p>
+            {debt.archived ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2.5 py-1 text-[0.8rem] font-bold text-sea-ink dark:bg-lagoon-deep/12">
+                <Archive className="size-3.5" strokeWidth={2.4} />
+                Archived
+              </span>
+            ) : (
+              debt.remaining === 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-lagoon/22 px-2.5 py-1 text-[0.8rem] font-bold text-sea-ink">
+                  <CircleCheck
+                    className="size-3.5 text-lagoon"
+                    strokeWidth={2.4}
+                  />
+                  Paid off
                 </span>
-                {' · '}
-                Opening{' '}
-                <span className="font-mono tabular-nums">
-                  {formatK(debt.openingBalance)}
+              )
+            )}
+          </div>
+        </section>
+
+        {/* History takes the wide left column from `xl`; the manage card sits
+            on the right. Below `xl` history comes first. */}
+        <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:items-start">
+          <Card variant="panel" className="gap-0 p-4 sm:p-6">
+            <h2 className="px-2 text-lg font-bold text-sea-ink">History</h2>
+            {transactions.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                <span className="grid size-12 place-items-center rounded-2xl bg-lagoon-deep/10 text-lagoon-deep">
+                  <ReceiptText className="size-6" />
                 </span>
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
+                <p className="font-bold text-sea-ink">Nothing recorded yet</p>
+                <p className="max-w-xs text-sm text-sea-ink-soft">
+                  It started at {formatK(debt.openingBalance)}. Payments you add
+                  will show here.
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-2 space-y-0.5">
+                {transactions.map((transaction) => {
+                  const account = transaction.accountId
+                    ? accounts.find((item) => item.id === transaction.accountId)
+                    : undefined
+                  const title = transaction.claimAction
+                    ? claimActionLabel(
+                        transaction.claimAction,
+                        transaction.adjustPolarity,
+                      )
+                    : transaction.payee
+                  const delta = transaction.claimAction
+                    ? claimRemainingDelta({
+                        action: transaction.claimAction,
+                        amount: transaction.amount,
+                        adjustPolarity: transaction.adjustPolarity,
+                      })
+                    : 0
+                  const Icon = delta < 0 ? ArrowDownRight : ArrowUpRight
+                  const content = (
+                    <>
+                      <span
+                        className={cn(
+                          'grid size-10 shrink-0 place-items-center rounded-xl',
+                          delta < 0
+                            ? 'bg-palm/12 text-palm'
+                            : 'bg-coral/12 text-coral-deep',
+                        )}
+                      >
+                        <Icon className="size-[1.125rem]" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[0.95rem] font-bold text-sea-ink">
+                          {title}
+                        </span>
+                        <span className="block truncate text-[0.8rem] text-sea-ink-soft">
+                          {transaction.day}
+                          {account ? ` · ${account.name}` : ' · no account'}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right text-[0.95rem] font-bold whitespace-nowrap text-sea-ink tabular-nums">
+                        {formatK(transaction.amount)}
+                      </span>
+                    </>
+                  )
+                  return (
+                    <li
+                      key={transaction.id}
+                      className="flex items-center gap-1"
+                    >
+                      {canMutateTransaction(transaction) ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          title="Change"
+                          className="h-auto min-w-0 flex-1 justify-start gap-3 rounded-2xl px-2 py-2.5 text-left font-normal whitespace-normal hover:bg-(--chip-bg)"
+                          onClick={() =>
+                            openSheet({
+                              transactionId: transaction.id,
+                              mode: 'claim',
+                              amount: transaction.amount,
+                              accountId: transaction.accountId,
+                              debtId: transaction.debtId,
+                              claimAction: transaction.claimAction,
+                              adjustPolarity: transaction.adjustPolarity,
+                              note: transaction.note,
+                              occurredAt: transaction.occurredAt,
+                              fromSavings: transaction.walletId === 'savings',
+                            })
+                          }
+                        >
+                          {content}
+                        </Button>
+                      ) : (
+                        <div className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2.5">
+                          {content}
+                        </div>
+                      )}
+                      {canDeleteTransaction(transaction) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-10"
+                          onClick={() => setPendingDelete(transaction)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </Card>
+
+          <Card
+            variant="panel"
+            className="gap-0 p-4 sm:p-5 xl:col-start-2 xl:row-start-1"
+          >
+            <h2 className="px-1 text-lg font-bold text-sea-ink">
+              Manage this debt
+            </h2>
+            <ul className="mt-2 space-y-0.5">
+              <ManageAction
+                icon={Pencil}
+                label="Edit"
+                hint="Change the name or starting amount"
                 onClick={() => {
                   setName(debt.name)
                   setOpening(formatAmountInput(String(debt.openingBalance)))
                   setError(null)
                   setEditorOpen(true)
                 }}
-              >
-                <Pencil className="size-4" />
-                Edit
-              </Button>
-              {debt.archived ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void restore()}
-                >
-                  <ArchiveRestore className="size-4" />
-                  Restore
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={debt.remaining !== 0}
-                  title={
-                    debt.remaining !== 0
-                      ? 'Settle or adjust the remaining balance to zero before archiving'
-                      : undefined
-                  }
-                  onClick={() => void archive()}
-                >
-                  <Archive className="size-4" />
-                  Archive
-                </Button>
-              )}
+              />
               {mergeTargets.length > 0 && (
-                <Button
-                  type="button"
-                  variant="secondary"
+                <ManageAction
+                  icon={Merge}
+                  label="Merge into another debt"
+                  hint="Move everything here into another debt"
                   onClick={() => {
                     setMergeTargetId(
                       mergeTargets.length === 1 ? mergeTargets[0].id : '',
@@ -369,106 +570,37 @@ function DebtDetailPage() {
                     setMergeError(null)
                     setMergeOpen(true)
                   }}
-                >
-                  <Merge className="size-4" />
-                  Merge into…
-                </Button>
+                />
               )}
-              {!debt.archived && (
-                <Button
-                  type="button"
-                  onClick={() =>
-                    openSheet({
-                      mode: 'claim',
-                      debtId: debt.id,
-                      claimAction:
-                        debt.direction === 'you_owe' ? 'repay' : 'collect',
-                    })
+              {debt.archived ? (
+                <ManageAction
+                  icon={ArchiveRestore}
+                  label="Restore"
+                  hint="Bring it back to your list"
+                  onClick={() => void restore()}
+                />
+              ) : (
+                <ManageAction
+                  icon={Archive}
+                  label="Archive"
+                  hint={
+                    debt.remaining !== 0
+                      ? 'Bring what is left to zero first'
+                      : 'Hide it from your list. Its history stays.'
                   }
-                >
-                  <Plus className="size-4" />
-                  Log movement
-                </Button>
+                  disabled={debt.remaining !== 0}
+                  title={
+                    debt.remaining !== 0
+                      ? 'Settle or adjust the remaining balance to zero before archiving'
+                      : undefined
+                  }
+                  onClick={() => void archive()}
+                />
               )}
-            </div>
-          </div>
-
-          <Card variant="island" className="mt-6 gap-0 rounded-3xl p-3 sm:p-4">
-            {transactions.length === 0 ? (
-              <p className="px-3 py-8 text-center text-sm text-sea-ink-soft">
-                No movements yet. Opening {formatK(debt.openingBalance)} is the
-                starting remaining.
-              </p>
-            ) : (
-              transactions.map((transaction, index) => {
-                const account = transaction.accountId
-                  ? accounts.find((item) => item.id === transaction.accountId)
-                  : undefined
-                const title = transaction.claimAction
-                  ? claimFeedTitle(
-                      transaction.claimAction,
-                      debt.name,
-                      transaction.adjustPolarity,
-                    )
-                  : transaction.payee
-                return (
-                  <div
-                    key={transaction.id}
-                    className={`flex items-center gap-2 px-2 py-3 ${
-                      index > 0 ? 'border-t border-(--line)' : ''
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      disabled={!canMutateTransaction(transaction)}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:opacity-70"
-                      onClick={() => {
-                        if (!canMutateTransaction(transaction)) return
-                        openSheet({
-                          transactionId: transaction.id,
-                          mode: 'claim',
-                          amount: transaction.amount,
-                          accountId: transaction.accountId,
-                          debtId: transaction.debtId,
-                          claimAction: transaction.claimAction,
-                          adjustPolarity: transaction.adjustPolarity,
-                          note: transaction.note,
-                          occurredAt: transaction.occurredAt,
-                          fromSavings: transaction.walletId === 'savings',
-                        })
-                      }}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-bold text-sea-ink">
-                          {title}
-                        </span>
-                        <span className="text-xs text-sea-ink-soft">
-                          {transaction.day}
-                          {account ? ` · ${account.name}` : ' · no account'}
-                        </span>
-                      </span>
-                      <span className="font-mono shrink-0 text-sm font-semibold tabular-nums">
-                        {formatK(transaction.amount)}
-                      </span>
-                    </button>
-                    {canDeleteTransaction(transaction) && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-10 sm:h-8"
-                        onClick={() => setPendingDelete(transaction)}
-                      >
-                        Delete
-                      </Button>
-                    )}
-                  </div>
-                )
-              })
-            )}
+            </ul>
           </Card>
-        </main>
-      </div>
+        </div>
+      </main>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
         <DialogContent

@@ -1,4 +1,5 @@
 import { useMutation } from 'convex/react'
+import { Coins } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -22,7 +23,7 @@ export function MoneySection() {
   const [savingsDraft, setSavingsDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  if (!settings) return <SettingsSection title="Money" />
+  if (!settings) return <SettingsSection title="Money" icon={Coins} />
 
   const savedUsd = formatAmountInput(String(settings.usdRate))
   const savedSavings = String(Math.round(settings.defaultSavingsRate * 100))
@@ -62,7 +63,7 @@ export function MoneySection() {
   }
 
   return (
-    <SettingsSection title="Money">
+    <SettingsSection title="Money" icon={Coins}>
       <form
         className="space-y-5"
         onSubmit={(event) => {

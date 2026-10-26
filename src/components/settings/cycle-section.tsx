@@ -1,4 +1,5 @@
 import { useMutation } from 'convex/react'
+import { CalendarDays } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -44,7 +45,8 @@ export function CycleSection() {
   const [draft, setDraft] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
 
-  if (!settings || !currentCycle) return <SettingsSection title="Cycle" />
+  if (!settings || !currentCycle)
+    return <SettingsSection title="Payday" icon={CalendarDays} />
 
   const savedDay = settings.paydayDay ?? DEFAULT_PAYDAY_DAY
   const paydayDay = draft ?? savedDay
@@ -73,12 +75,13 @@ export function CycleSection() {
 
   return (
     <SettingsSection
-      title="Cycle"
+      title="Payday"
+      icon={CalendarDays}
       description="Each budget cycle runs from payday to the day before the next one."
     >
       <div className="space-y-4">
         <div>
-          <Label htmlFor="settings-payday">Payday</Label>
+          <Label htmlFor="settings-payday">Payday each month</Label>
           <Select
             value={String(paydayDay)}
             disabled={saving}
@@ -96,7 +99,7 @@ export function CycleSection() {
             </SelectContent>
           </Select>
         </div>
-        <dl className="grid gap-3 rounded-2xl border border-(--line) bg-(--chip-bg) px-4 py-3 sm:grid-cols-2">
+        <dl className="grid gap-3 rounded-2xl bg-lagoon-deep/6 px-4 py-3 sm:grid-cols-2">
           <div>
             <dt className="field-label">This cycle</dt>
             <dd className="mt-1 text-sm font-semibold text-sea-ink">
@@ -113,7 +116,7 @@ export function CycleSection() {
         {changed && (
           <p
             role="status"
-            className="rounded-xl bg-lagoon-deep/8 px-4 py-3 text-sm font-semibold text-sea-ink"
+            className="rounded-2xl bg-lagoon-deep/8 px-4 py-3 text-sm font-semibold text-sea-ink"
           >
             Takes effect from your next cycle. This cycle keeps its dates.
           </p>

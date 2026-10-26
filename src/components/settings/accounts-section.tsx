@@ -1,6 +1,16 @@
 import { Link } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { ArchiveRestore, ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ArchiveRestore,
+  Banknote,
+  ChevronDown,
+  Landmark,
+  Pencil,
+  Plus,
+  Smartphone,
+  Trash2,
+  TrendingUp,
+} from 'lucide-react'
 import { useId, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -37,7 +47,11 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 import { Switch } from '#/components/ui/switch'
-import { formatAccountAmount, isSpendableAccount } from '#/lib/app-data'
+import {
+  accountKindColor,
+  formatAccountAmount,
+  isSpendableAccount,
+} from '#/lib/app-data'
 import { errorMessage } from '#/lib/error-message'
 import { ACCOUNT_KIND_LABELS } from '#/lib/onboarding-data'
 import { patchAccountOptimistically } from '#/lib/optimistic-settings'
@@ -53,6 +67,13 @@ const ACCOUNT_KINDS: Account['kind'][] = [
   'cash',
   'investment',
 ]
+
+const KIND_ICON = {
+  bank: Landmark,
+  mobile: Smartphone,
+  cash: Banknote,
+  investment: TrendingUp,
+} as const
 
 function accountMeta(account: Account) {
   return `${ACCOUNT_KIND_LABELS[account.kind]} · ${account.currency}`
@@ -120,6 +141,7 @@ export function AccountsSection() {
   return (
     <SettingsSection
       title="Accounts"
+      icon={Landmark}
       description="Rename accounts, choose which count toward spendable, or remove ones you no longer use."
     >
       <div className="-my-1 flex flex-col">
@@ -138,23 +160,23 @@ export function AccountsSection() {
       </div>
       <Button
         type="button"
-        variant="secondary"
-        className="mt-4 w-full sm:w-auto"
+        variant="ghost"
+        className="mt-1 -ml-2 justify-start px-2 text-lagoon-deep"
         onClick={() => setAddOpen(true)}
       >
-        <Plus className="size-4" />
+        <Plus />
         Add account
       </Button>
 
       {archived.length > 0 && (
-        <div className="mt-5 border-t border-dashed border-(--line) pt-4">
+        <div className="mt-3 border-t border-dashed border-(--line) pt-3">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             aria-expanded={showArchived}
             aria-controls={archivedListId}
-            className="-ml-3 h-10 sm:h-8"
+            className="-ml-2 h-10 px-2 sm:h-8"
             onClick={() => setShowArchived((current) => !current)}
           >
             <ChevronDown
@@ -266,6 +288,8 @@ function AccountRow({
   onRemove: () => void
 }) {
   const switchId = useId()
+  const Icon = KIND_ICON[account.kind]
+  const color = accountKindColor(account)
 
   return (
     <div
@@ -274,18 +298,28 @@ function AccountRow({
         divided && 'border-t border-(--line)',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-bold text-sea-ink">{account.name}</p>
-          <p className="text-xs font-semibold text-sea-ink-soft">
+      <div className="flex items-center gap-3">
+        <span
+          className="grid size-9 shrink-0 place-items-center rounded-xl"
+          style={{
+            background: `color-mix(in oklab, ${color} 14%, transparent)`,
+            color,
+          }}
+        >
+          <Icon className="size-[1.125rem]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-sea-ink">{account.name}</p>
+          <p className="text-[0.8rem] text-sea-ink-soft">
             {accountMeta(account)}
           </p>
         </div>
-        <p className="font-mono shrink-0 font-semibold text-sea-ink tabular-nums">
+        <p className="shrink-0 font-bold text-sea-ink tabular-nums">
           {formatAccountAmount(account)}
         </p>
       </div>
-      <div className="flex items-center justify-between gap-3">
+      {/* Indented past the icon so the controls line up with the name. */}
+      <div className="flex items-center justify-between gap-3 pl-12">
         <div className="flex min-w-0 items-center gap-2.5">
           <Switch
             id={switchId}

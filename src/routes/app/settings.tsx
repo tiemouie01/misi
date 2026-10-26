@@ -26,22 +26,33 @@ export const Route = createFileRoute('/app/settings')({
 function SettingsPage() {
   return (
     <AppProviders>
-      <div className="min-h-screen">
-        <main className="page-wrap py-6 sm:py-8">
-          <h1 className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
+      <main className="page-wrap py-6 sm:py-8">
+        <header>
+          <p className="text-sm text-sea-ink-soft">
+            Your money, payday and accounts
+          </p>
+          <h1 className="font-display mt-1 text-[1.75rem] font-bold tracking-tight text-sea-ink sm:text-4xl">
             Settings
           </h1>
-          <div className="mt-6 flex max-w-2xl flex-col gap-4 sm:gap-5">
+        </header>
+
+        {/* One column until `xl`, in reading order. From there the everyday
+            money settings take the wide left column and the occasional ones
+            (other pages, theme, sign out) stack on the right. */}
+        <div className="mt-5 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:items-start">
+          <div className="grid gap-4 sm:gap-6">
             <MoneySection />
             <CycleSection />
-            <QuickAddDefaultsSection />
             <AccountsSection />
-            <AppearanceSection />
+            <QuickAddDefaultsSection />
+          </div>
+          <div className="grid gap-4 sm:gap-6">
             <ManageSection />
+            <AppearanceSection />
             <AccountSection />
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </AppProviders>
   )
 }

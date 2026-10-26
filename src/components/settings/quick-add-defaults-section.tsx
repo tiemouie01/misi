@@ -1,4 +1,5 @@
 import { useMutation } from 'convex/react'
+import { Zap } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
@@ -56,7 +57,8 @@ export function QuickAddDefaultsSection() {
     api.misi.updateSettings,
   ).withOptimisticUpdate(updateSettingsOptimistically)
 
-  if (!settings) return <SettingsSection title="Quick-add defaults" />
+  if (!settings)
+    return <SettingsSection title="Quick-add defaults" icon={Zap} />
 
   const activeAccounts = accounts.filter((account) => !account.archived)
   const resolved = resolveQuickAddDefaults(accounts, settings)
@@ -75,6 +77,7 @@ export function QuickAddDefaultsSection() {
   return (
     <SettingsSection
       title="Quick-add defaults"
+      icon={Zap}
       description="The accounts quick-add starts on. You can still switch accounts on each entry."
     >
       <div className="space-y-4">
@@ -124,7 +127,7 @@ export function QuickAddDefaultsSection() {
           resolved.transferFrom === resolved.transferTo && (
             <p
               role="status"
-              className="rounded-xl bg-coral/8 px-4 py-3 text-sm font-semibold text-coral-deep"
+              className="rounded-2xl bg-coral/10 px-4 py-3 text-sm font-semibold text-coral-deep"
             >
               Transfers start with the same account on both sides. Pick a
               different one for "Transfers to".

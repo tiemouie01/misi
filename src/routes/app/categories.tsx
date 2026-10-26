@@ -38,6 +38,7 @@ import {
   CATEGORY_BUDGET_GROUPS,
 } from '../../../shared/category-defs'
 import { errorMessage } from '#/lib/error-message'
+import { cn } from '#/lib/utils'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Category } from '#/lib/categories'
@@ -212,51 +213,52 @@ function CategoriesPage() {
     <AppProviders>
       <div className="min-h-screen">
         <main className="page-wrap py-6 sm:py-8">
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
-            <div className="min-w-0">
-              <h1 className="font-display text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
-                Categories
-              </h1>
-              <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
-                Customise how your spending is grouped.
-              </p>
-            </div>
+          <header className="flex items-end justify-between gap-4">
+            <h1 className="font-display text-[1.75rem] font-bold tracking-tight text-sea-ink sm:text-4xl">
+              Categories
+            </h1>
             <Button type="button" onClick={openAdd}>
               <Plus className="size-4" />
               Add category
             </Button>
-          </div>
+          </header>
 
-          <Card variant="island" className="mt-6 gap-0 rounded-3xl p-3 sm:p-4">
-            {active.map((category, index) => (
-              <CategoryRow
-                key={category.id}
-                category={category}
-                divided={index > 0}
-                onEdit={() => openEdit(category)}
+          {/* The count sits straight on the teal ground, like home's hero. */}
+          <section className="mt-5 flex flex-col gap-3 py-1 sm:mt-6">
+            <h2 className="text-[0.95rem] font-semibold text-sea-ink-soft">
+              Categories you can pick
+            </h2>
+            <p className="text-[2.75rem] leading-none font-extrabold tracking-tight tabular-nums sm:text-6xl">
+              {active.length}
+            </p>
+            <p className="text-sm text-sea-ink-soft">
+              Customise how your spending is grouped. Tap one to change it.
+            </p>
+          </section>
+
+          <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 lg:grid-cols-2 lg:items-start">
+            {CATEGORY_BUDGET_GROUPS.map((group) => (
+              <CategoryListCard
+                key={group}
+                title={CATEGORY_BUDGET_GROUP_LABELS[group]}
+                categories={active.filter(
+                  (category) => category.budgetGroup === group,
+                )}
+                empty={`No ${CATEGORY_BUDGET_GROUP_LABELS[group].toLowerCase()} yet.`}
+                onEdit={openEdit}
               />
             ))}
-          </Card>
 
-          {archived.length > 0 && (
-            <section className="mt-8 border-t border-dashed border-(--line) pt-6">
-              <p className="field-label">Archived</p>
-              <Card
-                variant="island"
-                className="mt-3 gap-0 rounded-3xl p-3 sm:p-4"
-              >
-                {archived.map((category, index) => (
-                  <CategoryRow
-                    key={category.id}
-                    category={category}
-                    divided={index > 0}
-                    archived
-                    onRestore={() => void restore(category)}
-                  />
-                ))}
-              </Card>
-            </section>
-          )}
+            {archived.length > 0 && (
+              <CategoryListCard
+                className="lg:col-span-2"
+                title="Archived"
+                description="Hidden from pickers. Restore one to use it again."
+                categories={archived}
+                onRestore={(category) => void restore(category)}
+              />
+            )}
+          </div>
         </main>
 
         {editor && (
@@ -275,75 +277,114 @@ function CategoriesPage() {
   )
 }
 
+function CategoryListCard({
+  title,
+  description,
+  categories,
+  empty,
+  className,
+  onEdit,
+  onRestore,
+}: {
+  title: string
+  description?: string
+  categories: ManagedCategory[]
+  empty?: string
+  className?: string
+  onEdit?: (category: ManagedCategory) => void
+  onRestore?: (category: ManagedCategory) => void
+}) {
+  return (
+    <Card variant="panel" className={cn('gap-0 p-4 sm:p-5', className)}>
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <h2 className="text-lg font-bold text-sea-ink">{title}</h2>
+        <span className="text-sm font-semibold text-sea-ink-soft tabular-nums">
+          {categories.length}
+        </span>
+      </div>
+      {description && (
+        <p className="mt-0.5 px-1 text-sm text-sea-ink-soft">{description}</p>
+      )}
+      {categories.length === 0 ? (
+        <p className="mt-2 px-1 py-3 text-sm text-sea-ink-soft">{empty}</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-(--line)">
+          {categories.map((category) => (
+            <li key={category.id}>
+              <CategoryRow
+                category={category}
+                onEdit={onEdit && (() => onEdit(category))}
+                onRestore={onRestore && (() => onRestore(category))}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
 function CategoryRow({
   category,
-  divided,
-  archived,
   onEdit,
   onRestore,
 }: {
   category: ManagedCategory
-  divided: boolean
-  archived?: boolean
   onEdit?: () => void
   onRestore?: () => void
 }) {
   const Icon = category.icon
   const content = (
-    <>
+    <span
+      className={cn(
+        'flex min-w-0 flex-1 items-center gap-3',
+        category.archived && 'opacity-60',
+      )}
+    >
       <span
-        className="grid size-10 shrink-0 place-items-center rounded-full"
+        className="grid size-9 shrink-0 place-items-center rounded-xl"
         style={{
           background: `color-mix(in oklab, ${category.color} 14%, transparent)`,
           color: category.color,
         }}
       >
-        <Icon className="size-4" />
+        <Icon className="size-[1.125rem]" />
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-        <p className="truncate text-sm font-bold text-sea-ink">
-          {category.name}
-        </p>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <Badge variant="outline">
-            {CATEGORY_BUDGET_GROUP_LABELS[category.budgetGroup]}
-          </Badge>
-          {category.isSystem && <Badge variant="secondary">System</Badge>}
-        </div>
-      </div>
-    </>
+      <span className="truncate font-semibold text-sea-ink">
+        {category.name}
+      </span>
+      {category.isSystem && <Badge variant="secondary">Built-in</Badge>}
+    </span>
   )
+  if (onEdit) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label={`Edit ${category.name}`}
+        className="my-1 h-auto min-h-14 w-full justify-start gap-3 rounded-2xl px-1 py-2 text-left font-normal whitespace-normal hover:bg-(--chip-bg) sm:px-2"
+        onClick={onEdit}
+      >
+        {content}
+        <Pencil className="size-4 text-sea-ink-soft" aria-hidden />
+      </Button>
+    )
+  }
   return (
-    <div
-      className={`${divided ? 'border-t border-(--line)' : ''} ${archived ? 'opacity-50' : ''}`}
-    >
-      {onEdit ? (
+    <div className="flex min-h-14 items-center gap-3 px-1 py-2 sm:px-2">
+      {content}
+      {onRestore && (
         <Button
           type="button"
           variant="ghost"
-          aria-label={`Edit ${category.name}`}
-          className="my-1 h-auto min-h-14 w-full justify-start gap-3 whitespace-normal rounded-2xl px-2 py-2 text-left sm:px-3"
-          onClick={onEdit}
+          size="sm"
+          className="text-lagoon-deep"
+          aria-label={`Restore ${category.name}`}
+          onClick={onRestore}
         >
-          {content}
-          <Pencil className="size-4 text-sea-ink-soft" aria-hidden />
+          <ArchiveRestore className="size-4" />
+          Restore
         </Button>
-      ) : (
-        <div className="flex items-center gap-3 px-2 py-3 sm:px-3">
-          {content}
-          {onRestore && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="sm:size-8"
-              aria-label={`Restore ${category.name}`}
-              onClick={onRestore}
-            >
-              <ArchiveRestore className="size-4" />
-            </Button>
-          )}
-        </div>
       )}
     </div>
   )
@@ -475,7 +516,7 @@ function CategoryDialog({
           </Select>
           {isSystem && (
             <p className="mt-1.5 text-xs text-sea-ink-soft">
-              System categories keep their group.
+              Built-in categories keep their group.
             </p>
           )}
         </div>
