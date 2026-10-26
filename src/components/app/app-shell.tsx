@@ -16,7 +16,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 
 import { useOptionalQuickAdd } from '#/components/app/quick-add-provider'
-import { MisiMark } from '#/components/misi-mark'
+import { BrandMark } from '#/components/misi-mark'
 import { Button, buttonVariants } from '#/components/ui/button'
 import {
   Popover,
@@ -81,19 +81,6 @@ function subscribeToSidebarState(onChange: () => void) {
 
 function sidebarCollapsed() {
   return document.documentElement.dataset.sidebar === 'collapsed'
-}
-
-function BrandMark({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        'grid size-9 shrink-0 place-items-center rounded-xl bg-white/14 text-sea-ink dark:bg-lagoon-deep/12',
-        className,
-      )}
-    >
-      <MisiMark className="size-5" />
-    </span>
-  )
 }
 
 /** Opens quick add. Renders nothing until quick add is available (it needs

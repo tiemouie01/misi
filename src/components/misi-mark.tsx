@@ -1,3 +1,5 @@
+import { cn } from '#/lib/utils'
+
 export interface MisiMarkProps extends React.SVGProps<SVGSVGElement> {
   strokeWidth?: number
 }
@@ -24,5 +26,19 @@ export function MisiMark({ strokeWidth = 3, ...props }: MisiMarkProps) {
         strokeLinecap="round"
       />
     </svg>
+  )
+}
+
+/** The logomark on a translucent tile, for headers on the teal ground. */
+export function BrandMark({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        'grid size-9 shrink-0 place-items-center rounded-xl bg-white/14 text-sea-ink dark:bg-lagoon-deep/12',
+        className,
+      )}
+    >
+      <MisiMark className="size-5" />
+    </span>
   )
 }

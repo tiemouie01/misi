@@ -112,7 +112,6 @@ export function IncomeSourcesTask({ onClose }: { onClose: () => void }) {
         setDraft={updateDraft}
         goToStep={() => undefined}
         error={error}
-        showIntro={false}
       />
       {/* Field-level errors are already shown next to the field by IncomeStep. */}
       {error && error !== validateIncomeSources(draft)?.message && (

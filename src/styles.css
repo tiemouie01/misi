@@ -436,23 +436,6 @@ body:has(.app-ground) {
   box-shadow: var(--card-lift);
 }
 
-.feature-card {
-  background: linear-gradient(
-    165deg,
-    color-mix(in oklab, var(--surface-strong) 93%, white 7%),
-    var(--surface)
-  );
-  box-shadow:
-    0 1px 0 var(--inset-glint) inset,
-    0 18px 34px rgba(30, 90, 72, 0.1),
-    0 4px 14px rgba(23, 58, 64, 0.06);
-}
-
-.feature-card:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in oklab, var(--lagoon-deep) 35%, var(--line));
-}
-
 button,
 .island-shell,
 a {
@@ -523,64 +506,6 @@ a {
   }
 }
 
-.wave-layer {
-  animation: wave-drift 16s linear infinite;
-}
-
-.wave-layer-slow {
-  animation: wave-drift 26s linear infinite reverse;
-}
-
-@keyframes wave-drift {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.float-soft {
-  animation: float-soft 6s ease-in-out infinite;
-}
-
-@keyframes float-soft {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
-.flow-dash {
-  background-image: linear-gradient(
-    90deg,
-    var(--lagoon-deep) 0 8px,
-    transparent 8px 16px
-  );
-  background-size: 16px 2px;
-  animation: flow-dash 1.2s linear infinite;
-}
-
-@keyframes flow-dash {
-  from {
-    background-position-x: 0;
-  }
-  to {
-    background-position-x: 16px;
-  }
-}
-
-.text-water-gradient {
-  background: linear-gradient(100deg, var(--lagoon-deep), var(--palm));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  padding-right: 0.08em;
-}
-
 .btn-primary {
   background: linear-gradient(120deg, var(--btn-a), var(--btn-b));
   color: var(--btn-text);
@@ -590,21 +515,12 @@ a {
   color: var(--btn-text);
 }
 
-.site-footer {
-  border-top: 1px solid var(--line);
-  background: color-mix(in oklab, var(--header-bg) 84%, transparent 16%);
-}
-
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
 
-  .rise-in,
-  .float-soft,
-  .wave-layer,
-  .wave-layer-slow,
-  .flow-dash {
+  .rise-in {
     animation: none;
   }
 }

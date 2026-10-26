@@ -1,4 +1,5 @@
 import { useMutation } from 'convex/react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { api } from '../../../convex/_generated/api'
@@ -10,7 +11,7 @@ import {
   ReviewStep,
   WelcomeStep,
 } from '#/components/onboarding/onboarding-steps'
-import { MisiMark } from '#/components/misi-mark'
+import { BrandMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
@@ -41,10 +42,23 @@ type Prefill = FunctionReturnType<typeof api.misi.onboardingData>
 const STEP_TITLES: Record<OnboardingStep, string> = {
   welcome: 'Welcome to Misi',
   payday: 'When is payday?',
-  accounts: 'Your accounts',
-  income: 'Expected income',
-  budgets: 'Cycle budgets',
-  review: 'Review & start',
+  accounts: 'Where is your money?',
+  income: 'Money coming in',
+  budgets: 'Your spending plan',
+  review: 'Check and start',
+}
+
+const STEP_INTROS: Record<OnboardingStep, string> = {
+  welcome: 'A few basics first. You can change all of this later.',
+  payday:
+    'Misi plans from one payday to the next. Pick the day your main pay comes.',
+  accounts:
+    'Pick the places you keep money, then type how much is in each today.',
+  income:
+    'Add the money you expect each month. You can skip this and add it later.',
+  budgets:
+    'Choose how much you can spend each pay month, then share it out. Savings is kept apart.',
+  review: 'Check that this looks right. Tap Edit to change anything.',
 }
 
 function accountIsPreset(name: string): boolean {
@@ -239,48 +253,47 @@ export function OnboardingWizard({
   const stepProps = { draft, setDraft, goToStep: onStepChange, error }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="page-wrap flex items-center justify-between py-4">
+    <div className="app-ground flex flex-col">
+      <header className="page-wrap flex items-center justify-between gap-3 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
         <span className="flex items-center gap-2.5">
-          <span className="grid size-9 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
-            <MisiMark className="size-5" />
-          </span>
+          <BrandMark />
           <span className="font-display text-2xl font-bold tracking-tight text-sea-ink">
             Misi
           </span>
         </span>
         <ThemeToggle compact />
-      </div>
+      </header>
 
-      <main className="flex flex-1 items-start justify-center px-4 pt-2 sm:pt-10 sm:pb-16">
-        <Card
-          variant="island"
-          className="w-full max-w-lg rounded-3xl max-sm:rounded-none max-sm:border-0! max-sm:bg-none! max-sm:shadow-none! sm:p-8"
+      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col px-4 pt-4 sm:pt-8 sm:pb-16">
+        <p className="text-sm font-semibold text-sea-ink-soft">
+          Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
+        </p>
+        <Progress
+          className="mt-2 h-2.5 bg-white/16 dark:bg-lagoon-deep/12 [&_[data-slot=progress-indicator]]:bg-none [&_[data-slot=progress-indicator]]:bg-lagoon"
+          value={((stepIndex + 1) / ONBOARDING_STEPS.length) * 100}
+          aria-label="Setup progress"
+        />
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="font-display mt-5 text-[1.75rem] leading-tight font-bold tracking-tight text-sea-ink outline-none sm:mt-6 sm:text-4xl"
         >
-          <p className="island-kicker">
-            Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
-          </p>
-          <h1
-            ref={headingRef}
-            tabIndex={-1}
-            className="font-display mt-2 text-2xl font-bold tracking-tight text-sea-ink outline-none"
-          >
-            {STEP_TITLES[step]}
-          </h1>
-          <Progress
-            className="mt-4"
-            value={((stepIndex + 1) / ONBOARDING_STEPS.length) * 100}
-            aria-label="Onboarding progress"
-          />
+          {STEP_TITLES[step]}
+        </h1>
+        <p className="mt-2 text-[0.95rem] text-sea-ink-soft">
+          {STEP_INTROS[step]}
+        </p>
 
-          <div className="mt-6">
-            {step === 'welcome' && <WelcomeStep {...stepProps} />}
-            {step === 'payday' && <PaydayStep {...stepProps} />}
-            {step === 'accounts' && <AccountsStep {...stepProps} />}
-            {step === 'income' && <IncomeStep {...stepProps} />}
-            {step === 'budgets' && <BudgetsStep {...stepProps} />}
-            {step === 'review' && <ReviewStep {...stepProps} />}
-          </div>
+        <Card
+          variant="panel"
+          className="mt-5 gap-0 p-4 max-sm:mb-5 sm:mt-6 sm:p-6"
+        >
+          {step === 'welcome' && <WelcomeStep {...stepProps} />}
+          {step === 'payday' && <PaydayStep {...stepProps} />}
+          {step === 'accounts' && <AccountsStep {...stepProps} />}
+          {step === 'income' && <IncomeStep {...stepProps} />}
+          {step === 'budgets' && <BudgetsStep {...stepProps} />}
+          {step === 'review' && <ReviewStep {...stepProps} />}
 
           {error && !errorShownInline && (
             <p
@@ -288,41 +301,51 @@ export function OnboardingWizard({
               id="onboarding-error"
               role="alert"
               tabIndex={-1}
-              className="mt-4 text-[0.85rem] font-semibold outline-none"
-              style={{ color: 'var(--coral)' }}
+              className="mt-4 text-[0.85rem] font-semibold text-coral-deep outline-none"
             >
               {error}
             </p>
           )}
-
-          <div className="mt-6 flex items-center justify-between gap-3 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:border-t max-sm:border-(--line) max-sm:bg-(--surface-strong) max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:backdrop-blur-md">
-            {isFirst ? (
-              <span />
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={submitting}
-                onClick={goBack}
-              >
-                Back
-              </Button>
-            )}
-            {isLast ? (
-              <Button
-                type="button"
-                disabled={submitting}
-                onClick={() => void submit()}
-              >
-                {submitting ? 'Setting up…' : 'Start using Misi'}
-              </Button>
-            ) : (
-              <Button type="button" onClick={goNext}>
-                Continue
-              </Button>
-            )}
-          </div>
         </Card>
+
+        {/* On phones the actions stick to the bottom so Next is always in
+            reach, even on long steps. */}
+        <div className="mt-6 flex items-center gap-3 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:mt-auto max-sm:bg-(--header-bg) max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:backdrop-blur-md">
+          {!isFirst && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="lg"
+              className="h-14 px-5 text-base text-sea-ink"
+              disabled={submitting}
+              onClick={goBack}
+            >
+              <ArrowLeft className="size-5" />
+              Back
+            </Button>
+          )}
+          {isLast ? (
+            <Button
+              type="button"
+              size="lg"
+              className="h-14 flex-1 text-base"
+              disabled={submitting}
+              onClick={() => void submit()}
+            >
+              {submitting ? 'Setting up…' : 'Start using Misi'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="lg"
+              className="h-14 flex-1 text-base"
+              onClick={goNext}
+            >
+              Next
+              <ArrowRight className="size-5" />
+            </Button>
+          )}
+        </div>
       </main>
     </div>
   )

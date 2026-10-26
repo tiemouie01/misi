@@ -132,11 +132,11 @@ export function SummaryTiles({
         )}
       </section>
 
-      <Card variant="panel" className="gap-1.5 p-4 sm:gap-2 sm:p-5">
+      <Card variant="panel" className="@container gap-1.5 p-4 sm:gap-2 sm:p-5">
         <h2 className="text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
           You can spend about
         </h2>
-        <p className="text-2xl leading-tight font-extrabold sm:text-[2rem]">
+        <p className="text-[clamp(1.125rem,15cqi,1.5rem)] leading-tight font-extrabold sm:text-[clamp(1.5rem,15cqi,2rem)]">
           {formatK(perDay)}{' '}
           <span className="text-sm font-bold text-sea-ink-soft sm:text-base">
             a day
@@ -151,11 +151,11 @@ export function SummaryTiles({
         </p>
       </Card>
 
-      <Card variant="panel" className="gap-1.5 p-4 sm:gap-2 sm:p-5">
+      <Card variant="panel" className="@container gap-1.5 p-4 sm:gap-2 sm:p-5">
         <h2 className="text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
           Total in your accounts
         </h2>
-        <p className="text-2xl leading-tight font-extrabold sm:text-[2rem]">
+        <p className="text-[clamp(1.125rem,15cqi,1.5rem)] leading-tight font-extrabold sm:text-[clamp(1.5rem,15cqi,2rem)]">
           {formatK(totalInAccounts)}
         </p>
         <p className="text-[0.8rem] text-sea-ink-soft sm:text-sm">

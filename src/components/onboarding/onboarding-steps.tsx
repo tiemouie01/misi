@@ -114,7 +114,7 @@ function ExpectedWindowPicker({
             'h-10 w-full justify-start rounded-xl px-3 text-left text-sm font-normal shadow-sm',
             !value && 'text-sea-ink-soft/70',
           )}
-          aria-label="Expected landing window"
+          aria-label="Days this money comes"
           aria-invalid={ariaInvalid}
           aria-describedby={ariaDescribedBy}
         >
@@ -162,7 +162,7 @@ function ExpectedWindowPicker({
           })}
         </div>
         <p className="mt-3 text-[0.75rem] text-sea-ink-soft">
-          Day-of-month landing window each cycle
+          Days of the month this money usually comes
         </p>
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-(--line) pt-2">
           <p
@@ -282,11 +282,7 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
   const invalid = Boolean(error)
 
   return (
-    <div className="space-y-4">
-      <p className="text-[0.9rem] text-sea-ink-soft">
-        A few basics and Misi will shape itself around how your money actually
-        moves. Everything here can be changed later.
-      </p>
+    <div className="space-y-5">
       <div>
         <Label htmlFor="ob-usd-rate">USD rate (K per $1)</Label>
         <Input
@@ -304,12 +300,12 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           }
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-          Used to fold USD accounts into your net worth.
+          Used to count your dollar accounts in kwacha.
         </p>
       </div>
       <div>
         <Label htmlFor="ob-default-savings-rate">
-          Default savings rate (% of income)
+          Savings rate (% of income)
         </Label>
         <Input
           id="ob-default-savings-rate"
@@ -326,13 +322,12 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           }
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-          Used as the starting rate for new income sources. Each source can have
-          its own rate.
+          How much of each pay to put aside. Each income can have its own rate.
         </p>
       </div>
       <div>
         <Label htmlFor="ob-savings-balance">
-          Current savings balance (optional)
+          Money in Savings now (optional)
         </Label>
         <Input
           id="ob-savings-balance"
@@ -357,8 +352,8 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
           id="ob-savings-balance-hint"
           className="mt-1.5 text-[0.8rem] text-sea-ink-soft"
         >
-          Money already set aside in Savings (MWK)—not your total across bank,
-          investment, or foreign-currency accounts.
+          Only what is already in Savings, in kwacha. Leave out bank, investment
+          and dollar accounts.
         </p>
       </div>
     </div>
@@ -367,38 +362,32 @@ export function WelcomeStep({ draft, setDraft, error }: StepProps) {
 
 export function PaydayStep({ draft, setDraft }: StepProps) {
   return (
-    <div className="space-y-4">
-      <p className="text-[0.9rem] text-sea-ink-soft">
-        Misi budgets from payday to payday, not calendar months. Pick the day
-        your main income lands.
+    <div>
+      <Label htmlFor="ob-payday">Payday each month</Label>
+      <Select
+        value={String(draft.paydayDay)}
+        onValueChange={(value) =>
+          setDraft((current) => ({
+            ...current,
+            paydayDay: Number(value),
+          }))
+        }
+      >
+        <SelectTrigger id="ob-payday" className="mt-2 h-12 w-full rounded-xl">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {Array.from({ length: 28 }, (_, index) => index + 1).map((day) => (
+            <SelectItem key={day} value={String(day)}>
+              {ordinal(day)} of the month
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
+        Your pay month runs from the {ordinal(draft.paydayDay)} to the day
+        before the next {ordinal(draft.paydayDay)}.
       </p>
-      <div>
-        <Label htmlFor="ob-payday">Payday</Label>
-        <Select
-          value={String(draft.paydayDay)}
-          onValueChange={(value) =>
-            setDraft((current) => ({
-              ...current,
-              paydayDay: Number(value),
-            }))
-          }
-        >
-          <SelectTrigger id="ob-payday" className="mt-2 h-10 w-full rounded-xl">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 28 }, (_, index) => index + 1).map((day) => (
-              <SelectItem key={day} value={String(day)}>
-                {ordinal(day)} of the month
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-          Your cycle runs from the {ordinal(draft.paydayDay)} to the day before
-          the next {ordinal(draft.paydayDay)}.
-        </p>
-      </div>
     </div>
   )
 }
@@ -459,10 +448,6 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[0.9rem] text-sea-ink-soft">
-        Where does your money sit right now? Pick accounts and enter today's
-        balance for each.
-      </p>
       <div className="flex flex-wrap gap-2">
         {ACCOUNT_PRESETS.map((preset) => {
           const selected = isPresetSelected(preset.name)
@@ -471,9 +456,8 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
               key={preset.name}
               type="button"
               variant={selected ? 'default' : 'outline'}
-              size="sm"
               aria-pressed={selected}
-              className="hover:translate-y-0 max-sm:h-10 max-sm:px-4 max-sm:text-sm"
+              className="h-11 px-4 hover:translate-y-0"
               onClick={() => togglePreset(preset)}
             >
               {preset.name}
@@ -521,12 +505,7 @@ export function AccountsStep({ draft, setDraft }: StepProps) {
   )
 }
 
-export function IncomeStep({
-  draft,
-  setDraft,
-  error,
-  showIntro = true,
-}: StepProps & { showIntro?: boolean }) {
+export function IncomeStep({ draft, setDraft, error }: StepProps) {
   const issue = error ? validateIncomeSources(draft) : null
   const invalid = issue?.message === error ? issue : null
   const invalidId = invalid
@@ -574,13 +553,6 @@ export function IncomeStep({
 
   return (
     <div className="space-y-4">
-      {showIntro && (
-        <p className="text-[0.9rem] text-sea-ink-soft">
-          What money do you expect each cycle? Add a landing window and amount
-          so Misi can compare planned income with what actually lands. Skip this
-          if you'd rather add it later.
-        </p>
-      )}
       {draft.incomeSources.map((source) => (
         <div
           key={source.key}
@@ -617,7 +589,7 @@ export function IncomeStep({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2">
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-window-${source.key}`}>
-                Landing window
+                Days it comes
               </Label>
               <ExpectedWindowPicker
                 {...fieldA11y(source.key, 'window')}
@@ -630,9 +602,7 @@ export function IncomeStep({
               {fieldError(source.key, 'window')}
             </div>
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`ob-income-amount-${source.key}`}>
-                Expected amount
-              </Label>
+              <Label htmlFor={`ob-income-amount-${source.key}`}>Amount</Label>
               <Input
                 {...fieldA11y(source.key, 'amount')}
                 inputMode="numeric"
@@ -648,12 +618,12 @@ export function IncomeStep({
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`ob-income-amount-max-${source.key}`}>
-                High end (optional)
+                Up to (optional)
               </Label>
               <Input
                 {...fieldA11y(source.key, 'amount-max')}
                 inputMode="numeric"
-                placeholder="For variable income"
+                placeholder="If it changes"
                 value={source.expectedAmountMax}
                 onChange={(event) =>
                   updateSource(source.key, {
@@ -693,10 +663,12 @@ export function IncomeStep({
             }
           >
             <span>
-              <span className="font-semibold">Anchor income</span>
-              <span className="ml-2">Used to keep payday cycles aligned.</span>
+              <span className="font-semibold">Main pay</span>
+              <span className="ml-2">Keeps your pay month in line.</span>
             </span>
-            <span className="font-bold">{source.isAnchor ? 'Yes' : 'Set'}</span>
+            <span className="shrink-0 font-bold">
+              {source.isAnchor ? 'Yes' : 'Make main'}
+            </span>
           </Button>
         </div>
       ))}
@@ -724,7 +696,7 @@ export function IncomeStep({
         }
       >
         <Plus className="size-4" />
-        Add income source
+        Add income
       </Button>
     </div>
   )
@@ -753,12 +725,8 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[0.9rem] text-sea-ink-soft">
-        How much can go out each cycle? Set a spending limit, then split it
-        across Needs and Wants. Savings is tracked separately.
-      </p>
       <div>
-        <Label htmlFor="ob-spending-limit">Spending limit per cycle</Label>
+        <Label htmlFor="ob-spending-limit">Spending limit each pay month</Label>
         <Input
           id="ob-spending-limit"
           className="mt-2"
@@ -775,16 +743,14 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           }
         />
         <p className="mt-1.5 text-[0.8rem] text-sea-ink-soft">
-          This is your spending envelope from payday to payday. Savings sits
-          outside it.
+          The most you plan to spend from one payday to the next. Savings is not
+          part of it.
         </p>
       </div>
       <div
         className={cn(
-          'grid grid-cols-3 gap-2 rounded-2xl border p-3',
-          overallocated > 0
-            ? 'border-coral/30 bg-coral/8'
-            : 'border-(--line) bg-(--chip-bg)',
+          'grid grid-cols-3 gap-2 rounded-2xl px-4 py-3',
+          overallocated > 0 ? 'bg-coral/10' : 'bg-lagoon-deep/6',
         )}
         aria-live="polite"
       >
@@ -798,7 +764,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
         </div>
         <div>
           <p className="text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
-            {overallocated > 0 ? 'Over' : 'Unallocated'}
+            {overallocated > 0 ? 'Too much' : 'Left to plan'}
           </p>
           <p
             className={cn(
@@ -821,7 +787,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
 
       {overallocated > 0 && (
         <p className="text-[0.8rem] font-semibold text-coral-deep">
-          Reduce category plans by {formatK(overallocated)} to continue.
+          Lower your plans by {formatK(overallocated)} to go on.
         </p>
       )}
 
@@ -832,7 +798,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
         if (categories.length === 0) return null
         return (
           <section key={group} className="space-y-2">
-            <h2 className="field-label">{BUDGET_GROUP_LABELS[group]}</h2>
+            <h2 className="field-label pt-2">{BUDGET_GROUP_LABELS[group]}</h2>
             <div className="space-y-2">
               {categories.map((category) => {
                 const budget = draft.budgets.find(
@@ -850,7 +816,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
                     </span>
                     <Input
                       aria-label={`${category.name} planned amount`}
-                      className="w-32"
+                      className="h-11 w-32"
                       inputMode="numeric"
                       placeholder="0"
                       value={budget?.plannedAmount ?? ''}
@@ -891,12 +857,9 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
       step: 'welcome',
       rows: [
         ['USD rate', `K${draft.usdRate || '—'} per $1`],
+        ['Savings rate', `${draft.defaultSavingsRate || '0'}% of income`],
         [
-          'Default savings rate',
-          `${draft.defaultSavingsRate || '0'}% for new sources`,
-        ],
-        [
-          'Savings balance',
+          'Money in Savings',
           draft.savingsOpeningBalance
             ? formatK(parseAmount(draft.savingsOpeningBalance))
             : 'K0',
@@ -906,7 +869,7 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
     {
       title: 'Payday',
       step: 'payday',
-      rows: [['Cycle anchor', `${ordinal(draft.paydayDay)} of the month`]],
+      rows: [['Payday', `${ordinal(draft.paydayDay)} of the month`]],
     },
     {
       title: 'Accounts',
@@ -927,20 +890,20 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
               source.name,
               `${formatK(parseAmount(source.expectedAmount))}${source.expectedAmountMax ? `–${formatK(parseAmount(source.expectedAmountMax))}` : ''} · ${formatExpectedWindow(source.expectedDayStart, source.expectedDayEnd) || '—'}`,
             ])
-          : [['None added', 'You can add income sources later']],
+          : [['None added', 'You can add income later']],
     },
     {
       title: 'Budgets',
       step: 'budgets',
       rows: [
         [
-          'Spending limit per cycle',
+          'Spending limit',
           draft.spendingLimit.trim() === ''
             ? 'Not set'
             : formatK(spendingLimit),
         ],
         [
-          overallocated > 0 ? 'Overallocated' : 'Unallocated',
+          overallocated > 0 ? 'Too much' : 'Left to plan',
           formatK(overallocated || unallocated),
         ],
         ...activeBudgets.map((budget): [string, string] => {
@@ -957,15 +920,9 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
   ]
 
   return (
-    <div className="space-y-4">
-      <p className="text-[0.9rem] text-sea-ink-soft">
-        Check everything looks right. You can jump back to any step to adjust.
-      </p>
+    <div className="divide-y divide-(--line)">
       {sections.map((section) => (
-        <section
-          key={section.title}
-          className="rounded-2xl border border-(--line) p-4"
-        >
+        <section key={section.title} className="py-4 first:pt-0 last:pb-0">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-display text-[0.95rem] font-bold text-sea-ink">
               {section.title}
@@ -973,7 +930,7 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
             <Button
               type="button"
               variant="link"
-              className="h-auto text-[0.8rem] font-bold"
+              className="-my-2 h-10 px-2 text-[0.85rem] font-bold"
               aria-label={`Edit ${section.title}`}
               onClick={() => goToStep(section.step)}
             >

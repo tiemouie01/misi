@@ -39,8 +39,10 @@ function OnboardingPage() {
 
   if (isPending) {
     return (
-      <div className="page-wrap py-20 text-center text-sea-ink-soft">
-        Loading setup…
+      <div className="app-ground">
+        <p className="page-wrap py-20 text-center text-sea-ink-soft">
+          Loading setup…
+        </p>
       </div>
     )
   }

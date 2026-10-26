@@ -4,9 +4,10 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
+import { TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 
-import { MisiMark } from '#/components/misi-mark'
+import { BrandMark } from '#/components/misi-mark'
 import { ThemeToggle } from '#/components/theme-toggle'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
@@ -18,6 +19,9 @@ import { errorMessage } from '#/lib/error-message'
 import type { FormEvent } from 'react'
 
 const googleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED === 'true'
+
+/** Taller fields with larger text, easier to tap and read. */
+const inputClassName = 'mt-2 h-12 text-base sm:text-base'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: ({ context }) => {
@@ -70,7 +74,9 @@ function LoginPage() {
       onError: (ctx: { error: { message?: string } }) => {
         setError(
           ctx.error.message ??
-            (mode === 'sign-in' ? 'Sign-in failed' : 'Sign-up failed'),
+            (mode === 'sign-in'
+              ? 'Could not sign in. Try again.'
+              : 'Could not make your account. Try again.'),
         )
         setPending(null)
       },
@@ -86,7 +92,9 @@ function LoginPage() {
       setError(
         errorMessage(
           caughtError,
-          mode === 'sign-in' ? 'Sign-in failed' : 'Sign-up failed',
+          mode === 'sign-in'
+            ? 'Could not sign in. Try again.'
+            : 'Could not make your account. Try again.',
         ),
       )
       setPending(null)
@@ -105,7 +113,9 @@ function LoginPage() {
         callbackURL: '/app',
       })
     } catch (caughtError) {
-      setError(errorMessage(caughtError, 'Google sign-in failed'))
+      setError(
+        errorMessage(caughtError, 'Could not sign in with Google. Try again.'),
+      )
       setPending(null)
     }
   }
@@ -119,51 +129,52 @@ function LoginPage() {
   const isBusy = pending !== null
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="page-wrap flex items-center justify-between py-4">
-        <Link to="/" className="flex items-center gap-2.5 no-underline">
-          <span className="grid size-9 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-md">
-            <MisiMark className="size-5" />
-          </span>
+    <div className="app-ground flex flex-col">
+      <header className="page-wrap flex items-center justify-between py-4 sm:py-5">
+        <Link
+          to="/"
+          aria-label="Misi home"
+          className="flex items-center gap-2.5 no-underline"
+        >
+          <BrandMark />
           <span className="font-display text-2xl font-bold tracking-tight text-sea-ink">
             Misi
           </span>
         </Link>
         <ThemeToggle compact />
-      </div>
+      </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 pb-16">
-        <Card
-          variant="island"
-          className="w-full max-w-sm rounded-3xl p-6 sm:p-8"
-        >
-          <div>
-            <p className="island-kicker">Misi</p>
-            <h1 className="font-display mt-2 text-2xl font-bold tracking-tight text-sea-ink">
-              {isSignIn ? 'Sign in' : 'Create your account'}
+      <main className="page-wrap flex flex-1 flex-col items-center justify-center pt-4 pb-16 sm:pb-24">
+        <div className="w-full max-w-md">
+          <div className="text-center">
+            <h1 className="font-display text-[2rem] font-bold tracking-tight text-sea-ink sm:text-4xl">
+              {isSignIn ? 'Sign in' : 'Make an account'}
             </h1>
-            <p className="mt-1 text-[0.9rem] text-sea-ink-soft">
+            <p className="mt-2 text-base text-sea-ink-soft">
               {isSignIn
-                ? 'Your money, flowing in one place.'
-                : 'Start tracking in under a minute.'}
+                ? 'See all your money in one place.'
+                : 'It takes less than a minute.'}
             </p>
+          </div>
 
+          <Card variant="panel" className="mt-6 gap-0 p-6 sm:mt-8 sm:p-8">
             {googleAuthEnabled && (
-              <div className="mt-6 space-y-4">
+              <div className="mb-5 space-y-5">
                 <Button
                   type="button"
                   variant="secondary"
+                  size="lg"
                   className="w-full"
                   disabled={isBusy}
                   onClick={() => void handleGoogleSignIn()}
                 >
-                  <GoogleIcon className="size-4" />
+                  <GoogleIcon className="size-5" />
                   {pending === 'google'
-                    ? 'Redirecting…'
+                    ? 'Opening Google…'
                     : 'Continue with Google'}
                 </Button>
 
-                <div className="flex items-center gap-3 text-[0.75rem] font-semibold tracking-wide text-sea-ink-soft uppercase">
+                <div className="flex items-center gap-3 text-[0.8rem] font-semibold tracking-wide text-sea-ink-soft uppercase">
                   <span className="h-px flex-1 bg-(--chip-line)" />
                   or
                   <span className="h-px flex-1 bg-(--chip-line)" />
@@ -171,13 +182,13 @@ function LoginPage() {
               </div>
             )}
 
-            <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit}>
               {!isSignIn && (
                 <div>
-                  <Label htmlFor="login-name">Name</Label>
+                  <Label htmlFor="login-name">Your name</Label>
                   <Input
                     id="login-name"
-                    className="mt-2"
+                    className={inputClassName}
                     autoComplete="name"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
@@ -189,7 +200,7 @@ function LoginPage() {
                 <Label htmlFor="login-email">Email</Label>
                 <Input
                   id="login-email"
-                  className="mt-2"
+                  className={inputClassName}
                   type="email"
                   autoComplete="email"
                   value={email}
@@ -201,47 +212,67 @@ function LoginPage() {
                 <Label htmlFor="login-password">Password</Label>
                 <Input
                   id="login-password"
-                  className="mt-2"
+                  className={inputClassName}
                   type="password"
                   minLength={8}
                   autoComplete={isSignIn ? 'current-password' : 'new-password'}
+                  aria-describedby={
+                    isSignIn ? undefined : 'login-password-hint'
+                  }
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
                 />
+                {!isSignIn && (
+                  <p
+                    id="login-password-hint"
+                    className="mt-1.5 text-[0.85rem] text-sea-ink-soft"
+                  >
+                    At least 8 letters, numbers or symbols.
+                  </p>
+                )}
               </div>
               {error && (
                 <p
-                  className="text-[0.85rem] font-semibold"
-                  style={{ color: 'var(--coral)' }}
+                  role="alert"
+                  className="flex items-start gap-2 rounded-2xl border border-coral/25 bg-coral/10 px-3.5 py-3 text-[0.9rem] font-semibold text-coral-deep"
                 >
+                  <TriangleAlert
+                    className="mt-0.5 size-4 shrink-0"
+                    strokeWidth={2.4}
+                  />
                   {error}
                 </p>
               )}
-              <Button type="submit" className="w-full" disabled={isBusy}>
+              <Button
+                type="submit"
+                size="lg"
+                className="h-13 w-full text-[1.05rem]"
+                disabled={isBusy}
+              >
                 {isSignIn
                   ? pending === 'email'
                     ? 'Signing in…'
                     : 'Sign in'
                   : pending === 'email'
-                    ? 'Creating…'
-                    : 'Create account'}
+                    ? 'Making your account…'
+                    : 'Make account'}
               </Button>
             </form>
+          </Card>
 
-            <p className="mt-5 text-center text-[0.85rem] text-sea-ink-soft">
-              {isSignIn ? 'New to Misi? ' : 'Already have an account? '}
-              <Button
-                type="button"
-                variant="link"
-                className="h-auto align-baseline text-[0.85rem] font-bold"
-                onClick={toggleMode}
-              >
-                {isSignIn ? 'Create an account' : 'Sign in'}
-              </Button>
-            </p>
-          </div>
-        </Card>
+          <p className="mt-6 text-center text-base text-sea-ink-soft">
+            {isSignIn ? 'New to Misi? ' : 'Have an account? '}
+            <Button
+              type="button"
+              variant="link"
+              className="h-auto align-baseline text-base font-bold text-sea-ink underline hover:text-sea-ink"
+              onClick={toggleMode}
+            >
+              {isSignIn ? 'Make an account' : 'Sign in'}
+            </Button>
+          </p>
+        </div>
       </main>
     </div>
   )
