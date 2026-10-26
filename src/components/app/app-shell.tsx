@@ -3,21 +3,35 @@ import {
   ChartNoAxesCombined,
   ChevronsLeft,
   ChevronsRight,
+  ChevronsUpDown,
   House,
+  LogOut,
   Plus,
   Settings,
   Tags,
+  UserRound,
   Users,
 } from 'lucide-react'
-import { useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
+import { toast } from 'sonner'
 
 import { useOptionalQuickAdd } from '#/components/app/quick-add-provider'
 import { MisiMark } from '#/components/misi-mark'
 import { Button, buttonVariants } from '#/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '#/components/ui/popover'
+import { authClient } from '#/lib/auth-client'
+import { errorMessage } from '#/lib/error-message'
+import { signOut } from '#/lib/sign-out'
 import { cn } from '#/lib/utils'
 
 const DAY_MS = 86_400_000
 const SIDEBAR_STORAGE_KEY = 'misi-sidebar'
+/** Matches the sidebar's `duration-200` width transition. */
+const SIDEBAR_SLIDE_MS = 200
 
 const APP_NAV = [
   { to: '/app', label: 'Home', icon: House, exact: true },
@@ -107,10 +121,95 @@ function AddButton({
 }
 
 const sidebarLinkClassName =
-  'flex h-11 items-center gap-3 rounded-xl px-3 text-[0.95rem] font-semibold text-sea-ink-soft no-underline outline-none transition-colors hover:bg-(--chip-bg) hover:text-sea-ink focus-visible:ring-2 focus-visible:ring-lagoon/45 data-[status=active]:bg-lagoon-deep/12 data-[status=active]:font-bold data-[status=active]:text-sea-ink [&_svg]:size-5 [&_svg]:shrink-0 sidebar-collapsed:h-14 sidebar-collapsed:flex-col sidebar-collapsed:justify-center sidebar-collapsed:gap-1 sidebar-collapsed:px-0 sidebar-collapsed:text-[0.6875rem]'
+  'flex h-11 items-center gap-3 rounded-xl px-3 text-[0.95rem] font-semibold whitespace-nowrap text-sea-ink-soft no-underline outline-none transition-colors hover:bg-(--chip-bg) hover:text-sea-ink focus-visible:ring-2 focus-visible:ring-lagoon/45 data-[status=active]:bg-lagoon-deep/12 data-[status=active]:font-bold data-[status=active]:text-sea-ink [&_svg]:size-5 [&_svg]:shrink-0 sidebar-collapsed:h-14 sidebar-collapsed:flex-col sidebar-collapsed:justify-center sidebar-collapsed:gap-1 sidebar-collapsed:px-0 sidebar-collapsed:text-[0.6875rem]'
+
+function saveSidebarState(collapsed: boolean) {
+  try {
+    if (collapsed) localStorage.setItem(SIDEBAR_STORAGE_KEY, 'collapsed')
+    else localStorage.removeItem(SIDEBAR_STORAGE_KEY)
+  } catch {
+    // Storage can be unavailable (private mode); the toggle still works.
+  }
+}
+
+/** The signed-in user, opening a menu with account settings and sign out. */
+function SidebarUserMenu() {
+  const { data: session } = authClient.useSession()
+  const [signingOut, setSigningOut] = useState(false)
+  const user = session?.user
+  const name = user?.name || 'Your account'
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    try {
+      await signOut()
+    } catch (caught) {
+      setSigningOut(false)
+      toast.error(errorMessage(caught, 'Unable to sign out'))
+    }
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={`Account: ${name}`}
+          className="h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left font-normal sidebar-collapsed:justify-center sidebar-collapsed:px-0"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-lagoon-deep/12 text-lagoon-deep">
+            <UserRound className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1 sidebar-collapsed:hidden">
+            <span className="block truncate text-sm font-bold text-sea-ink">
+              {name}
+            </span>
+            {user?.email && (
+              <span className="block truncate text-xs text-sea-ink-soft">
+                {user.email}
+              </span>
+            )}
+          </span>
+          <ChevronsUpDown className="size-4 text-sea-ink-soft sidebar-collapsed:hidden" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        className="w-64 rounded-2xl border-(--line) bg-(--surface-strong) p-1.5 text-sea-ink backdrop-blur-md"
+      >
+        <div className="px-2.5 py-2">
+          <p className="truncate text-sm font-bold">{name}</p>
+          {user?.email && (
+            <p className="truncate text-xs text-sea-ink-soft">{user.email}</p>
+          )}
+        </div>
+        <div className="my-1 h-px bg-(--line)" />
+        <Link
+          to="/app/settings"
+          className="flex h-10 items-center gap-2.5 rounded-xl px-2.5 text-sm font-semibold text-sea-ink! no-underline hover:bg-(--chip-bg)"
+        >
+          <Settings className="size-4 text-sea-ink-soft" />
+          Account settings
+        </Link>
+        <button
+          type="button"
+          disabled={signingOut}
+          className="flex h-10 w-full items-center gap-2.5 rounded-xl px-2.5 text-sm font-semibold text-sea-ink hover:bg-(--chip-bg) disabled:opacity-60"
+          onClick={() => void handleSignOut()}
+        >
+          <LogOut className="size-4 text-sea-ink-soft" />
+          {signingOut ? 'Signing out…' : 'Sign out'}
+        </button>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 /** Desktop and tablet navigation. Collapses to a labelled rail; Add stays its
- * first, largest item either way. */
+ * first, largest item either way. The width slides: collapsing clips the
+ * expanded content until the rail fades in, expanding reveals it. */
 export function AppSidebar({ cycle }: { cycle?: ShellCycle | null }) {
   const collapsed = useSyncExternalStore(
     subscribeToSidebarState,
@@ -119,89 +218,105 @@ export function AppSidebar({ cycle }: { cycle?: ShellCycle | null }) {
   )
 
   function toggle() {
-    const next = !collapsed
-    if (next) document.documentElement.dataset.sidebar = 'collapsed'
-    else delete document.documentElement.dataset.sidebar
-    try {
-      if (next) localStorage.setItem(SIDEBAR_STORAGE_KEY, 'collapsed')
-      else localStorage.removeItem(SIDEBAR_STORAGE_KEY)
-    } catch {
-      // Storage can be unavailable (private mode); the toggle still works.
+    const root = document.documentElement
+    if (collapsed) {
+      delete root.dataset.sidebar
+      saveSidebarState(false)
+      return
     }
+    if (root.dataset.sidebarMotion) return
+    saveSidebarState(true)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      root.dataset.sidebar = 'collapsed'
+      return
+    }
+    root.dataset.sidebarMotion = 'collapsing'
+    window.setTimeout(() => {
+      root.dataset.sidebar = 'collapsed'
+      delete root.dataset.sidebarMotion
+    }, SIDEBAR_SLIDE_MS)
   }
 
   return (
     <aside
       aria-label="Menu"
-      className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-(--line) bg-(--header-bg) px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 backdrop-blur-md md:flex sidebar-collapsed:w-23 sidebar-collapsed:items-center sidebar-collapsed:px-2.5"
+      className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-(--line) bg-(--header-bg) px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 backdrop-blur-md transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex sidebar-narrow:w-23 sidebar-collapsed:px-2.5"
     >
-      <Link
-        to="/app"
-        aria-label="Misi home"
-        className="flex items-center gap-2.5 px-1 no-underline"
-      >
-        <BrandMark />
-        <span className="font-display text-2xl font-bold tracking-tight text-sea-ink sidebar-collapsed:hidden">
-          Misi
-        </span>
-      </Link>
-
-      <div className="flex flex-col gap-1.5">
-        <AddButton className="h-13 w-full rounded-2xl text-[0.95rem] sidebar-collapsed:size-17 sidebar-collapsed:flex-col sidebar-collapsed:gap-0.5 sidebar-collapsed:rounded-[1.25rem] sidebar-collapsed:text-xs">
-          <Plus className="size-5 sidebar-collapsed:size-6" strokeWidth={2.6} />
-          <span className="sidebar-collapsed:hidden">
-            Add spending or income
-          </span>
-          <span className="hidden sidebar-collapsed:inline">Add</span>
-        </AddButton>
-        <p className="text-center text-xs text-sea-ink-soft sidebar-collapsed:hidden">
-          or press{' '}
-          <kbd className="rounded-md border border-(--line) bg-(--chip-bg) px-1.5 py-0.5 font-sans font-bold text-sea-ink">
-            N
-          </kbd>
-        </p>
-      </div>
-
-      <nav aria-label="App" className="flex w-full flex-col gap-1">
-        {SIDEBAR_NAV.map((item) => {
-          const Icon = item.icon
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              activeOptions={'exact' in item ? { exact: true } : undefined}
-              activeProps={{ 'aria-current': 'page' }}
-              className={sidebarLinkClassName}
-            >
-              <Icon />
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
-
-      <div className="mt-auto flex w-full flex-col gap-2">
-        {cycle && (
-          <div className="rounded-2xl bg-(--chip-bg) px-3.5 py-3 text-[0.8rem] text-sea-ink-soft sidebar-collapsed:hidden">
-            <p className="text-sm font-bold text-sea-ink">This pay month</p>
-            {cycleSummary(cycle)}
-          </div>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Open menu' : 'Collapse menu'}
-          className="h-11 justify-start rounded-xl px-3 font-semibold sidebar-collapsed:justify-center sidebar-collapsed:px-0"
-          onClick={toggle}
+      {/* Fixed width while expanded so the slide clips content instead of
+          reflowing it; the rail layout fades in once the slide ends. */}
+      <div className="flex w-56 flex-1 flex-col gap-5 sidebar-collapsed:w-full sidebar-collapsed:animate-in sidebar-collapsed:items-center sidebar-collapsed:duration-200 sidebar-collapsed:fade-in-0">
+        <Link
+          to="/app"
+          aria-label="Misi home"
+          className="flex items-center gap-2.5 px-1 no-underline"
         >
-          {collapsed ? (
-            <ChevronsRight className="size-5" />
-          ) : (
-            <ChevronsLeft className="size-5" />
+          <BrandMark />
+          <span className="font-display text-2xl font-bold tracking-tight text-sea-ink sidebar-collapsed:hidden">
+            Misi
+          </span>
+        </Link>
+
+        <div className="flex w-full flex-col items-center gap-1.5">
+          <AddButton className="h-13 w-full rounded-2xl text-[0.95rem] sidebar-collapsed:size-17 sidebar-collapsed:flex-col sidebar-collapsed:gap-0.5 sidebar-collapsed:rounded-[1.25rem] sidebar-collapsed:text-xs">
+            <Plus
+              className="size-5 sidebar-collapsed:size-6"
+              strokeWidth={2.6}
+            />
+            <span className="sidebar-collapsed:hidden">
+              Add spending or income
+            </span>
+            <span className="hidden sidebar-collapsed:inline">Add</span>
+          </AddButton>
+          <p className="text-center text-xs whitespace-nowrap text-sea-ink-soft sidebar-collapsed:hidden">
+            or press{' '}
+            <kbd className="rounded-md border border-(--line) bg-(--chip-bg) px-1.5 py-0.5 font-sans font-bold text-sea-ink">
+              N
+            </kbd>
+          </p>
+        </div>
+
+        <nav aria-label="App" className="flex w-full flex-col gap-1">
+          {SIDEBAR_NAV.map((item) => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                activeOptions={'exact' in item ? { exact: true } : undefined}
+                activeProps={{ 'aria-current': 'page' }}
+                className={sidebarLinkClassName}
+              >
+                <Icon />
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+
+        <div className="mt-auto flex w-full flex-col gap-2">
+          {cycle && (
+            <div className="rounded-2xl bg-(--chip-bg) px-3.5 py-3 text-[0.8rem] whitespace-nowrap text-sea-ink-soft sidebar-collapsed:hidden">
+              <p className="text-sm font-bold text-sea-ink">This pay month</p>
+              {cycleSummary(cycle)}
+            </div>
           )}
-          <span className="sidebar-collapsed:hidden">Collapse menu</span>
-        </Button>
+          <SidebarUserMenu />
+          <Button
+            type="button"
+            variant="ghost"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Open menu' : 'Collapse menu'}
+            className="h-11 justify-start rounded-xl px-3 font-semibold sidebar-collapsed:justify-center sidebar-collapsed:px-0"
+            onClick={toggle}
+          >
+            {collapsed ? (
+              <ChevronsRight className="size-5" />
+            ) : (
+              <ChevronsLeft className="size-5" />
+            )}
+            <span className="sidebar-collapsed:hidden">Collapse menu</span>
+          </Button>
+        </div>
       </div>
     </aside>
   )

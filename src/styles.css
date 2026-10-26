@@ -10,6 +10,9 @@
 /* The /app sidebar's collapsed state; set on <html> before first paint (see
    src/routes/__root.tsx) so the layout never jumps after hydration. */
 @custom-variant sidebar-collapsed (&:is([data-sidebar='collapsed'] *));
+/* The sidebar's narrow width: while collapsing it slides shut around the
+   still-expanded content before the rail layout swaps in. */
+@custom-variant sidebar-narrow (&:is([data-sidebar='collapsed'] *, [data-sidebar-motion='collapsing'] *));
 
 :root {
   color-scheme: light;
