@@ -51,6 +51,12 @@
   --card-solid: #ffffff;
   --card-frame: rgba(255, 255, 255, 0.18);
   --card-lift: 0 12px 32px rgba(6, 30, 28, 0.24);
+  /* Water on the ground (water.tsx): waves along the bottom and the wave
+     divider. */
+  --wave-back: rgba(6, 34, 30, 0.1);
+  --wave-front: rgba(6, 34, 30, 0.13);
+  --wave-crest: rgba(255, 255, 255, 0.1);
+  --wave-line: rgba(255, 255, 255, 0.26);
   /* Height of the phone bottom tab bar (app-shell.tsx), safe area included.
      The /app layout's bottom spacing offsets from it. */
   --app-bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
@@ -131,6 +137,10 @@
   --card-solid: #132b2d;
   --card-frame: rgba(255, 255, 255, 0.07);
   --card-lift: 0 14px 36px rgba(0, 0, 0, 0.38);
+  --wave-back: rgba(0, 0, 0, 0.16);
+  --wave-front: rgba(0, 0, 0, 0.2);
+  --wave-crest: rgba(141, 229, 219, 0.1);
+  --wave-line: rgba(141, 229, 219, 0.26);
 
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
@@ -427,6 +437,46 @@ body:has(.app-ground) {
   background: var(--ground-b);
 }
 
+/* Water: the waves drift sideways and the water bar's edge bobs. Each SVG
+   repeats its wave, so shifting by one repeat loops without a jump. */
+@keyframes water-drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes water-bob {
+  to {
+    transform: translateY(33.3333%);
+  }
+}
+
+.water-drift {
+  animation: water-drift 38s linear infinite;
+}
+
+.water-drift-slow {
+  animation: water-drift 64s linear infinite reverse;
+}
+
+.water-bob {
+  animation: water-bob 2.6s linear infinite;
+}
+
+/* A ripple spreads from the Add button as it's pressed. */
+.water-press {
+  transition:
+    box-shadow 600ms ease-out,
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.water-press:active {
+  box-shadow: 0 0 0 10px color-mix(in oklab, var(--lagoon) 30%, transparent);
+  transition: none;
+}
+
 /* Cards on the ground get a solid fill and a see-through frame. */
 .app-ground .island-shell,
 .app-card {
@@ -520,8 +570,15 @@ a {
     scroll-behavior: auto;
   }
 
-  .rise-in {
+  .rise-in,
+  .water-drift,
+  .water-drift-slow,
+  .water-bob {
     animation: none;
+  }
+
+  .water-press {
+    transition: none;
   }
 }
 

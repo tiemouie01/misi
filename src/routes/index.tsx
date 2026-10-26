@@ -17,6 +17,7 @@ import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import { CYCLE, formatK, seedAccounts, seedReconcile } from '#/lib/app-data'
+import { WaterWaves } from '#/components/water'
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -123,6 +124,7 @@ function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
 function Home() {
   return (
     <div id="top" className="app-ground">
+      <WaterWaves />
       <Header />
 
       <main className="page-wrap">

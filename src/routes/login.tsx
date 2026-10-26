@@ -15,6 +15,7 @@ import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { authClient } from '#/lib/auth-client'
 import { errorMessage } from '#/lib/error-message'
+import { WaterWaves } from '#/components/water'
 
 import type { FormEvent } from 'react'
 
@@ -130,6 +131,7 @@ function LoginPage() {
 
   return (
     <div className="app-ground flex flex-col">
+      <WaterWaves />
       <header className="page-wrap flex items-center justify-between py-4 sm:py-5">
         <Link
           to="/"

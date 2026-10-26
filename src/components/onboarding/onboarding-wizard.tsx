@@ -36,6 +36,7 @@ import { errorMessage } from '#/lib/error-message'
 
 import type { FunctionReturnType } from 'convex/server'
 import type { OnboardingDraft, OnboardingStep } from '#/lib/onboarding-data'
+import { WaterWaves } from '#/components/water'
 
 type Prefill = FunctionReturnType<typeof api.misi.onboardingData>
 
@@ -254,6 +255,7 @@ export function OnboardingWizard({
 
   return (
     <div className="app-ground flex flex-col">
+      <WaterWaves />
       <header className="page-wrap flex items-center justify-between gap-3 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
         <span className="flex items-center gap-2.5">
           <BrandMark />

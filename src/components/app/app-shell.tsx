@@ -100,7 +100,7 @@ function AddButton({
       aria-label="Add spending or income"
       aria-keyshortcuts="N"
       title="Add spending or income (N)"
-      className={className}
+      className={cn('water-press', className)}
       onClick={() => quickAdd.openSheet({ mode: 'expense' })}
     >
       {children}
@@ -358,7 +358,7 @@ export function AppBottomNav() {
       <BottomNavLink item={home} />
       <BottomNavLink item={budget} />
       <div className="flex flex-col items-center justify-end pb-1.5">
-        <AddButton className="-mt-7 size-15 rounded-full border-4 border-(--card-solid) p-0 shadow-lg [--btn-a:var(--lagoon)] [--btn-b:var(--lagoon)] [--btn-text:#0d3337] dark:[--btn-text:#06231d]">
+        <AddButton className="-mt-7 size-15 rounded-[50%/46%_46%_54%_54%] border-4 border-(--card-solid) p-0 shadow-lg [--btn-a:var(--lagoon)] [--btn-b:var(--lagoon)] [--btn-text:#0d3337] dark:[--btn-text:#06231d]">
           <Plus className="size-6.5" strokeWidth={2.6} />
         </AddButton>
         <span

@@ -327,15 +327,17 @@ function BudgetHero({
       <p className="text-[2.75rem] leading-none font-extrabold tracking-tight tabular-nums sm:text-6xl">
         {formatBudgetMoney(Math.abs(remaining), currency)}
       </p>
+      {/* Water that drains as money is spent; empty, on a coral track, once
+          over the limit. */}
       <Progress
-        value={Math.min(positiveAmount(totalSpent), spendingLimit)}
+        variant="water"
+        value={Math.max(0, remaining)}
         max={Math.max(spendingLimit, 1)}
-        aria-label="Share of the spending limit used"
-        aria-valuetext={`${formatBudgetPercent(spentPercent)} of the spending limit spent`}
+        aria-label="Money left of the spending limit"
+        aria-valuetext={`${formatBudgetPercent(Math.max(0, 100 - spentPercent))} of the spending limit left`}
         className={cn(
-          'h-2.5 bg-white/16 dark:bg-lagoon-deep/12',
-          LAGOON_PROGRESS,
-          over && '[&_[data-slot=progress-indicator]]:bg-coral',
+          'bg-white/16 dark:bg-lagoon-deep/12',
+          over && 'bg-coral/30 dark:bg-coral/30',
         )}
       />
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">

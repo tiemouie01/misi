@@ -18,6 +18,7 @@ import { useQuickAdd } from '#/components/app/quick-add-provider'
 import { SummaryTiles, spendingPace } from '#/components/app/summary-tiles'
 import { TodoCard } from '#/components/app/todo-card'
 import { TransactionsCard } from '#/components/app/transactions-card'
+import { WaveDivider } from '#/components/water'
 import {
   accountMwkValue,
   canMutateTransaction,
@@ -422,11 +423,13 @@ function AppDashboard({
         />
       </div>
 
+      <WaveDivider className="mt-3 sm:mt-4" />
+
       {/* One column until `xl` (to-do first, then activity); from there the
           activity list takes the wide left column and the rest stack on the
           right. The flexible last row keeps the right-hand cards together
           however long the activity list grows. */}
-      <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:grid-rows-[auto_auto_1fr] xl:items-start">
+      <div className="mt-3 grid gap-4 sm:mt-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:grid-rows-[auto_auto_1fr] xl:items-start">
         <TodoCard
           className="xl:col-start-2"
           autoSave={pendingAutoSave}

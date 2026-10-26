@@ -101,11 +101,16 @@ export function SummaryTiles({
             <p className="text-[2.75rem] leading-none font-extrabold tracking-tight sm:text-6xl">
               {formatK(spendingLeft)}
             </p>
+            {/* Water that drains as money is spent. */}
             <Progress
-              value={Math.min(totalSpent, spendingLimit)}
+              variant="water"
+              value={Math.max(0, spendingLeft)}
               max={spendingLimit}
-              aria-label="Share of this month's plan spent"
-              className="h-2.5 bg-white/16 dark:bg-lagoon-deep/12 [&_[data-slot=progress-indicator]]:bg-none [&_[data-slot=progress-indicator]]:bg-lagoon"
+              aria-label="Money left of this month's plan"
+              className={cn(
+                'bg-white/16 dark:bg-lagoon-deep/12',
+                pace === 'fast' && '[--water:var(--sun)]',
+              )}
             />
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <p className="text-sm text-sea-ink-soft tabular-nums">

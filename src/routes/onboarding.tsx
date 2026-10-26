@@ -8,6 +8,7 @@ import { authClient } from '#/lib/auth-client'
 import { ONBOARDING_STEPS } from '#/lib/onboarding-data'
 
 import type { OnboardingStep } from '#/lib/onboarding-data'
+import { WaterWaves } from '#/components/water'
 
 export const Route = createFileRoute('/onboarding')({
   validateSearch: (search): { step?: OnboardingStep } => ({
@@ -40,6 +41,7 @@ function OnboardingPage() {
   if (isPending) {
     return (
       <div className="app-ground">
+        <WaterWaves />
         <p className="page-wrap py-20 text-center text-sea-ink-soft">
           Loading setup…
         </p>

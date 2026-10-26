@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog'
 import { errorMessage } from '#/lib/error-message'
+import { WaterWaves } from '#/components/water'
 
 const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
 
@@ -164,6 +165,7 @@ function AppLayout() {
   return (
     <QuickAddProvider>
       <div className="app-ground md:flex">
+        <WaterWaves />
         <AppSidebar cycle={data?.currentCycle} />
         <div className="min-w-0 flex-1">
           <AppMobileHeader />
