@@ -44,6 +44,13 @@
   --btn-b: #1d5138;
   --btn-text: #ffffff;
   --link-hover: #246f76;
+  /* The signed-in app's background (the old hero card's teal) and the solid,
+     framed cards that sit on it. */
+  --ground-a: #1f6e76;
+  --ground-b: #1d5138;
+  --card-solid: #ffffff;
+  --card-frame: rgba(255, 255, 255, 0.18);
+  --card-lift: 0 12px 32px rgba(6, 30, 28, 0.24);
   /* Height of the phone bottom tab bar (app-shell.tsx), safe area included.
      The /app layout's bottom spacing offsets from it. */
   --app-bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
@@ -119,6 +126,11 @@
   --btn-b: #4ea87c;
   --btn-text: #06231d;
   --link-hover: #b8efe5;
+  --ground-a: #10302f;
+  --ground-b: #0b1f17;
+  --card-solid: #132b2d;
+  --card-frame: rgba(255, 255, 255, 0.07);
+  --card-lift: 0 14px 36px rgba(0, 0, 0, 0.38);
 
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
@@ -333,6 +345,95 @@ pre code {
     0 6px 18px rgba(23, 58, 64, 0.08);
   /* Keep the base card on the regular compositor path. Blur is reserved for
      bounded sticky surfaces where it is visible and worth the scroll cost. */
+}
+
+/* The signed-in app sits on a teal ground. Text straight on the ground turns
+   light by flipping the palette; cards and .app-surface reset it from the
+   snapshot body takes of the normal palette. */
+body {
+  --surface-ink: var(--sea-ink);
+  --surface-ink-soft: var(--sea-ink-soft);
+  --surface-lagoon-deep: var(--lagoon-deep);
+  --surface-line: var(--line);
+  --surface-chip-bg: var(--chip-bg);
+  --surface-chip-line: var(--chip-line);
+  --surface-link-bg-hover: var(--link-bg-hover);
+  --surface-link-hover: var(--link-hover);
+  --surface-kicker: var(--kicker);
+  --surface-btn-a: var(--btn-a);
+  --surface-btn-b: var(--btn-b);
+  --surface-btn-text: var(--btn-text);
+}
+
+.app-ground {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  color: var(--sea-ink);
+  --sea-ink: #ffffff;
+  --sea-ink-soft: rgba(255, 255, 255, 0.8);
+  --lagoon-deep: #b8efe5;
+  --line: rgba(255, 255, 255, 0.16);
+  --chip-bg: rgba(255, 255, 255, 0.1);
+  --chip-line: rgba(255, 255, 255, 0.22);
+  --link-bg-hover: rgba(255, 255, 255, 0.16);
+  --link-hover: #ffffff;
+  --kicker: rgba(255, 255, 255, 0.8);
+  --header-bg: rgba(29, 88, 84, 0.8);
+  --btn-a: var(--lagoon);
+  --btn-b: var(--lagoon);
+  --btn-text: #0d3337;
+}
+
+.dark .app-ground {
+  --sea-ink: #eaf6f3;
+  --sea-ink-soft: #afcdc8;
+  --lagoon-deep: #8de5db;
+  --line: rgba(141, 229, 219, 0.14);
+  --chip-bg: rgba(141, 229, 219, 0.08);
+  --chip-line: rgba(141, 229, 219, 0.2);
+  --link-bg-hover: rgba(141, 229, 219, 0.14);
+  --header-bg: rgba(14, 40, 40, 0.82);
+  --btn-text: #06231d;
+}
+
+/* Spans the whole page, so tall pages and full-page captures stay teal. */
+.app-ground::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(160deg, var(--ground-a), var(--ground-b));
+}
+
+.app-ground :is([data-slot='card'], .island-shell, .app-surface) {
+  color: var(--sea-ink);
+  --sea-ink: var(--surface-ink);
+  --sea-ink-soft: var(--surface-ink-soft);
+  --lagoon-deep: var(--surface-lagoon-deep);
+  --line: var(--surface-line);
+  --chip-bg: var(--surface-chip-bg);
+  --chip-line: var(--surface-chip-line);
+  --link-bg-hover: var(--surface-link-bg-hover);
+  --link-hover: var(--surface-link-hover);
+  --kicker: var(--surface-kicker);
+  --btn-a: var(--surface-btn-a);
+  --btn-b: var(--surface-btn-b);
+  --btn-text: var(--surface-btn-text);
+}
+
+/* Overscroll past the ground shows its end colour, not the light body. */
+body:has(.app-ground) {
+  background: var(--ground-b);
+}
+
+/* Cards on the ground get a solid fill and a see-through frame. */
+.app-ground .island-shell,
+.app-card {
+  border: 6px solid var(--card-frame);
+  background: var(--card-solid);
+  background-clip: padding-box;
+  box-shadow: var(--card-lift);
 }
 
 .feature-card {

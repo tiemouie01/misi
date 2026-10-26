@@ -87,7 +87,7 @@ function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'grid size-9 shrink-0 place-items-center rounded-xl bg-linear-to-br from-lagoon-deep to-palm text-(--btn-text) shadow-sm',
+        'grid size-9 shrink-0 place-items-center rounded-xl bg-white/14 text-sea-ink dark:bg-lagoon-deep/12',
         className,
       )}
     >
@@ -112,6 +112,7 @@ function AddButton({
       type="button"
       aria-label="Add spending or income"
       aria-keyshortcuts="N"
+      title="Add spending or income (N)"
       className={className}
       onClick={() => quickAdd.openSheet({ mode: 'expense' })}
     >
@@ -121,7 +122,7 @@ function AddButton({
 }
 
 const sidebarLinkClassName =
-  'flex h-11 items-center gap-3 rounded-xl px-3 text-[0.95rem] font-semibold whitespace-nowrap text-sea-ink-soft no-underline outline-none transition-colors hover:bg-(--chip-bg) hover:text-sea-ink focus-visible:ring-2 focus-visible:ring-lagoon/45 data-[status=active]:bg-lagoon-deep/12 data-[status=active]:font-bold data-[status=active]:text-sea-ink [&_svg]:size-5 [&_svg]:shrink-0 sidebar-collapsed:h-14 sidebar-collapsed:flex-col sidebar-collapsed:justify-center sidebar-collapsed:gap-1 sidebar-collapsed:px-0 sidebar-collapsed:text-[0.6875rem]'
+  'flex h-11 items-center gap-3 rounded-xl px-3 text-[0.95rem] font-semibold whitespace-nowrap text-sea-ink-soft no-underline outline-none transition-colors hover:bg-(--chip-bg) hover:text-sea-ink focus-visible:ring-2 focus-visible:ring-lagoon/45 data-[status=active]:bg-white/12 data-[status=active]:font-bold data-[status=active]:text-sea-ink data-[status=active]:[&_svg]:text-lagoon dark:data-[status=active]:bg-lagoon-deep/10 [&_svg]:size-5 [&_svg]:shrink-0 sidebar-collapsed:h-14 sidebar-collapsed:flex-col sidebar-collapsed:justify-center sidebar-collapsed:gap-1 sidebar-collapsed:px-0 sidebar-collapsed:text-[0.6875rem]'
 
 function saveSidebarState(collapsed: boolean) {
   try {
@@ -158,7 +159,7 @@ function SidebarUserMenu() {
           aria-label={`Account: ${name}`}
           className="h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left font-normal sidebar-collapsed:justify-center sidebar-collapsed:px-0"
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-lagoon-deep/12 text-lagoon-deep">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/14 text-sea-ink dark:bg-lagoon-deep/12">
             <UserRound className="size-5" />
           </span>
           <span className="min-w-0 flex-1 sidebar-collapsed:hidden">
@@ -240,7 +241,7 @@ export function AppSidebar({ cycle }: { cycle?: ShellCycle | null }) {
   return (
     <aside
       aria-label="Menu"
-      className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-(--line) bg-(--header-bg) px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4 backdrop-blur-md transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex sidebar-narrow:w-23 sidebar-collapsed:px-2.5"
+      className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-x-hidden overflow-y-auto px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex sidebar-narrow:w-23 sidebar-collapsed:px-2.5"
     >
       {/* Fixed width while expanded so the slide clips content instead of
           reflowing it; the rail layout fades in once the slide ends. */}
@@ -256,24 +257,16 @@ export function AppSidebar({ cycle }: { cycle?: ShellCycle | null }) {
           </span>
         </Link>
 
-        <div className="flex w-full flex-col items-center gap-1.5">
-          <AddButton className="h-13 w-full rounded-2xl text-[0.95rem] sidebar-collapsed:size-17 sidebar-collapsed:flex-col sidebar-collapsed:gap-0.5 sidebar-collapsed:rounded-[1.25rem] sidebar-collapsed:text-xs">
-            <Plus
-              className="size-5 sidebar-collapsed:size-6"
-              strokeWidth={2.6}
-            />
-            <span className="sidebar-collapsed:hidden">
-              Add spending or income
-            </span>
-            <span className="hidden sidebar-collapsed:inline">Add</span>
-          </AddButton>
-          <p className="text-center text-xs whitespace-nowrap text-sea-ink-soft sidebar-collapsed:hidden">
-            or press{' '}
-            <kbd className="rounded-md border border-(--line) bg-(--chip-bg) px-1.5 py-0.5 font-sans font-bold text-sea-ink">
-              N
-            </kbd>
-          </p>
-        </div>
+        <AddButton className="h-12 w-full justify-start gap-2.5 rounded-2xl pr-3 pl-4 text-base sidebar-collapsed:size-17 sidebar-collapsed:flex-col sidebar-collapsed:justify-center sidebar-collapsed:gap-0.5 sidebar-collapsed:rounded-[1.25rem] sidebar-collapsed:p-0 sidebar-collapsed:text-xs">
+          <Plus className="size-5 sidebar-collapsed:size-6" strokeWidth={2.6} />
+          Add
+          <kbd
+            aria-hidden
+            className="ml-auto grid size-6 place-items-center rounded-md bg-(--btn-text)/15 font-sans text-xs font-bold sidebar-collapsed:hidden"
+          >
+            N
+          </kbd>
+        </AddButton>
 
         <nav aria-label="App" className="flex w-full flex-col gap-1">
           {SIDEBAR_NAV.map((item) => {
@@ -295,7 +288,7 @@ export function AppSidebar({ cycle }: { cycle?: ShellCycle | null }) {
 
         <div className="mt-auto flex w-full flex-col gap-2">
           {cycle && (
-            <div className="rounded-2xl bg-(--chip-bg) px-3.5 py-3 text-[0.8rem] whitespace-nowrap text-sea-ink-soft sidebar-collapsed:hidden">
+            <div className="rounded-2xl border border-(--line) bg-(--chip-bg) px-3.5 py-3 text-[0.8rem] whitespace-nowrap text-sea-ink-soft sidebar-collapsed:hidden">
               <p className="text-sm font-bold text-sea-ink">This pay month</p>
               {cycleSummary(cycle)}
             </div>
@@ -325,7 +318,7 @@ export function AppSidebar({ cycle }: { cycle?: ShellCycle | null }) {
 /** Phone-only top bar; navigation lives in the bottom tab bar. */
 export function AppMobileHeader() {
   return (
-    <header className="sticky top-0 z-20 border-b border-(--line) bg-(--header-bg) pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden">
+    <header className="sticky top-0 z-20 bg-(--header-bg) pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden">
       <div className="page-wrap flex h-15 items-center justify-between gap-3">
         <Link to="/app" className="flex items-center gap-2.5 no-underline">
           <BrandMark className="size-8.5" />
@@ -338,8 +331,8 @@ export function AppMobileHeader() {
           aria-label="Settings"
           activeProps={{ 'aria-current': 'page' }}
           className={cn(
-            buttonVariants({ variant: 'secondary', size: 'icon' }),
-            'size-11 data-[status=active]:border-lagoon-deep/35 data-[status=active]:bg-lagoon-deep/12',
+            buttonVariants({ variant: 'ghost', size: 'icon' }),
+            'size-11 text-sea-ink data-[status=active]:bg-white/12',
           )}
         >
           <Settings className="size-5" />
@@ -373,12 +366,12 @@ export function AppBottomNav() {
   return (
     <nav
       aria-label="App"
-      className="fixed inset-x-0 bottom-0 z-30 grid h-(--app-bottom-nav-h) grid-cols-5 border-t border-(--line) bg-(--header-bg) pr-[max(0.5rem,env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pl-[max(0.5rem,env(safe-area-inset-left))] backdrop-blur-md md:hidden"
+      className="app-surface fixed inset-x-0 bottom-0 z-30 grid h-(--app-bottom-nav-h) grid-cols-5 border-t border-(--line) bg-(--card-solid) shadow-[0_-8px_24px_rgba(6,30,28,0.18)] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[env(safe-area-inset-bottom)] pl-[max(0.5rem,env(safe-area-inset-left))] md:hidden"
     >
       <BottomNavLink item={home} />
       <BottomNavLink item={budget} />
       <div className="flex flex-col items-center justify-end pb-1.5">
-        <AddButton className="-mt-7 size-15 rounded-full border-4 border-(--bg-base) p-0 shadow-lg">
+        <AddButton className="-mt-7 size-15 rounded-full border-4 border-(--card-solid) p-0 shadow-lg [--btn-a:var(--lagoon)] [--btn-b:var(--lagoon)] [--btn-text:#0d3337] dark:[--btn-text:#06231d]">
           <Plus className="size-6.5" strokeWidth={2.6} />
         </AddButton>
         <span

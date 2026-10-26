@@ -426,7 +426,7 @@ function AppDashboard({
           activity list takes the wide left column and the rest stack on the
           right. The flexible last row keeps the right-hand cards together
           however long the activity list grows. */}
-      <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[auto_auto_1fr] xl:items-start">
+      <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:grid-rows-[auto_auto_1fr] xl:items-start">
         <TodoCard
           className="xl:col-start-2"
           autoSave={pendingAutoSave}

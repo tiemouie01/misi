@@ -15,7 +15,7 @@ const badgeVariants = cva(
         secondary: 'border-(--chip-line) bg-(--chip-bg) text-sea-ink-soft',
         outline: 'border-(--chip-line) bg-transparent text-sea-ink',
         success: 'border-palm/20 bg-palm/12 text-palm',
-        destructive: 'border-transparent bg-destructive/12 text-destructive',
+        destructive: 'border-transparent bg-coral/15 text-coral-deep',
       },
     },
     defaultVariants: {

@@ -6,6 +6,7 @@ import {
   Plus,
   Smartphone,
   TrendingUp,
+  Wallet,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -13,6 +14,7 @@ import {
   AddAccountDialog,
   MoveMoneyDialog,
 } from '#/components/app/account-dialogs'
+import { spendingEnvelopeBalance } from '../../../shared/savings'
 import { Button, buttonVariants } from '#/components/ui/button'
 import { Card } from '#/components/ui/card'
 import {
@@ -60,6 +62,8 @@ export function MoneyCard({
   const [moveOpen, setMoveOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const activeAccounts = accounts.filter((account) => !account.archived)
+  const freeToSpend = spendingEnvelopeBalance(spendable, savingsBalance)
+  const usingSavings = freeToSpend < 0
 
   return (
     <Card variant="panel" className={cn('gap-0 p-4 sm:p-5', className)}>
@@ -117,29 +121,60 @@ export function MoneyCard({
         Add account
       </Button>
 
-      <div className="mt-1 flex items-center gap-3 rounded-2xl bg-palm/8 py-2 pr-1.5 pl-3">
-        <PiggyBank className="size-5 shrink-0 text-palm" />
-        <p className="min-w-0 flex-1 text-sm text-sea-ink">
-          {savingsBalance > 0 ? (
-            <>
-              <span className="font-bold tabular-nums">
-                {formatK(savingsBalance)}
-              </span>{' '}
-              kept aside in Savings
-            </>
-          ) : (
-            'Nothing kept aside in Savings yet'
-          )}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-9 px-3 text-lagoon-deep"
-          onClick={() => setMoveOpen(true)}
-        >
-          {savingsBalance > 0 ? 'Move' : 'Save'}
-        </Button>
+      {/* Spendable money split in two: what's free and what's kept aside.
+          The -mx-2/px-3 inset lines the rows up with the accounts above. */}
+      <div
+        className={cn(
+          '-mx-2 mt-1 divide-y divide-(--line) rounded-2xl px-3',
+          usingSavings ? 'bg-coral/10' : 'bg-lagoon-deep/6',
+        )}
+      >
+        <div className="flex items-center gap-3 py-3">
+          <span className="grid size-9 shrink-0 place-items-center">
+            <Wallet
+              className={cn(
+                'size-5',
+                usingSavings ? 'text-coral-deep' : 'text-lagoon-deep',
+              )}
+            />
+          </span>
+          <p className="min-w-0 flex-1 font-semibold text-sea-ink">
+            Free to spend
+            {usingSavings && (
+              <span className="block text-[0.8rem] text-coral-deep">
+                You're using your savings
+              </span>
+            )}
+          </p>
+          <span
+            className={cn(
+              'font-bold tabular-nums',
+              usingSavings ? 'text-coral-deep' : 'text-sea-ink',
+            )}
+          >
+            {formatK(freeToSpend)}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 py-2">
+          <span className="grid size-9 shrink-0 place-items-center">
+            <PiggyBank className="size-5 text-palm" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-sea-ink">Kept aside in Savings</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-7 px-2 text-[0.8rem] font-bold text-lagoon-deep"
+              onClick={() => setMoveOpen(true)}
+            >
+              {savingsBalance > 0 ? 'Move money' : 'Put money aside'}
+            </Button>
+          </div>
+          <span className="font-bold text-sea-ink tabular-nums">
+            {formatK(savingsBalance)}
+          </span>
+        </div>
       </div>
 
       <Link

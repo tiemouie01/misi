@@ -44,15 +44,13 @@ function PaceChip({ pace }: { pace: SpendingPace }) {
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.8rem] font-bold text-sea-ink',
-        pace === 'over' ? 'bg-coral/15' : warn ? 'bg-sun/18' : 'bg-palm/12',
-        // Solid on the filled phone card so the text keeps its contrast.
-        'max-md:bg-(--surface-strong)',
+        pace === 'over' ? 'bg-coral/30' : warn ? 'bg-sun/30' : 'bg-lagoon/22',
       )}
     >
       <Icon
         className={cn(
           'size-3.5',
-          pace === 'over' ? 'text-coral-deep' : warn ? 'text-sun' : 'text-palm',
+          pace === 'over' ? 'text-coral' : warn ? 'text-sun' : 'text-lagoon',
         )}
         strokeWidth={2.4}
       />
@@ -92,28 +90,25 @@ export function SummaryTiles({
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-      {/* Phones get the main number on a filled card, as in the tab-bar
-          layout; wider screens keep all three tiles calm and equal. */}
-      <Card
-        variant="panel"
-        className="col-span-2 gap-3 border-transparent bg-linear-to-br from-(--btn-a) to-(--btn-b) p-5 text-(--btn-text) sm:p-6 md:border-(--line) md:bg-none md:bg-(--surface-strong) md:text-sea-ink xl:col-span-1"
-      >
-        <h2 className="text-[0.95rem] font-semibold opacity-85 md:text-sea-ink-soft md:opacity-100">
+      {/* The main number sits straight on the app's teal ground, not in a
+          card, so it reads first. */}
+      <section className="col-span-2 flex flex-col justify-center gap-3 py-1 xl:col-span-1 xl:pr-4">
+        <h2 className="text-[0.95rem] font-semibold text-sea-ink-soft">
           Left to spend until payday, {paydayLabel}
         </h2>
         {hasPlan ? (
           <>
-            <p className="text-[2.6rem] leading-none font-extrabold tracking-tight sm:text-5xl">
+            <p className="text-[2.75rem] leading-none font-extrabold tracking-tight sm:text-6xl">
               {formatK(spendingLeft)}
             </p>
             <Progress
               value={Math.min(totalSpent, spendingLimit)}
               max={spendingLimit}
               aria-label="Share of this month's plan spent"
-              className="h-2.5 bg-(--btn-text)/25 md:bg-(--line) max-md:[&_[data-slot=progress-indicator]]:bg-none max-md:[&_[data-slot=progress-indicator]]:bg-(--btn-text)"
+              className="h-2.5 bg-white/16 dark:bg-lagoon-deep/12 [&_[data-slot=progress-indicator]]:bg-none [&_[data-slot=progress-indicator]]:bg-lagoon"
             />
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <p className="text-sm opacity-85 tabular-nums md:text-sea-ink-soft md:opacity-100">
+              <p className="text-sm text-sea-ink-soft tabular-nums">
                 {formatK(totalSpent)} spent · Plan: {formatK(spendingLimit)}
               </p>
               <PaceChip pace={pace} />
@@ -121,23 +116,23 @@ export function SummaryTiles({
           </>
         ) : (
           <>
-            <p className="text-[2.6rem] leading-none font-extrabold tracking-tight sm:text-5xl">
+            <p className="text-[2.75rem] leading-none font-extrabold tracking-tight sm:text-6xl">
               {formatK(0)}
             </p>
-            <p className="text-sm opacity-85 md:text-sea-ink-soft md:opacity-100">
+            <p className="text-sm text-sea-ink-soft">
               You haven't planned this month's spending yet.{' '}
               <Link
                 to="/app/budget"
-                className="font-bold text-current underline md:text-lagoon-deep"
+                className="font-bold text-sea-ink! underline"
               >
                 Make a plan
               </Link>
             </p>
           </>
         )}
-      </Card>
+      </section>
 
-      <Card variant="panel" className="gap-1.5 p-4 sm:gap-2 sm:p-6">
+      <Card variant="panel" className="gap-1.5 p-4 sm:gap-2 sm:p-5">
         <h2 className="text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
           You can spend about
         </h2>
@@ -156,7 +151,7 @@ export function SummaryTiles({
         </p>
       </Card>
 
-      <Card variant="panel" className="gap-1.5 p-4 sm:gap-2 sm:p-6">
+      <Card variant="panel" className="gap-1.5 p-4 sm:gap-2 sm:p-5">
         <h2 className="text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
           Total in your accounts
         </h2>

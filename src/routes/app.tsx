@@ -163,7 +163,7 @@ function AppLayout() {
 
   return (
     <QuickAddProvider>
-      <div className="md:flex">
+      <div className="app-ground md:flex">
         <AppSidebar cycle={data?.currentCycle} />
         <div className="min-w-0 flex-1">
           <AppMobileHeader />
@@ -172,7 +172,7 @@ function AppLayout() {
               role="alert"
               className="page-wrap py-4 text-sm font-semibold text-coral-deep"
             >
-              <span className="block rounded-xl bg-coral/8 px-4 py-3">
+              <span className="app-surface block rounded-xl bg-(--card-solid) px-4 py-3">
                 {setupError}
               </span>
             </p>
