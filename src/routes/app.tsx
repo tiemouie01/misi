@@ -10,7 +10,11 @@ import { useConvexAuth, useMutation } from 'convex/react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
-import { AppBottomNav, AppHeader } from '#/components/app/app-header'
+import {
+  AppBottomNav,
+  AppMobileHeader,
+  AppSidebar,
+} from '#/components/app/app-shell'
 import { IncomeSourcesTask } from '#/components/app/income-sources-task'
 import { QuickAddProvider } from '#/components/app/quick-add-provider'
 import { ReconcileTask } from '#/components/app/reconcile-task'
@@ -158,30 +162,35 @@ function AppLayout() {
   }, [categoryCount, data, ensureDefaultCategories, queryClient])
 
   return (
-    <>
-      <AppHeader cycle={data?.currentCycle} />
-      {setupError && categoryCount === 0 && (
-        <p
-          role="alert"
-          className="page-wrap py-4 text-sm font-semibold text-coral-deep"
-        >
-          <span className="block rounded-xl bg-coral/8 px-4 py-3">
-            {setupError}
-          </span>
-        </p>
-      )}
-      <QuickAddProvider>
-        <Outlet />
-      </QuickAddProvider>
-      {/* The only bottom spacing /app pages need: together with <main>'s own
-          bottom padding it keeps the end of the page clear of the quick-add
-          FAB and, on phones, the bottom tab bar under it. */}
-      <div aria-hidden className="h-[calc(var(--app-bottom-nav-h)+4rem)]" />
+    <QuickAddProvider>
+      <div className="md:flex">
+        <AppSidebar cycle={data?.currentCycle} />
+        <div className="min-w-0 flex-1">
+          <AppMobileHeader />
+          {setupError && categoryCount === 0 && (
+            <p
+              role="alert"
+              className="page-wrap py-4 text-sm font-semibold text-coral-deep"
+            >
+              <span className="block rounded-xl bg-coral/8 px-4 py-3">
+                {setupError}
+              </span>
+            </p>
+          )}
+          <Outlet />
+          {/* Together with <main>'s own bottom padding, keeps the end of the
+              page clear of the phone tab bar and its raised Add button. */}
+          <div
+            aria-hidden
+            className="h-[calc(var(--app-bottom-nav-h)+1.5rem)] md:h-8"
+          />
+        </div>
+      </div>
       <AppBottomNav />
       <AppTaskOverlays
         task={task}
         onClose={() => void closeAppTask(navigate)}
       />
-    </>
+    </QuickAddProvider>
   )
 }

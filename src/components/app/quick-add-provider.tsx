@@ -1,10 +1,10 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { createContext, use, useMemo, useState } from 'react'
+import { createContext, use, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { QuickAddFab, QuickAddSheet } from '#/components/app/quick-add'
+import { QuickAddSheet } from '#/components/app/quick-add'
 import { TransactionDeleteDialog } from '#/components/app/transactions-card'
 import {
   canDeleteTransaction,
@@ -37,13 +37,36 @@ export function useQuickAdd() {
   return value
 }
 
+/** For the app shell, which renders before onboarding has finished and so
+ * before quick add is available. */
+export function useOptionalQuickAdd() {
+  return use(QuickAddContext)
+}
+
+/** True when a key press is meant for a text field or an open dialog rather
+ * than a page-wide shortcut. */
+function isTypingOrInDialog(event: KeyboardEvent) {
+  const target = event.target
+  if (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.closest('input, textarea, select, [role="dialog"]'))
+  ) {
+    return true
+  }
+  return (
+    document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
+  )
+}
+
 const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
   timeZone: 'Africa/Blantyre',
 })
 
-/** Owns the quick-add FAB, sheet and delete confirmation for every /app page. */
+/** Owns the quick-add sheet, its N shortcut and delete confirmation for every
+ * /app page. */
 export function QuickAddProvider({ children }: { children: ReactNode }) {
   const { data } = useSuspenseQuery(convexQuery(api.misi.bootstrap, {}))
   if (!data?.settings) return children
@@ -114,6 +137,20 @@ function ReadyQuickAddProvider({
     openSheet(initial)
   }
 
+  useEffect(() => {
+    if (sheet.open) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'n' && event.key !== 'N') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (isTypingOrInDialog(event)) return
+      event.preventDefault()
+      setEditing(null)
+      openSheet({ mode: 'expense' })
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [sheet.open, openSheet])
+
   function requestDelete(transaction: Txn) {
     if (!canDeleteTransaction(transaction)) return
     closeSheet()
@@ -137,9 +174,6 @@ function ReadyQuickAddProvider({
   return (
     <QuickAddContext value={{ openSheet: open, requestDelete }}>
       {children}
-      {!sheet.open && !pendingDelete && (
-        <QuickAddFab onOpen={(initial) => open(initial)} />
-      )}
       {sheet.open && (
         <QuickAddSheet
           initial={sheet.initial}

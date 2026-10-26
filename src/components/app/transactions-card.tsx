@@ -1,10 +1,10 @@
 import {
   ArrowDownToLine,
   ArrowLeftRight,
-  Droplets,
+  PiggyBank,
+  ReceiptText,
   Scale,
   Tag,
-  Trash2,
 } from 'lucide-react'
 
 import { claimFeedTitle } from '../../../shared/claim'
@@ -26,6 +26,7 @@ import {
   formatK,
 } from '#/lib/app-data'
 import { resolveCategory } from '#/lib/categories'
+import { cn } from '#/lib/utils'
 
 import type { PaginationStatus } from 'convex/react'
 import type { Account, Txn } from '#/lib/app-data'
@@ -37,9 +38,9 @@ interface TransactionsCardProps {
   categories: Category[]
   status: PaginationStatus
   onLoadMore: () => void
-  animationDelay: string
   onEdit: (transaction: Txn) => void
   onDelete: (transaction: Txn) => void
+  className?: string
 }
 
 interface TransactionDeleteDialogProps {
@@ -67,10 +68,6 @@ function transactionAmountLabel(transaction: Txn) {
     }
   }
   return formatK(transaction.amount)
-}
-
-function allocationLabel(transaction: Txn) {
-  return transaction.direction === 'toSpending' ? '→ Spending' : '→ Savings'
 }
 
 export function TransactionDeleteDialog({
@@ -126,15 +123,186 @@ export function TransactionDeleteDialog({
   )
 }
 
+interface RowCopy {
+  icon: typeof Tag
+  color: string
+  title: string
+  /** Shown under the title, e.g. the category when the payee differs. */
+  detail?: string
+  /** Where the money came from or went, in plain words. */
+  account: string
+}
+
+function rowCopy(
+  transaction: Txn,
+  accounts: Account[],
+  categories: Category[],
+): RowCopy {
+  const accountName = (id?: string) =>
+    accounts.find((account) => account.id === id)?.name ?? 'an account'
+  const extras = [
+    transaction.items ? `Items: ${transaction.items}` : null,
+    transaction.adjustment ? 'Balance check' : null,
+  ]
+
+  function withExtras(copy: RowCopy): RowCopy {
+    const detail = [copy.detail, ...extras].filter(Boolean).join(' · ')
+    return { ...copy, detail: detail || undefined }
+  }
+
+  switch (transaction.type) {
+    case 'income':
+      return withExtras({
+        icon: ArrowDownToLine,
+        color: 'var(--palm)',
+        title: transaction.payee,
+        account: `Into ${accountName(transaction.accountId)}`,
+      })
+    case 'transfer':
+      return withExtras({
+        icon: ArrowLeftRight,
+        color: 'var(--tide)',
+        title: transaction.payee || 'Moved money',
+        account: transaction.toAccountId
+          ? `${accountName(transaction.accountId)} → ${accountName(transaction.toAccountId)}`
+          : `Savings · ${accountName(transaction.accountId)}`,
+      })
+    case 'allocation':
+      return withExtras({
+        icon: PiggyBank,
+        color: 'var(--lagoon-deep)',
+        title:
+          transaction.direction === 'toSpending'
+            ? 'Taken out of Savings'
+            : 'Put into Savings',
+        account: transaction.autoSave ? 'Auto-save' : 'Savings',
+      })
+    case 'claim':
+      return withExtras({
+        icon: Scale,
+        color: 'var(--coral)',
+        title: transaction.claimAction
+          ? claimFeedTitle(
+              transaction.claimAction,
+              transaction.payee,
+              transaction.adjustPolarity,
+            )
+          : transaction.payee,
+        account: transaction.accountId
+          ? accountName(transaction.accountId)
+          : 'No account',
+      })
+    default: {
+      const category = resolveCategory(categories, transaction.categoryId)
+      const title = transaction.payee || category?.name || 'Spending'
+      return withExtras({
+        icon: category?.icon ?? Tag,
+        color: category?.color ?? 'var(--lagoon-deep)',
+        title,
+        detail: category && category.name !== title ? category.name : undefined,
+        account: `From ${accountName(transaction.accountId)}`,
+      })
+    }
+  }
+}
+
+const rowGridClassName =
+  'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 @xl:grid-cols-[auto_minmax(0,1fr)_minmax(0,13rem)_auto] @xl:gap-x-4'
+
+function TransactionRow({
+  transaction,
+  accounts,
+  categories,
+  onEdit,
+  onDelete,
+}: {
+  transaction: Txn
+  accounts: Account[]
+  categories: Category[]
+  onEdit: (transaction: Txn) => void
+  onDelete: (transaction: Txn) => void
+}) {
+  const copy = rowCopy(transaction, accounts, categories)
+  const Icon = copy.icon
+  const canEdit = canMutateTransaction(transaction)
+  const canDelete = canDeleteTransaction(transaction)
+  const amountLabel = transactionAmountLabel(transaction)
+  const content = (
+    <>
+      <span
+        className="grid size-10 place-items-center rounded-xl"
+        style={{
+          background: `color-mix(in oklab, ${copy.color} 14%, transparent)`,
+          color: copy.color,
+        }}
+      >
+        <Icon className="size-[1.125rem]" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[0.95rem] font-bold text-sea-ink">
+          {copy.title}
+        </span>
+        <span className="block truncate text-[0.8rem] text-sea-ink-soft">
+          <span className="@xl:hidden">
+            {[copy.account, copy.detail].filter(Boolean).join(' · ')}
+          </span>
+          <span className="@max-xl:hidden">{copy.detail}</span>
+        </span>
+      </span>
+      <span className="truncate text-sm text-sea-ink-soft @max-xl:hidden">
+        {copy.account}
+      </span>
+      <span
+        className={cn(
+          'text-right text-[0.95rem] font-bold whitespace-nowrap tabular-nums',
+          transaction.type === 'income'
+            ? 'text-palm'
+            : transaction.type === 'transfer' ||
+                transaction.type === 'allocation'
+              ? 'text-sea-ink-soft'
+              : 'text-sea-ink',
+        )}
+      >
+        {amountLabel}
+      </span>
+    </>
+  )
+
+  if (!canEdit && !canDelete) {
+    return (
+      <li className={cn(rowGridClassName, 'rounded-2xl px-2 py-2.5')}>
+        {content}
+      </li>
+    )
+  }
+
+  return (
+    <li>
+      <Button
+        type="button"
+        variant="ghost"
+        title={canEdit ? 'Change or delete' : 'Delete'}
+        className={cn(
+          rowGridClassName,
+          'h-auto w-full rounded-2xl px-2 py-2.5 text-left font-normal whitespace-normal hover:bg-(--chip-bg)',
+        )}
+        onClick={() => (canEdit ? onEdit(transaction) : onDelete(transaction))}
+      >
+        {content}
+      </Button>
+    </li>
+  )
+}
+
 export function TransactionsCard({
   transactions,
   accounts,
   categories,
   status,
   onLoadMore,
-  animationDelay,
   onEdit,
   onDelete,
+  className,
 }: TransactionsCardProps) {
   const groups = transactions.reduce<Array<{ day: string; txns: Txn[] }>>(
     (result, transaction) => {
@@ -148,182 +316,81 @@ export function TransactionsCard({
 
   return (
     <Card
-      variant="island"
-      className="rise-in gap-0 rounded-3xl p-5 sm:p-6"
-      style={{ animationDelay }}
+      variant="panel"
+      className={cn('@container gap-0 p-4 sm:p-6', className)}
     >
-      <p className="island-kicker">Recent activity</p>
-      {groups.map((group, groupIndex) => {
-        const expenseTotal = group.txns
-          .filter((transaction) => transaction.type === 'expense')
-          .reduce((sum, transaction) => sum + transaction.amount, 0)
-        return (
-          <div key={group.day}>
-            <div
-              className={`${groupIndex === 0 ? 'mt-4' : 'mt-5'} flex items-baseline justify-between`}
-            >
-              <p className="field-label">{group.day}</p>
-              {expenseTotal > 0 && (
-                <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
-                  {formatK(-expenseTotal)}
-                </span>
-              )}
-            </div>
-            <div className="mt-2 space-y-1">
-              {group.txns.map((transaction) => {
-                const account = transaction.accountId
-                  ? accounts.find((item) => item.id === transaction.accountId)
-                  : undefined
-                const toAccount = transaction.toAccountId
-                  ? accounts.find((item) => item.id === transaction.toAccountId)
-                  : undefined
-                const category = resolveCategory(
-                  categories,
-                  transaction.categoryId,
-                )
-                const isAllocation = transaction.type === 'allocation'
-                const isClaim = transaction.type === 'claim'
-                const Icon = isAllocation
-                  ? Droplets
-                  : isClaim
-                    ? Scale
-                    : transaction.type === 'transfer'
-                      ? ArrowLeftRight
-                      : transaction.type === 'income'
-                        ? ArrowDownToLine
-                        : (category?.icon ?? Tag)
-                const color = isAllocation
-                  ? 'var(--lagoon)'
-                  : isClaim
-                    ? 'var(--coral)'
-                    : transaction.type === 'income'
-                      ? 'var(--palm)'
-                      : transaction.type === 'transfer'
-                        ? 'var(--lagoon-deep)'
-                        : (category?.color ?? 'var(--lagoon-deep)')
-                const title = isAllocation
-                  ? allocationLabel(transaction)
-                  : isClaim && transaction.claimAction
-                    ? claimFeedTitle(
-                        transaction.claimAction,
-                        transaction.payee,
-                        transaction.adjustPolarity,
-                      )
-                    : transaction.payee
-                const subline = isAllocation
-                  ? transaction.autoSave
-                    ? 'Auto-save'
-                    : transaction.payee
-                  : isClaim
-                    ? transaction.accountId
-                      ? `Claim · ${account?.name ?? 'Account'}`
-                      : 'Claim · no account'
-                    : transaction.type === 'transfer'
-                      ? transaction.toAccountId
-                        ? `${account?.name ?? 'Account'} → ${toAccount?.name ?? 'Account'}`
-                        : `Savings · ${account?.name ?? 'Account'}`
-                      : transaction.type === 'income'
-                        ? `Income · ${account?.name ?? 'Account'}`
-                        : `${category?.name ?? transaction.categoryId ?? 'Expense'} · ${account?.name ?? 'Account'}`
-                const amountLabel = transactionAmountLabel(transaction)
-                const canEdit = canMutateTransaction(transaction)
-                const canDelete = canDeleteTransaction(transaction)
-                return (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center gap-0.5"
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={!canEdit}
-                      aria-label={
-                        canEdit
-                          ? transaction.autoSave
-                            ? `Edit ${title}`
-                            : `Edit ${title} transaction`
-                          : undefined
-                      }
-                      title={
-                        canEdit
-                          ? transaction.autoSave
-                            ? 'Edit auto-save'
-                            : 'Edit transaction'
-                          : isAllocation
-                            ? 'Envelope moves can be deleted but not edited'
-                            : 'Generated transactions cannot be edited'
-                      }
-                      className="group h-auto min-w-0 flex-1 justify-start gap-2.5 whitespace-normal rounded-xl px-1.5 py-2.5 text-left disabled:opacity-100 sm:gap-3 sm:px-2"
-                      onClick={() => onEdit(transaction)}
-                    >
-                      <span
-                        className="grid size-8 shrink-0 place-items-center rounded-lg sm:size-9"
-                        style={{
-                          background: `color-mix(in oklab, ${color} 14%, transparent)`,
-                          color,
-                        }}
-                      >
-                        <Icon className="size-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold text-sea-ink">
-                          {title}
-                        </span>
-                        <span className="block truncate text-[0.75rem] text-sea-ink-soft">
-                          {subline}
-                          {transaction.items && (
-                            <>
-                              {' · '}
-                              <span className="italic">
-                                items: {transaction.items}
-                              </span>
-                            </>
-                          )}
-                          {transaction.adjustment && ' · Reconcile'}
-                        </span>
-                      </span>
-                      <span
-                        className={`font-mono shrink-0 text-sm font-semibold tabular-nums ${
-                          transaction.type === 'income'
-                            ? 'text-palm'
-                            : transaction.type === 'transfer' || isAllocation
-                              ? 'text-sea-ink-soft'
-                              : 'text-sea-ink'
-                        }`}
-                      >
-                        {amountLabel}
-                      </span>
-                    </Button>
-                    {canDelete && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Delete ${title} transaction`}
-                        title="Delete transaction"
-                        className="size-10 shrink-0 text-sea-ink-soft hover:bg-coral/10 hover:text-coral-deep sm:size-9"
-                        onClick={() => onDelete(transaction)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+      <h2 className="px-2 text-lg font-bold text-sea-ink">Recent activity</h2>
+
+      {groups.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+          <span className="grid size-12 place-items-center rounded-2xl bg-lagoon-deep/10 text-lagoon-deep">
+            <ReceiptText className="size-6" />
+          </span>
+          <p className="font-bold text-sea-ink">Nothing recorded yet</p>
+          <p className="max-w-xs text-sm text-sea-ink-soft">
+            Press Add whenever you spend or receive money. It shows up here.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div
+            aria-hidden
+            className={cn(
+              rowGridClassName,
+              'mt-4 border-b border-(--line) px-2 pb-2 text-[0.8rem] font-semibold text-sea-ink-soft @max-xl:hidden',
+            )}
+          >
+            <span className="w-10" />
+            <span>What</span>
+            <span>Account</span>
+            <span className="text-right">Amount</span>
           </div>
-        )
-      })}
-      {(status === 'CanLoadMore' || status === 'LoadingMore') && (
-        <Button
-          type="button"
-          variant="outline"
-          disabled={status === 'LoadingMore'}
-          className="mt-4 w-full"
-          onClick={onLoadMore}
-        >
-          {status === 'LoadingMore' ? 'Loading…' : 'Show more'}
-        </Button>
+          {groups.map((group) => {
+            const spent = group.txns
+              .filter((transaction) => transaction.type === 'expense')
+              .reduce((sum, transaction) => sum + transaction.amount, 0)
+            return (
+              <section key={group.day} className="mt-4 @xl:mt-5">
+                <div className="flex items-baseline justify-between gap-3 px-2">
+                  <h3 className="text-sm font-bold text-sea-ink">
+                    {group.day}
+                  </h3>
+                  {spent > 0 && (
+                    <span className="text-[0.8rem] text-sea-ink-soft tabular-nums">
+                      {formatK(spent)} spent
+                    </span>
+                  )}
+                </div>
+                <ul className="mt-1.5 space-y-0.5">
+                  {group.txns.map((transaction) => (
+                    <TransactionRow
+                      key={transaction.id}
+                      transaction={transaction}
+                      accounts={accounts}
+                      categories={categories}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+          {(status === 'CanLoadMore' || status === 'LoadingMore') && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={status === 'LoadingMore'}
+              className="mt-4 w-full"
+              onClick={onLoadMore}
+            >
+              {status === 'LoadingMore' ? 'Loading…' : 'Show more'}
+            </Button>
+          )}
+          <p className="mt-4 px-2 text-[0.8rem] text-sea-ink-soft">
+            Tap any line to change or delete it.
+          </p>
+        </>
       )}
     </Card>
   )

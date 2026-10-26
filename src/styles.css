@@ -7,6 +7,9 @@
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
+/* The /app sidebar's collapsed state; set on <html> before first paint (see
+   src/routes/__root.tsx) so the layout never jumps after hydration. */
+@custom-variant sidebar-collapsed (&:is([data-sidebar='collapsed'] *));
 
 :root {
   color-scheme: light;
@@ -38,8 +41,8 @@
   --btn-b: #1d5138;
   --btn-text: #ffffff;
   --link-hover: #246f76;
-  /* Height of the mobile bottom tab bar (app-header.tsx), safe area included.
-     The quick-add FAB and the /app layout padding offset from it. */
+  /* Height of the phone bottom tab bar (app-shell.tsx), safe area included.
+     The /app layout's bottom spacing offsets from it. */
   --app-bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
 
   --background: oklch(1 0 0);
@@ -77,7 +80,7 @@
   --sidebar-ring: oklch(0.871 0.006 286.286);
 }
 
-@media (min-width: 40rem) {
+@media (min-width: 48rem) {
   :root {
     --app-bottom-nav-h: 0px;
   }

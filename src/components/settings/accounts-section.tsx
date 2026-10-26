@@ -5,7 +5,7 @@ import { useId, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { AddAccountDialog } from '#/components/app/net-worth-card'
+import { AddAccountDialog } from '#/components/app/account-dialogs'
 import { useQuickAdd } from '#/components/app/quick-add-provider'
 import { SettingsSection } from '#/components/settings/settings-section'
 import { useSettingsData } from '#/components/settings/use-settings-data'
@@ -44,7 +44,7 @@ import { patchAccountOptimistically } from '#/lib/optimistic-settings'
 import { cn } from '#/lib/utils'
 
 import type { Id } from '../../../convex/_generated/dataModel'
-import type { NewAccountInput } from '#/components/app/net-worth-card'
+import type { NewAccountInput } from '#/components/app/account-dialogs'
 import type { Account } from '#/lib/app-data'
 
 const ACCOUNT_KINDS: Account['kind'][] = [

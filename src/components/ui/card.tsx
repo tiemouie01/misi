@@ -13,6 +13,8 @@ const cardVariants = cva(
         default: 'border-(--line) bg-card shadow-sm',
         island: 'island-shell',
         subtle: 'border-(--chip-line) bg-(--chip-bg)',
+        panel:
+          'rounded-3xl border-(--line) bg-(--surface-strong) shadow-[0_1px_2px_rgba(23,58,64,0.05)]',
       },
     },
     defaultVariants: {

@@ -3,7 +3,6 @@ import {
   ChevronDown,
   Delete,
   PiggyBank,
-  Plus,
   Trash2,
 } from 'lucide-react'
 import { useEffect, useEffectEvent, useState } from 'react'
@@ -28,11 +27,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '#/components/ui/popover'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '#/components/ui/tooltip'
 import {
   currencyToMwk,
   formatK,
@@ -89,10 +83,6 @@ interface QuickAddSheetProps {
   onClose: () => void
   onSave: (payload: QuickAddPayload) => void
   onDelete?: () => void
-}
-
-interface QuickAddFabProps {
-  onOpen: (initial: QuickAddInitial) => void
 }
 
 function defaultIncomeSourceId(sources: readonly QuickAddIncomeSource[]) {
@@ -304,27 +294,6 @@ function RecentChips({
           </Button>
         )
       })}
-    </div>
-  )
-}
-
-export function QuickAddFab({ onOpen }: QuickAddFabProps) {
-  return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end p-5 pb-[max(calc(var(--app-bottom-nav-h,0px)+1.25rem),env(safe-area-inset-bottom))] sm:p-6">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            aria-label="Log a transaction"
-            size="icon-lg"
-            className="pointer-events-auto size-14 shadow-lg hover:shadow-xl"
-            onClick={() => onOpen({ mode: 'expense' })}
-          >
-            <Plus className="size-6" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="left">Log a transaction</TooltipContent>
-      </Tooltip>
     </div>
   )
 }

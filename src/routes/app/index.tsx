@@ -1,34 +1,23 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import {
-  createFileRoute,
-  Link,
-  redirect,
-  useHydrated,
-  useNavigate,
-} from '@tanstack/react-router'
+import { createFileRoute, redirect, useHydrated } from '@tanstack/react-router'
 import { useMutation, usePaginatedQuery } from 'convex/react'
-import { ReceiptText, WalletCards, Waves } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { z } from 'zod'
 
 import { api } from '../../../convex/_generated/api'
 import {
   incomeSourceStatus,
   landedAmountForSource,
-  totalActualIncome,
 } from '../../../shared/income'
-import { spendingEnvelopeBalance } from '../../../shared/savings'
-import { DEFAULT_PAYDAY_DAY } from '../../../shared/cycle-period'
 import { greeting } from '#/lib/greeting'
 import { AppProviders } from '#/components/app/app-providers'
-import { AutoSaveCard } from '#/components/app/auto-save-card'
-import { CyclePulseCard } from '#/components/app/cycle-pulse-card'
-import { NetWorthCard } from '#/components/app/net-worth-card'
+import { DebtsCard } from '#/components/app/debts-card'
+import { MoneyCard } from '#/components/app/money-card'
 import { useQuickAdd } from '#/components/app/quick-add-provider'
+import { SummaryTiles, spendingPace } from '#/components/app/summary-tiles'
+import { TodoCard } from '#/components/app/todo-card'
 import { TransactionsCard } from '#/components/app/transactions-card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import {
   accountMwkValue,
   canMutateTransaction,
@@ -37,14 +26,14 @@ import {
   spendableTotalMwk,
 } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { mapDebt } from '#/lib/debts'
 import { errorMessage } from '#/lib/error-message'
 
 import type { FunctionReturnType } from 'convex/server'
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
-import type { AutoSaveStatus } from '#/components/app/auto-save-card'
-import type { NewAccountInput } from '#/components/app/net-worth-card'
-import type { PulseIncomeSource } from '#/components/app/cycle-pulse-card'
-import type { Account, Txn, Wallet } from '#/lib/app-data'
+import type { Doc } from '../../../convex/_generated/dataModel'
+import type { NewAccountInput } from '#/components/app/account-dialogs'
+import type { TodoIncome } from '#/components/app/todo-card'
+import type { Account, Txn } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
 
 const DAY_MS = 86_400_000
@@ -66,12 +55,6 @@ const dayLabelWithYearFormat = new Intl.DateTimeFormat('en-GB', {
 
 const FEED_PAGE_SIZE = 50
 
-const HOME_TABS = ['activity', 'balances'] as const
-
-/** Below `lg` only one tab shows at a time; wide layouts show both columns. */
-const tabPanelClassName =
-  'min-w-0 data-[state=inactive]:hidden lg:data-[state=inactive]:block'
-
 const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
@@ -91,19 +74,7 @@ type ReadyBootstrapData = Omit<BootstrapData, 'oneTapRecents'> & {
   oneTapRecents?: BootstrapData['oneTapRecents']
 }
 
-interface AutoSaveUiState {
-  transactionId: string
-  status: AutoSaveStatus
-  amount: number
-  sourceName: string
-  savingsRate: number
-  occurredAt: number
-}
-
 export const Route = createFileRoute('/app/')({
-  validateSearch: z.object({
-    tab: z.enum(HOME_TABS).optional().catch(undefined),
-  }),
   loader: async ({ context }) => {
     const data = await context.queryClient.ensureQueryData(
       convexQuery(api.misi.bootstrap, {}),
@@ -164,19 +135,6 @@ function toTxn(transaction: Doc<'transactions'>, now: number): Txn {
     adjustment: transaction.adjustment ? true : undefined,
     autoSave: transaction.autoSave ? true : undefined,
   }
-}
-
-/** Distance from the bottom of the (sticky) tab bar to the top of the active
- * panel; negative once the panel has scrolled underneath the bar. */
-function activePanelOffset(
-  tabs: HTMLElement | null,
-  tabList: HTMLElement | null,
-) {
-  const panel = tabs?.querySelector('[role="tabpanel"][data-state="active"]')
-  if (!panel || !tabList) return null
-  return (
-    panel.getBoundingClientRect().top - tabList.getBoundingClientRect().bottom
-  )
 }
 
 function shortDate(timestamp: number) {
@@ -242,39 +200,10 @@ function AppDashboard({
   const confirmAutoSaveMutation = useMutation(api.misi.confirmAutoSave)
   const dismissAutoSaveMutation = useMutation(api.misi.dismissAutoSave)
   const moveSavingsMutation = useMutation(api.misi.moveSavings)
-  const setAccountSpendableMutation = useMutation(api.misi.setAccountSpendable)
   const createAccountMutation = useMutation(api.misi.createAccount)
-  const [localAutoSaveUi, setLocalAutoSaveUi] =
-    useState<AutoSaveUiState | null>(null)
-  const { tab = 'activity' } = Route.useSearch()
-  const navigate = useNavigate({ from: Route.fullPath })
-  const tabsRef = useRef<HTMLDivElement>(null)
-  const tabListRef = useRef<HTMLDivElement>(null)
-  const pinTabPanel = useRef(false)
-
-  // When switching tabs while scrolled under the pinned tab bar, start the new
-  // tab at its top instead of wherever the old tab's scroll position lands.
-  useLayoutEffect(() => {
-    if (!pinTabPanel.current) return
-    pinTabPanel.current = false
-    const offset = activePanelOffset(tabsRef.current, tabListRef.current)
-    if (offset !== null) window.scrollBy({ top: offset - 12 })
-  }, [tab])
-
-  function selectTab(value: string) {
-    const next = HOME_TABS.find((item) => item === value)
-    if (!next || next === tab) return
-    const offset = activePanelOffset(tabsRef.current, tabListRef.current)
-    pinTabPanel.current = offset !== null && offset < 0
-    void navigate({
-      search: (prev) => ({
-        ...prev,
-        tab: next === 'activity' ? undefined : next,
-      }),
-      replace: true,
-      resetScroll: false,
-    })
-  }
+  const [autoSaveBusy, setAutoSaveBusy] = useState(false)
+  const hydrated = useHydrated()
+  const { openSheet, requestDelete } = useQuickAdd()
 
   // Archived accounts stay in the list so history still shows their names;
   // their balance is zero, so totals are unaffected.
@@ -318,36 +247,16 @@ function AppDashboard({
     [feed.status, feed.results, transactions, now],
   )
 
-  const cycleInfo = useMemo(() => {
-    const cycle = data.currentCycle
-    const totalDays = Math.max(
-      1,
-      Math.ceil((cycle.endsAt + 1 - cycle.startsAt) / DAY_MS),
-    )
-    const dayNumber = Math.min(
-      totalDays,
-      Math.max(1, Math.floor((now - cycle.startsAt) / DAY_MS) + 1),
-    )
-    const daysRemaining = Math.max(0, Math.ceil((cycle.endsAt - now) / DAY_MS))
-    const today = new Date(now)
-
-    return {
-      label: cycle.label,
-      spendingLimit: cycle.spendingLimit,
-      totalDays,
-      dayNumber,
-      daysRemaining,
-      dayOf: `day ${dayNumber} of ${totalDays}`,
-      headerBadge: `${cycle.label} · day ${dayNumber}`,
-      greetingDate: greetingDateFormat.format(today),
-      endsOn: shortDate(cycle.endsAt),
-      cycleGain: data.transactions.reduce((sum, transaction) => {
-        if (transaction.type === 'income') return sum + transaction.amount
-        if (transaction.type === 'expense') return sum - transaction.amount
-        return sum
-      }, 0),
-    }
-  }, [data.currentCycle, data.transactions, now])
+  const cycle = data.currentCycle
+  const totalDays = Math.max(
+    1,
+    Math.ceil((cycle.endsAt + 1 - cycle.startsAt) / DAY_MS),
+  )
+  const dayNumber = Math.min(
+    totalDays,
+    Math.max(1, Math.floor((now - cycle.startsAt) / DAY_MS) + 1),
+  )
+  const daysRemaining = Math.max(0, Math.ceil((cycle.endsAt - now) / DAY_MS))
 
   const totalSpent = data.transactions
     .filter(
@@ -356,87 +265,49 @@ function AppDashboard({
         transaction.excludeFromBudget !== true,
     )
     .reduce((sum, transaction) => sum + transaction.amount, 0)
-  const spendingLeft = cycleInfo.spendingLimit - totalSpent
+  const spendingLeft = cycle.spendingLimit - totalSpent
   const perDay =
-    cycleInfo.daysRemaining > 0
-      ? Math.max(0, Math.round(spendingLeft / cycleInfo.daysRemaining))
-      : 0
-  const activeDebts = data.debts.filter((debt) => debt.archivedAt === undefined)
+    daysRemaining > 0
+      ? Math.max(0, Math.round(spendingLeft / daysRemaining))
+      : Math.max(0, spendingLeft)
+
+  const debts = useMemo(() => data.debts.map(mapDebt), [data.debts])
+  const activeDebts = debts.filter((debt) => !debt.archived)
   const youOwe = activeDebts
     .filter((debt) => debt.direction === 'you_owe')
     .reduce((sum, debt) => sum + debt.remaining, 0)
   const owedToYou = activeDebts
     .filter((debt) => debt.direction === 'owed_to_you')
     .reduce((sum, debt) => sum + debt.remaining, 0)
-  const netWorth =
-    accounts.reduce(
-      (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
-      0,
-    ) +
-    owedToYou -
-    youOwe
+
+  const activeAccounts = accounts.filter((account) => !account.archived)
+  const totalInAccounts = activeAccounts.reduce(
+    (sum, account) => sum + accountMwkValue(account, data.settings.usdRate),
+    0,
+  )
   const spendable = spendableTotalMwk(accounts, data.settings.usdRate)
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
-  const spendingEnvelope = spendingEnvelopeBalance(spendable, savingsBalance)
 
-  const incomeSources = useMemo<PulseIncomeSource[]>(
+  const pendingIncome = useMemo<TodoIncome[]>(
     () =>
-      data.cycleIncomePlans.map((plan) => {
-        const landedAmount = landedAmountForSource(
-          data.transactions,
-          plan.sourceId,
-        )
-        return {
-          id: plan.sourceId,
-          name: plan.sourceName,
-          expectedAmount: plan.expectedAmount,
-          expectedAmountMax: plan.expectedAmountMax,
-          landedAmount,
-          status: incomeSourceStatus(landedAmount, plan.expectedAmount),
-        }
+      data.cycleIncomePlans.flatMap((plan) => {
+        const landed = landedAmountForSource(data.transactions, plan.sourceId)
+        const status = incomeSourceStatus(landed, plan.expectedAmount)
+        if (status === 'landed' || plan.expectedAmount <= 0) return []
+        return [
+          {
+            id: plan.sourceId,
+            name: plan.sourceName,
+            amount: Math.max(0, plan.expectedAmount - landed),
+            partial: status === 'partial',
+          },
+        ]
       }),
     [data.cycleIncomePlans, data.transactions],
   )
-  const incomeLanded = totalActualIncome(data.transactions)
 
-  const envelopes: Wallet[] = [
-    {
-      id: 'spending',
-      name: 'Spending',
-      balance: spendingEnvelope,
-      currency: 'MWK',
-      detail:
-        spendingEnvelope < 0
-          ? 'Cutting into savings'
-          : 'Unallocated spendable money',
-    },
-    {
-      id: 'savings',
-      name: 'Savings',
-      balance: savingsBalance,
-      currency: 'MWK',
-    },
-  ]
-  const hydrated = useHydrated()
-  const { openSheet, requestDelete } = useQuickAdd()
-
-  const pendingAutoSave = data.pendingAutoSave
-  const autoSaveUi: AutoSaveUiState | null = pendingAutoSave
-    ? localAutoSaveUi?.transactionId === pendingAutoSave.transactionId
-      ? localAutoSaveUi
-      : {
-          transactionId: pendingAutoSave.transactionId,
-          status: 'proposed',
-          amount: pendingAutoSave.amount,
-          sourceName: pendingAutoSave.sourceName,
-          savingsRate: pendingAutoSave.savingsRate,
-          occurredAt: pendingAutoSave.occurredAt,
-        }
-    : localAutoSaveUi?.status === 'saved' ||
-        localAutoSaveUi?.status === 'dismissed'
-      ? localAutoSaveUi
-      : null
+  const pendingAutoSave = data.pendingAutoSave ?? null
 
   function editTransaction(transaction: Txn) {
     if (!canMutateTransaction(transaction)) return
@@ -467,36 +338,36 @@ function AppDashboard({
     )
   }
 
-  async function confirmAutoSave() {
-    if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
+  async function confirmAutoSave(amount: number) {
+    if (!pendingAutoSave || autoSaveBusy) return
+    setAutoSaveBusy(true)
     try {
       await confirmAutoSaveMutation({
-        transactionId: autoSaveUi.transactionId as Id<'transactions'>,
-        amount: autoSaveUi.amount,
+        transactionId: pendingAutoSave.transactionId,
+        amount,
       })
-      setLocalAutoSaveUi({ ...autoSaveUi, status: 'saved' })
-      toast.success('Saved to savings')
+      toast.success(`${formatK(amount)} saved`)
     } catch (error) {
-      toast.error(
-        errorMessage(error, 'Unable to confirm auto-save. Try again.'),
-      )
+      toast.error(errorMessage(error, 'Unable to save that. Try again.'))
       console.error('Unable to confirm auto-save', error)
+    } finally {
+      setAutoSaveBusy(false)
     }
   }
 
   async function dismissAutoSave() {
-    if (!autoSaveUi || autoSaveUi.status !== 'proposed') return
+    if (!pendingAutoSave || autoSaveBusy) return
+    setAutoSaveBusy(true)
     try {
       await dismissAutoSaveMutation({
-        transactionId: autoSaveUi.transactionId as Id<'transactions'>,
-        amount: autoSaveUi.amount,
+        transactionId: pendingAutoSave.transactionId,
+        amount: pendingAutoSave.amount,
       })
-      setLocalAutoSaveUi({ ...autoSaveUi, status: 'dismissed' })
     } catch (error) {
-      toast.error(
-        errorMessage(error, 'Unable to dismiss auto-save. Try again.'),
-      )
+      toast.error(errorMessage(error, 'Unable to dismiss that. Try again.'))
       console.error('Unable to dismiss auto-save', error)
+    } finally {
+      setAutoSaveBusy(false)
     }
   }
 
@@ -514,144 +385,84 @@ function AppDashboard({
     }
   }
 
-  function setAccountSpendable(accountId: string, includeInSpendable: boolean) {
-    void setAccountSpendableMutation({
-      accountId: accountId as Id<'accounts'>,
-      includeInSpendable,
-    }).catch((error) => {
-      toast.error(errorMessage(error, 'Unable to update account. Try again.'))
-      console.error('Unable to update account spendable flag', error)
-    })
-  }
-
   async function createAccount(input: NewAccountInput) {
     await createAccountMutation(input)
     toast.success(`${input.name} added`)
   }
 
   return (
-    <div className="min-h-screen">
-      <main className="page-wrap py-6 sm:py-8">
-        {/* Phones and tablets get Activity / Balances tabs under a sticky bar;
-            from `lg` both panels sit side by side as two columns. Flex (not
-            grid) below `lg` so the sticky bar can pin across either panel. */}
-        <Tabs
-          ref={tabsRef}
-          value={tab}
-          onValueChange={selectTab}
-          className="gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:items-start"
-        >
-          <div className="min-w-0 space-y-5">
-            <section>
-              <p className="island-kicker">
-                {cycleInfo.greetingDate} · {cycleInfo.label} · {cycleInfo.dayOf}
-              </p>
-              <h1 className="font-display mt-2 text-3xl font-bold tracking-tight text-sea-ink sm:text-4xl">
-                {greeting(hydrated ? new Date() : null, data.userName)}
-              </h1>
-              <p className="mt-1.5 text-[0.95rem] text-sea-ink-soft">
-                <span className="font-mono font-semibold text-sea-ink tabular-nums">
-                  {formatK(spendingLeft)}
-                </span>{' '}
-                left in Spending —{' '}
-                <span className="font-mono font-semibold text-sea-ink tabular-nums">
-                  {formatK(perDay)}
-                </span>
-                /day until {cycleInfo.endsOn}.
-              </p>
-            </section>
-            {autoSaveUi && (
-              <AutoSaveCard
-                status={autoSaveUi.status}
-                amount={autoSaveUi.amount}
-                sourceName={autoSaveUi.sourceName}
-                rateLabel={`${Math.round(autoSaveUi.savingsRate * 100)}%`}
-                landedLabel={transactionDayLabel(autoSaveUi.occurredAt, now)}
-                onAmountChange={(amount) =>
-                  setLocalAutoSaveUi({ ...autoSaveUi, amount })
-                }
-                onConfirm={() => void confirmAutoSave()}
-                onDismiss={() => void dismissAutoSave()}
-                animationDelay="60ms"
-              />
-            )}
-          </div>
-          <TabsList
-            ref={tabListRef}
-            aria-label="Home sections"
-            className="sticky top-[calc(4.3125rem+env(safe-area-inset-top))] z-10 h-11 w-full bg-(--surface-strong) shadow-sm backdrop-blur-md lg:hidden"
-          >
-            <TabsTrigger value="activity">
-              <ReceiptText />
-              Activity
-            </TabsTrigger>
-            <TabsTrigger value="balances">
-              <WalletCards />
-              Balances
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent
-            value="activity"
-            forceMount
-            className={`${tabPanelClassName} lg:col-start-1`}
-          >
-            <TransactionsCard
-              transactions={feedTransactions}
-              accounts={accounts}
-              categories={categories}
-              status={feed.status}
-              onLoadMore={() => feed.loadMore(FEED_PAGE_SIZE)}
-              animationDelay="90ms"
-              onEdit={editTransaction}
-              onDelete={requestDelete}
-            />
-          </TabsContent>
-          <TabsContent
-            value="balances"
-            forceMount
-            className={`${tabPanelClassName} space-y-5 lg:col-start-2 lg:row-span-2 lg:row-start-1`}
-          >
-            <NetWorthCard
-              accounts={accounts}
-              envelopes={envelopes}
-              youOwe={youOwe}
-              owedToYou={owedToYou}
-              activeDebtCount={activeDebts.length}
-              netWorth={netWorth}
-              spendable={spendable}
-              savingsBalance={savingsBalance}
-              cycleGain={cycleInfo.cycleGain}
-              usdRate={data.settings.usdRate}
-              paydayDay={data.settings.paydayDay ?? DEFAULT_PAYDAY_DAY}
-              animationDelay="120ms"
-              onMoveSavings={moveSavings}
-              onSetAccountSpendable={setAccountSpendable}
-              onCreateAccount={createAccount}
-            />
-            <CyclePulseCard
-              cycleLabel={cycleInfo.label}
-              spendingLimit={cycleInfo.spendingLimit}
-              totalSpent={totalSpent}
-              spendingLeft={spendingLeft}
-              perDay={perDay}
-              dayNumber={cycleInfo.dayNumber}
-              totalDays={cycleInfo.totalDays}
-              incomeLanded={incomeLanded}
-              incomeSources={incomeSources}
-              animationDelay="150ms"
-            />
-          </TabsContent>
-        </Tabs>
-        <footer className="mt-10 flex flex-col items-start justify-between gap-2 border-t border-(--line) pt-5 text-[0.8rem] text-sea-ink-soft sm:flex-row sm:items-center">
-          <span className="flex items-center gap-2">
-            <Waves className="size-4 text-lagoon-deep" />
-            <span className="font-display font-bold text-sea-ink">Misi</span>
-          </span>
-          <Link to="/" className="font-bold text-lagoon-deep no-underline">
-            ← Back to site
-          </Link>
-        </footer>
-      </main>
-    </div>
+    <main className="page-wrap py-6 sm:py-8">
+      <header>
+        <p className="text-sm text-sea-ink-soft">
+          {greetingDateFormat.format(new Date(now))}
+        </p>
+        <h1 className="font-display mt-1 text-[1.75rem] font-bold tracking-tight text-sea-ink sm:text-4xl">
+          {greeting(hydrated ? new Date() : null, data.userName)}
+        </h1>
+      </header>
+
+      <div className="mt-5 sm:mt-6">
+        <SummaryTiles
+          spendingLeft={spendingLeft}
+          spendingLimit={cycle.spendingLimit}
+          totalSpent={totalSpent}
+          perDay={perDay}
+          daysRemaining={daysRemaining}
+          paydayLabel={shortDate(cycle.endsAt + 1)}
+          pace={spendingPace({
+            spendingLimit: cycle.spendingLimit,
+            totalSpent,
+            dayNumber,
+            totalDays,
+          })}
+          totalInAccounts={totalInAccounts}
+          accountCount={activeAccounts.length}
+          youOwe={youOwe}
+          owedToYou={owedToYou}
+        />
+      </div>
+
+      {/* One column until `xl` (to-do first, then activity); from there the
+          activity list takes the wide left column and the rest stack on the
+          right. The flexible last row keeps the right-hand cards together
+          however long the activity list grows. */}
+      <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[auto_auto_1fr] xl:items-start">
+        <TodoCard
+          className="xl:col-start-2"
+          autoSave={pendingAutoSave}
+          autoSaveBusy={autoSaveBusy}
+          pendingIncome={pendingIncome}
+          onConfirmAutoSave={(amount) => void confirmAutoSave(amount)}
+          onDismissAutoSave={() => void dismissAutoSave()}
+          onIncomeArrived={(income) =>
+            openSheet({
+              mode: 'income',
+              sourceId: income.id,
+              amount: income.amount,
+            })
+          }
+        />
+        <TransactionsCard
+          className="xl:col-start-1 xl:row-span-3 xl:row-start-1"
+          transactions={feedTransactions}
+          accounts={accounts}
+          categories={categories}
+          status={feed.status}
+          onLoadMore={() => feed.loadMore(FEED_PAGE_SIZE)}
+          onEdit={editTransaction}
+          onDelete={requestDelete}
+        />
+        <MoneyCard
+          className="xl:col-start-2"
+          accounts={accounts}
+          usdRate={data.settings.usdRate}
+          spendable={spendable}
+          savingsBalance={savingsBalance}
+          onMoveSavings={moveSavings}
+          onCreateAccount={createAccount}
+        />
+        <DebtsCard className="xl:col-start-2" debts={debts} />
+      </div>
+    </main>
   )
 }
