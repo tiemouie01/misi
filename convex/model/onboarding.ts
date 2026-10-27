@@ -1,7 +1,11 @@
 import { ConvexError, v } from 'convex/values'
 
 import { findAccountNamed, getAccounts, validateAccountName } from './accounts'
-import { assertCategoryPlansFitLimit, getCyclePeriod } from './cycles'
+import {
+  assertCategoryPlansFitLimit,
+  getCyclePeriod,
+  isRecurringIncomeSource,
+} from './cycles'
 import { validateSettingsValues } from './settings'
 
 import type { Id } from '../_generated/dataModel'
@@ -243,10 +247,12 @@ export async function reconcileIncomeSources(
   userId: string,
   incomeSources: Array<OnboardingIncomeSourceInput>,
 ) {
-  const existingSources = await ctx.db
-    .query('incomeSources')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .collect()
+  const existingSources = (
+    await ctx.db
+      .query('incomeSources')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect()
+  ).filter(isRecurringIncomeSource)
 
   const keptSourceIds = new Set<Id<'incomeSources'>>()
   for (const [sortOrder, input] of incomeSources.entries()) {

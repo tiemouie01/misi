@@ -28,6 +28,9 @@ export interface BudgetIncomeSourcePlan {
   status?: 'landed' | 'pending' | 'partial'
   note?: string
   icon?: LucideIcon
+  /** Applies to this cycle only; edited on the Budget page, not with sources. */
+  oneOff?: boolean
+  expectedDay?: number
 }
 
 export interface BudgetCycle {
@@ -37,6 +40,8 @@ export interface BudgetCycle {
   expectedIncome: number
   actualIncome?: number
   unassignedIncome?: number
+  /** Unplanned income into accounts outside free to spend, e.g. investment returns. */
+  investmentIncome?: number
   actualSavings?: number
   actualSpending?: number
   isClosed?: boolean
@@ -79,6 +84,15 @@ export interface BudgetIncomePlanUpdate {
   savingsRate: number
 }
 
+export interface BudgetOneOffIncomeUpdate {
+  cycleId: string
+  /** Set when editing an existing one-off line. */
+  id?: string
+  name: string
+  expectedAmount: number
+  expectedDay?: number
+}
+
 export interface BudgetPageProps {
   cycles: readonly BudgetCycle[]
   history?: readonly BudgetHistoryRow[]
@@ -90,4 +104,6 @@ export interface BudgetPageProps {
   onTabChange?: (tab: BudgetTab) => void
   onManageIncomeSources?: () => void
   onSavePlan?: (update: BudgetPlanUpdate) => void | Promise<void>
+  onSaveOneOffIncome?: (update: BudgetOneOffIncomeUpdate) => Promise<void>
+  onRemoveOneOffIncome?: (id: string) => Promise<void>
 }

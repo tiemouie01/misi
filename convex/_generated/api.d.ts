@@ -18,6 +18,7 @@ import type * as model_checkpoints from "../model/checkpoints.js";
 import type * as model_core from "../model/core.js";
 import type * as model_cycles from "../model/cycles.js";
 import type * as model_debts from "../model/debts.js";
+import type * as model_income from "../model/income.js";
 import type * as model_onboarding from "../model/onboarding.js";
 import type * as model_savings from "../model/savings.js";
 import type * as model_settings from "../model/settings.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   "model/core": typeof model_core;
   "model/cycles": typeof model_cycles;
   "model/debts": typeof model_debts;
+  "model/income": typeof model_income;
   "model/onboarding": typeof model_onboarding;
   "model/savings": typeof model_savings;
   "model/settings": typeof model_settings;

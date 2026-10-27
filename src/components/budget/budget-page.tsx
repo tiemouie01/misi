@@ -7,6 +7,7 @@ import {
   CircleAlert,
   CircleCheck,
   Pencil,
+  Plus,
   ReceiptText,
   Target,
   TrendingUp,
@@ -43,6 +44,7 @@ import {
   spendingLimitForPlans,
 } from '../../../shared/budget-rollover'
 import { incomeSourceStatus } from '../../../shared/income'
+import { OneOffIncomeDialog } from './one-off-income-dialog'
 
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type {
@@ -713,16 +715,17 @@ function IncomeSourcesCard({
   cycle,
   currency,
   onManage,
+  onAddOneOff,
+  onEditOneOff,
 }: {
   cycle: BudgetCycle
   currency: string
   onManage?: () => void
+  onAddOneOff?: () => void
+  onEditOneOff?: (source: BudgetIncomeSourcePlan) => void
 }) {
   const sources = cycle.incomeSources ?? []
-  const planned = sources.reduce(
-    (total, source) => total + positiveAmount(source.expectedAmount),
-    0,
-  )
+  const planned = positiveAmount(cycle.expectedIncome)
   const actual = sources.reduce(
     (total, source) => total + positiveAmount(source.actualAmount),
     0,
@@ -735,21 +738,57 @@ function IncomeSourcesCard({
   const actualTotal = Math.max(totalActual, actual + unassigned)
   const actualPercent =
     planned > 0 ? clampPercent((actualTotal / planned) * 100) : 0
-  const unassignedNotice =
-    unassigned > 0 ? (
-      <div className="rounded-2xl bg-sun/12 px-3.5 py-3 text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-semibold text-sea-ink">
-            Income without a source
-          </span>
-          <span className="font-bold text-sea-ink tabular-nums">
-            {formatBudgetMoney(unassigned, currency)}
-          </span>
+  const investment = Math.min(
+    unassigned,
+    positiveAmount(cycle.investmentIncome),
+  )
+  const unassignedNotice = (
+    <>
+      {unassigned - investment > 0 ? (
+        <div className="rounded-2xl bg-sun/12 px-3.5 py-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-sea-ink">
+              Income without a source
+            </span>
+            <span className="font-bold text-sea-ink tabular-nums">
+              {formatBudgetMoney(unassigned - investment, currency)}
+            </span>
+          </div>
+          <p className="mt-1 text-[0.8rem] text-sea-ink-soft">
+            Counted in income expected, but not linked to one of your paydays.
+          </p>
         </div>
-        <p className="mt-1 text-[0.8rem] text-sea-ink-soft">
-          Counted in the total, but not linked to one of your paydays.
-        </p>
-      </div>
+      ) : null}
+      {investment > 0 ? (
+        <div className="rounded-2xl bg-lagoon-deep/6 px-3.5 py-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-sea-ink">
+              Investment returns
+            </span>
+            <span className="font-bold text-sea-ink tabular-nums">
+              {formatBudgetMoney(investment, currency)}
+            </span>
+          </div>
+          <p className="mt-1 text-[0.8rem] text-sea-ink-soft">
+            Counted as income this cycle. It stays in your investment accounts,
+            so it isn&apos;t free to spend until you move it.
+          </p>
+        </div>
+      ) : null}
+    </>
+  )
+  const addOneOffButton =
+    onAddOneOff && !cycle.isClosed ? (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="self-start max-sm:h-10"
+        onClick={onAddOneOff}
+      >
+        <Plus aria-hidden="true" />
+        Add one-off income
+      </Button>
     ) : null
 
   return (
@@ -813,8 +852,20 @@ function IncomeSourcesCard({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-semibold text-sea-ink">
-                        {source.name}
+                      <p className="flex min-w-0 items-center gap-1 font-semibold text-sea-ink">
+                        <span className="truncate">{source.name}</span>
+                        {source.oneOff && onEditOneOff && !cycle.isClosed ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="-my-1 shrink-0 text-sea-ink-soft"
+                            aria-label={`Edit ${source.name}`}
+                            onClick={() => onEditOneOff(source)}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </Button>
+                        ) : null}
                       </p>
                       <Badge
                         variant={
@@ -853,6 +904,7 @@ function IncomeSourcesCard({
             })}
           </ul>
           {unassignedNotice}
+          {addOneOffButton}
         </>
       ) : (
         <>
@@ -860,6 +912,7 @@ function IncomeSourcesCard({
           <p className="rounded-2xl bg-lagoon-deep/6 px-4 py-5 text-sm text-sea-ink-soft">
             No income sources have been added to this cycle yet.
           </p>
+          {addOneOffButton}
         </>
       )}
     </Card>
@@ -1343,12 +1396,18 @@ export function BudgetPage({
   onTabChange,
   onManageIncomeSources,
   onSavePlan,
+  onSaveOneOffIncome,
+  onRemoveOneOffIncome,
 }: BudgetPageProps) {
   const selectedCycle =
     cycles.find((cycle) => cycle.id === currentCycleId) ?? cycles.at(0)
   const [activeTab, setActiveTab] = useState<BudgetTab>(defaultTab)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [draft, setDraft] = useState<BudgetDraft | undefined>()
+  const [oneOffDialog, setOneOffDialog] = useState<{
+    open: boolean
+    income?: BudgetIncomeSourcePlan
+  }>({ open: false })
 
   if (!selectedCycle) {
     return (
@@ -1360,6 +1419,8 @@ export function BudgetPage({
 
   const expectedIncome = positiveAmount(selectedCycle.expectedIncome)
   const actualIncome = positiveAmount(selectedCycle.actualIncome)
+  const investmentIncome = positiveAmount(selectedCycle.investmentIncome)
+  const editingOneOff = oneOffDialog.income
   const plannedSavings = plannedSavingsTotal(selectedCycle.incomeSources)
   const actualSavings = positiveAmount(selectedCycle.actualSavings)
   const spendingLimit = positiveAmount(selectedCycle.spendingLimit)
@@ -1441,7 +1502,11 @@ export function BudgetPage({
           value={formatBudgetMoney(expectedIncome, currency)}
           detail={
             actualIncome > 0
-              ? `${formatBudgetMoney(actualIncome, currency)} arrived so far`
+              ? `${formatBudgetMoney(actualIncome, currency)} arrived so far${
+                  investmentIncome > 0
+                    ? `, ${formatBudgetMoney(investmentIncome, currency)} of it in investments`
+                    : ''
+                }`
               : 'Nothing arrived yet'
           }
         />
@@ -1494,6 +1559,16 @@ export function BudgetPage({
               cycle={selectedCycle}
               currency={currency}
               onManage={onManageIncomeSources}
+              onAddOneOff={
+                onSaveOneOffIncome
+                  ? () => setOneOffDialog({ open: true })
+                  : undefined
+              }
+              onEditOneOff={
+                onSaveOneOffIncome
+                  ? (income) => setOneOffDialog({ open: true, income })
+                  : undefined
+              }
             />
           </div>
         </TabsContent>
@@ -1513,6 +1588,29 @@ export function BudgetPage({
         onManageIncomeSources={onManageIncomeSources}
         onSave={handleSavePlan}
       />
+      {onSaveOneOffIncome && oneOffDialog.open ? (
+        <OneOffIncomeDialog
+          open
+          income={editingOneOff}
+          cycleLabel={selectedCycle.label}
+          currency={currency}
+          onOpenChange={(open) => {
+            if (!open) setOneOffDialog({ open: false })
+          }}
+          onSave={(input) =>
+            onSaveOneOffIncome({
+              ...input,
+              cycleId: selectedCycle.id,
+              id: editingOneOff?.id,
+            })
+          }
+          onRemove={
+            editingOneOff && onRemoveOneOffIncome
+              ? () => onRemoveOneOffIncome(editingOneOff.id)
+              : undefined
+          }
+        />
+      ) : null}
     </div>
   )
 }

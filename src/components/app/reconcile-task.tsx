@@ -7,12 +7,7 @@ import { toast } from 'sonner'
 import { api } from '../../../convex/_generated/api'
 import { QuickAddSheet } from '#/components/app/quick-add'
 import { ReconcileCard } from '#/components/app/reconcile-card'
-import {
-  isSpendableAccount,
-  mapAccount,
-  resolveQuickAddDefaults,
-  USD_RATE,
-} from '#/lib/app-data'
+import { mapAccount, resolveQuickAddDefaults, USD_RATE } from '#/lib/app-data'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { errorMessage } from '#/lib/error-message'
 import { useQuickAddSheet } from '#/lib/use-quick-add-sheet'
@@ -37,6 +32,7 @@ export function ReconcileTask() {
   const [now] = useState(() => Date.now())
   const { data } = useSuspenseQuery(bootstrapQuery)
   const absorbAdjustmentMutation = useMutation(api.misi.absorbAdjustment)
+  const logInvestmentReturnMutation = useMutation(api.misi.logInvestmentReturn)
   const [actualOverrides, setActualOverrides] = useState<
     Record<string, { expected: number; actual: number } | undefined>
   >({})
@@ -61,10 +57,11 @@ export function ReconcileTask() {
     [data?.categories],
   )
 
+  // Investment accounts are checked too, so a return can be logged as income.
   const expectedBalances = useMemo(
     () =>
       accounts
-        .filter((account) => !account.archived && isSpendableAccount(account))
+        .filter((account) => !account.archived)
         .map((account) => ({
           accountId: account.id,
           expected: account.balance,
@@ -130,6 +127,24 @@ export function ReconcileTask() {
     }
   }
 
+  async function logInvestmentReturn(accountId: string) {
+    const balance = reconcile.find((item) => item.accountId === accountId)
+    if (!balance) return
+    try {
+      await logInvestmentReturnMutation({
+        accountId: accountId as Id<'accounts'>,
+        actual: balance.actual,
+        note: reconcileNote,
+      })
+      toast.success('Investment return logged as income')
+    } catch (error) {
+      toast.error(
+        errorMessage(error, 'Unable to log the investment return. Try again.'),
+      )
+      console.error('Unable to log investment return', error)
+    }
+  }
+
   return (
     <>
       <ReconcileCard
@@ -153,6 +168,7 @@ export function ReconcileTask() {
           }))
         }
         onAbsorb={(accountId) => void absorbAdjustment(accountId)}
+        onLogReturn={(accountId) => void logInvestmentReturn(accountId)}
         onLogMissing={openSheet}
         animationDelay="60ms"
         usdRate={data?.settings?.usdRate ?? USD_RATE}

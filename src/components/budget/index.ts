@@ -13,6 +13,7 @@ export type {
   BudgetHistoryRow,
   BudgetIncomeSourcePlan,
   BudgetIncomePlanUpdate,
+  BudgetOneOffIncomeUpdate,
   BudgetPageProps,
   BudgetPlanUpdate,
   BudgetTab,

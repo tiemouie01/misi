@@ -16,6 +16,7 @@ import type { Id } from '../../../convex/_generated/dataModel'
 import type {
   BudgetCycle,
   BudgetHistoryRow,
+  BudgetOneOffIncomeUpdate,
   BudgetPlanUpdate,
 } from '#/components/budget'
 
@@ -53,6 +54,11 @@ function expectedWindow(start: number, end: number) {
   return `Expected days ${start}–${end}`
 }
 
+/** One-offs store "any day" as the whole month, days 1–31. */
+function oneOffExpectedDay(start: number, end: number) {
+  return start === end ? start : undefined
+}
+
 function BudgetRoute() {
   const { now } = Route.useLoaderData()
   const navigate = useNavigate({ from: Route.fullPath })
@@ -60,6 +66,9 @@ function BudgetRoute() {
   const { data: bootstrap } = useSuspenseQuery(bootstrapQuery)
   const { data: overview } = useSuspenseQuery(budgetOverviewQuery)
   const saveCyclePlan = useMutation(api.misi.saveCyclePlan)
+  const addOneOffIncome = useMutation(api.misi.addOneOffIncome)
+  const updateOneOffIncome = useMutation(api.misi.updateOneOffIncome)
+  const removeOneOffIncome = useMutation(api.misi.removeOneOffIncome)
   const ensureSeedData = useMutation(api.misi.ensureSeedData)
   const [selectedCycleId, setSelectedCycleId] = useState<string>()
   const [rolloverError, setRolloverError] = useState<string | null>(null)
@@ -114,9 +123,10 @@ function BudgetRoute() {
           id: view.cycle._id,
           label: view.cycle.label,
           rangeLabel: `${shortDate(view.cycle.startsAt)} – ${shortDate(view.cycle.endsAt)}`,
-          expectedIncome: view.plannedIncome,
+          expectedIncome: view.expectedIncome,
           actualIncome: view.actualIncome,
           unassignedIncome: view.unassignedIncome,
+          investmentIncome: view.investmentIncome,
           actualSavings: view.actualSavings,
           actualSpending: view.actualSpending,
           isClosed: view.cycle.endsAt < now,
@@ -141,22 +151,36 @@ function BudgetRoute() {
                   : undefined,
               }
             }),
-          incomeSources: view.incomePlans.map((source) => ({
-            id: source.sourceId,
-            name: source.sourceName,
-            expectedAmount: source.expectedAmount,
-            expectedAmountMax: source.expectedAmountMax,
-            actualAmount: source.actualAmount,
-            savingsRate: source.savingsRate,
-            status: incomeSourceStatus(
-              source.actualAmount,
-              source.expectedAmount,
-            ),
-            note: expectedWindow(
-              source.expectedDayStart,
-              source.expectedDayEnd,
-            ),
-          })),
+          incomeSources: view.incomePlans.map((source) => {
+            const expectedDay = source.oneOff
+              ? oneOffExpectedDay(
+                  source.expectedDayStart,
+                  source.expectedDayEnd,
+                )
+              : undefined
+            return {
+              id: source.sourceId,
+              name: source.sourceName,
+              expectedAmount: source.expectedAmount,
+              expectedAmountMax: source.expectedAmountMax,
+              actualAmount: source.actualAmount,
+              savingsRate: source.savingsRate,
+              status: incomeSourceStatus(
+                source.actualAmount,
+                source.expectedAmount,
+              ),
+              note: source.oneOff
+                ? expectedDay === undefined
+                  ? 'One-off, this cycle only'
+                  : `One-off · expected on day ${expectedDay}`
+                : expectedWindow(
+                    source.expectedDayStart,
+                    source.expectedDayEnd,
+                  ),
+              oneOff: source.oneOff,
+              expectedDay,
+            }
+          }),
         }
       }),
     [categoriesByKey, now, overview.cycles],
@@ -211,6 +235,40 @@ function BudgetRoute() {
     }
   }
 
+  async function refreshBudget() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: budgetOverviewQuery.queryKey }),
+      queryClient.invalidateQueries({ queryKey: bootstrapQuery.queryKey }),
+    ])
+  }
+
+  async function saveOneOffIncome(update: BudgetOneOffIncomeUpdate) {
+    const input = {
+      name: update.name,
+      expectedAmount: update.expectedAmount,
+      expectedDay: update.expectedDay,
+    }
+    if (update.id) {
+      await updateOneOffIncome({
+        sourceId: update.id as Id<'incomeSources'>,
+        ...input,
+      })
+    } else {
+      await addOneOffIncome({
+        cycleId: update.cycleId as Id<'cycles'>,
+        ...input,
+      })
+    }
+    await refreshBudget()
+    toast.success(update.id ? 'One-off income updated' : 'One-off income added')
+  }
+
+  async function deleteOneOffIncome(id: string) {
+    await removeOneOffIncome({ sourceId: id as Id<'incomeSources'> })
+    await refreshBudget()
+    toast.success('One-off income removed')
+  }
+
   return (
     <AppProviders>
       <main className="page-wrap py-6 sm:py-8">
@@ -231,6 +289,8 @@ function BudgetRoute() {
               })
             }
             onSavePlan={savePlan}
+            onSaveOneOffIncome={saveOneOffIncome}
+            onRemoveOneOffIncome={deleteOneOffIncome}
           />
         )}
       </main>
