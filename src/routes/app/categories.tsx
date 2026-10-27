@@ -416,11 +416,8 @@ function CategoryDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        sheet
-        className="gap-0 rounded-3xl border-(--line) bg-(--surface-strong) shadow-2xl backdrop-blur-md sm:max-w-md"
-      >
-        <DialogTitle className="font-display text-xl font-bold text-sea-ink">
+      <DialogContent sheet className="gap-0 sm:max-w-md">
+        <DialogTitle className="pr-10">
           {editor.category ? 'Edit category' : 'Add category'}
         </DialogTitle>
         <DialogDescription className="sr-only">
@@ -428,7 +425,7 @@ function CategoryDialog({
         </DialogDescription>
 
         <div className="mt-5 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-(--chip-line) bg-(--chip-bg) px-3.5 py-2 text-sm font-bold text-sea-ink">
+          <span className="inline-flex items-center gap-2 rounded-full bg-lagoon-deep/10 px-3.5 py-2 text-sm font-bold text-sea-ink">
             <SelectedIcon className="size-4" style={{ color: selectedColor }} />
             {editor.name.trim() || 'New category'}
           </span>
@@ -457,11 +454,11 @@ function CategoryDialog({
                 <Button
                   key={categoryIcon.id}
                   type="button"
-                  variant="secondary"
+                  variant="chip"
                   size="icon-sm"
                   aria-label={categoryIcon.label}
                   aria-pressed={editor.iconId === categoryIcon.id}
-                  className="h-10 w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                  className="h-10 w-full sm:h-8"
                   onClick={() =>
                     onChange({ ...editor, iconId: categoryIcon.id })
                   }
@@ -484,7 +481,7 @@ function CategoryDialog({
                 size="icon-sm"
                 aria-label={color.label}
                 aria-pressed={editor.colorId === color.id}
-                className="aspect-square h-auto w-full max-w-10 justify-self-center rounded-full hover:opacity-90 sm:size-8 hover:bg-transparent aria-pressed:ring-2 aria-pressed:ring-sea-ink aria-pressed:ring-offset-2 aria-pressed:ring-offset-(--surface-strong)"
+                className="aspect-square h-auto w-full max-w-10 justify-self-center rounded-full hover:opacity-90 sm:size-8 hover:bg-transparent aria-pressed:ring-2 aria-pressed:ring-sea-ink aria-pressed:ring-offset-2 aria-pressed:ring-offset-(--card-solid)"
                 style={{ background: `var(--${color.id})` }}
                 onClick={() => onChange({ ...editor, colorId: color.id })}
               />

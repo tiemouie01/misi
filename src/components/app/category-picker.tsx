@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
@@ -87,8 +88,7 @@ export function CategoryPicker({
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="h-10 sm:h-8"
+          size="chip"
           onClick={() => setOpen(true)}
         >
           <LayoutGrid className="size-4 text-sea-ink-soft" />
@@ -105,18 +105,13 @@ export function CategoryPicker({
           if (!next) setQuery('')
         }}
       >
-        <DialogContent
-          sheet
-          className="gap-4 rounded-3xl border-(--line) bg-(--surface-strong) shadow-2xl sm:max-w-md"
-        >
-          <div className="pr-12">
-            <DialogTitle className="font-display text-xl font-bold text-sea-ink">
-              All categories
-            </DialogTitle>
+        <DialogContent sheet className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>All categories</DialogTitle>
             <DialogDescription className="sr-only">
               Search or pick a category for this expense.
             </DialogDescription>
-          </div>
+          </DialogHeader>
           <form
             onSubmit={(event) => {
               event.preventDefault()
@@ -183,11 +178,11 @@ function CategoryPill({
   return (
     <Button
       type="button"
-      variant="secondary"
-      size="sm"
+      variant="chip"
+      size="chip"
       aria-pressed={selected}
       className={cn(
-        'h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink',
+        'max-w-full',
         grid &&
           'h-auto min-h-10 justify-start rounded-2xl py-2 text-left whitespace-normal sm:h-auto sm:min-h-9',
       )}

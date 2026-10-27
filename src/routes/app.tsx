@@ -77,10 +77,7 @@ function AppTaskOverlays({
           if (!open) onClose()
         }}
       >
-        <DialogContent
-          sheet
-          className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong)"
-        >
+        <DialogContent sheet className="max-h-[min(90vh,760px)]">
           <DialogHeader className="sr-only">
             <DialogTitle>Reconcile</DialogTitle>
             <DialogDescription>
@@ -98,15 +95,10 @@ function AppTaskOverlays({
           if (!open) onClose()
         }}
       >
-        <DialogContent
-          sheet
-          className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-3xl border-(--line) bg-(--surface-strong)"
-        >
-          <DialogHeader className="pr-8 text-left">
-            <DialogTitle className="font-display text-2xl font-bold text-sea-ink">
-              Income sources
-            </DialogTitle>
-            <DialogDescription className="text-sea-ink-soft">
+        <DialogContent sheet className="max-h-[min(90vh,760px)]">
+          <DialogHeader>
+            <DialogTitle>Income sources</DialogTitle>
+            <DialogDescription>
               Update the income you expect each cycle and its savings split.
             </DialogDescription>
           </DialogHeader>

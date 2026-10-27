@@ -3,6 +3,10 @@
 import { AlertDialog as AlertDialogPrimitive } from 'radix-ui'
 
 import { buttonVariants } from '#/components/ui/button'
+import {
+  dialogOverlayClassName,
+  dialogSurfaceClassName,
+} from '#/components/ui/dialog'
 import { cn } from '#/lib/utils'
 
 import type { ComponentProps } from 'react'
@@ -36,12 +40,7 @@ function AlertDialogOverlay({
   return (
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
-      className={cn(
-        'fixed inset-0 z-50 bg-sea-ink/45 backdrop-blur-sm',
-        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
-        'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-        className,
-      )}
+      className={cn(dialogOverlayClassName, className)}
       {...props}
     />
   )
@@ -56,13 +55,7 @@ function AlertDialogContent({
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
-        className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full min-w-0 grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-3xl border border-(--line) bg-(--surface-strong) p-6 shadow-lg outline-none',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
-          'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          'sm:max-w-md',
-          className,
-        )}
+        className={cn(dialogSurfaceClassName, 'sm:max-w-md', className)}
         {...props}
       />
     </AlertDialogPortal>
@@ -73,7 +66,7 @@ function AlertDialogHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="alert-dialog-header"
-      className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
+      className={cn('flex flex-col gap-1.5 text-left', className)}
       {...props}
     />
   )
@@ -100,7 +93,7 @@ function AlertDialogTitle({
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
       className={cn(
-        'font-display text-lg font-bold tracking-tight text-sea-ink',
+        'text-xl leading-tight font-bold tracking-tight text-sea-ink',
         className,
       )}
       {...props}

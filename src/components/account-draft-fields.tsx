@@ -115,7 +115,7 @@ export function AccountDraftFields({
       <div className="flex items-center justify-between gap-3 pt-1">
         <Label
           htmlFor={`ob-spendable-${account.key}`}
-          className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+          className="font-bold text-sea-ink"
         >
           Counts toward spendable
         </Label>

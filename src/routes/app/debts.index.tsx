@@ -190,10 +190,7 @@ function DebtsPage() {
       </main>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent
-          sheet
-          className="rounded-3xl border-(--line) bg-(--surface-strong)"
-        >
+        <DialogContent sheet>
           <DialogHeader>
             <DialogTitle>Add a debt</DialogTitle>
             <DialogDescription>
@@ -212,9 +209,7 @@ function DebtsPage() {
               />
             </div>
             <fieldset>
-              <legend className="mb-2 text-sm font-semibold text-sea-ink">
-                Who owes?
-              </legend>
+              <legend className="field-label mb-2">Who owes?</legend>
               <div className="flex gap-2">
                 {(
                   [
@@ -225,10 +220,9 @@ function DebtsPage() {
                   <Button
                     key={value}
                     type="button"
-                    variant="secondary"
-                    size="sm"
+                    variant="chip"
+                    size="chip"
                     aria-pressed={direction === value}
-                    className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
                     onClick={() => setDirection(value)}
                   >
                     {label}

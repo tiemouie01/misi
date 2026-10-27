@@ -353,11 +353,11 @@ function ClaimFields({
               <Button
                 key={debt.id}
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="chip"
+                size="chip"
                 disabled={lockIdentity}
                 aria-pressed={debtId === debt.id}
-                className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                className="max-w-full"
                 onClick={() => onDebtId(debt.id)}
               >
                 <span className="truncate">{debt.name}</span>
@@ -393,11 +393,10 @@ function ClaimFields({
             <Button
               key={action}
               type="button"
-              variant="secondary"
-              size="sm"
+              variant="chip"
+              size="chip"
               disabled={lockIdentity}
               aria-pressed={claimAction === action}
-              className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
               onClick={() => onClaimAction(action)}
             >
               {claimActionLabel(action)}
@@ -413,10 +412,9 @@ function ClaimFields({
               <Button
                 key={polarity}
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="chip"
+                size="chip"
                 aria-pressed={adjustPolarity === polarity}
-                className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                 onClick={() => onAdjustPolarity(polarity)}
               >
                 {polarity === 'increase'
@@ -436,10 +434,9 @@ function ClaimFields({
             {!needsAccount && (
               <Button
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="chip"
+                size="chip"
                 aria-pressed={!accountId}
-                className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                 onClick={() => onAccountId('')}
               >
                 No account
@@ -449,10 +446,10 @@ function ClaimFields({
               <Button
                 key={account.id}
                 type="button"
-                variant="secondary"
-                size="sm"
+                variant="chip"
+                size="chip"
                 aria-pressed={accountId === account.id}
-                className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                className="max-w-full"
                 onClick={() => onAccountId(account.id)}
               >
                 <span className="truncate">{account.name}</span>
@@ -462,11 +459,11 @@ function ClaimFields({
         </fieldset>
       )}
       {showFromSavings && (
-        <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-(--line) px-4 py-3">
           <div className="min-w-0">
             <Label
               htmlFor="quick-add-claim-from-savings"
-              className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+              className="font-bold text-sea-ink"
             >
               From savings
             </Label>
@@ -943,10 +940,7 @@ export function QuickAddSheet({
         if (!nextOpen) onClose()
       }}
     >
-      <DialogContent
-        sheet
-        className="gap-0 overflow-x-hidden rounded-3xl border border-(--line) bg-(--surface-strong) shadow-2xl backdrop-blur-md sm:max-w-md"
-      >
+      <DialogContent sheet className="gap-0 overflow-x-hidden sm:max-w-md">
         <DialogTitle className="sr-only">
           {isAutoSave
             ? 'Edit auto-save'
@@ -963,9 +957,11 @@ export function QuickAddSheet({
         </DialogDescription>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-(--line) sm:hidden" />
         {isAutoSave ? (
-          <p className="island-kicker mr-11">Auto-save → Savings</p>
+          <p className="mr-11 text-lg leading-tight font-bold text-sea-ink">
+            Auto-save → Savings
+          </p>
         ) : isEditing && initial.mode === 'claim' ? (
-          <p className="island-kicker mr-11">
+          <p className="mr-11 text-lg leading-tight font-bold text-sea-ink">
             {claimActionLabel(claimAction, adjustPolarity)}
           </p>
         ) : (
@@ -997,7 +993,7 @@ export function QuickAddSheet({
           </div>
         )}
         <div className="mt-5 min-w-0 text-center">
-          <p className="island-kicker">Amount ({amountCurrency})</p>
+          <p className="field-label">Amount ({amountCurrency})</p>
           <p
             aria-live="polite"
             aria-atomic="true"
@@ -1153,10 +1149,9 @@ export function QuickAddSheet({
               <div className="flex min-w-0 flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant="secondary"
-                  size="sm"
+                  variant="chip"
+                  size="chip"
                   aria-pressed={!sourceId}
-                  className="h-10 sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
                   onClick={() => {
                     // Start an unassigned income without retaining the source
                     // description that was selected before this action.
@@ -1169,12 +1164,12 @@ export function QuickAddSheet({
                 {archivedIncomeSourceId && (
                   <Button
                     type="button"
-                    variant="secondary"
-                    size="sm"
+                    variant="chip"
+                    size="chip"
                     disabled
                     aria-pressed={sourceId === archivedIncomeSourceId}
                     title="This source is archived and will remain linked unless you choose another source."
-                    className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                    className="max-w-full"
                   >
                     <span className="truncate">Archived source</span>
                   </Button>
@@ -1183,10 +1178,10 @@ export function QuickAddSheet({
                   <Button
                     key={source.id}
                     type="button"
-                    variant="secondary"
-                    size="sm"
+                    variant="chip"
+                    size="chip"
                     aria-pressed={sourceId === source.id}
-                    className="h-10 max-w-full sm:h-8 aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10 aria-pressed:text-sea-ink"
+                    className="max-w-full"
                     onClick={() => {
                       const previous = incomeSources.find(
                         (item) => item.id === sourceId,
@@ -1242,11 +1237,11 @@ export function QuickAddSheet({
         {detailsOpen && (
           <div id="quick-add-details" className="min-w-0">
             {!isAutoSave && mode === 'transfer' && (
-              <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+              <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-(--line) px-4 py-3">
                 <div className="min-w-0">
                   <Label
                     htmlFor="quick-add-from-savings"
-                    className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+                    className="font-bold text-sea-ink"
                   >
                     From savings
                   </Label>
@@ -1297,11 +1292,11 @@ export function QuickAddSheet({
               </div>
             )}
             {!isAutoSave && mode === 'expense' && (
-              <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-(--chip-line) bg-(--chip-bg) px-4 py-3">
+              <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-(--line) px-4 py-3">
                 <div className="min-w-0">
                   <Label
                     htmlFor="quick-add-pay-from-savings"
-                    className="mb-0 text-sm font-bold normal-case tracking-normal text-sea-ink"
+                    className="font-bold text-sea-ink"
                   >
                     Pay from savings
                   </Label>
@@ -1322,14 +1317,14 @@ export function QuickAddSheet({
             {!isAutoSave && mode === 'expense' && !fromSavings && (
               <Button
                 type="button"
-                variant="secondary"
+                variant="chip"
                 aria-pressed={excludeFromBudget}
-                className="mt-4 h-auto w-full min-w-0 justify-start whitespace-normal rounded-xl px-4 py-3 text-left aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/10"
+                className="mt-4 h-auto w-full min-w-0 justify-start whitespace-normal rounded-2xl px-4 py-3 text-left"
                 onClick={() => setExcludeFromBudget((current) => !current)}
               >
                 <span
                   aria-hidden="true"
-                  className="flex size-5 shrink-0 items-center justify-center rounded-md border border-(--line) bg-(--surface-strong) text-xs font-black text-lagoon-deep"
+                  className="flex size-5 shrink-0 items-center justify-center rounded-md border border-(--line) bg-(--card-solid) text-xs font-black text-lagoon-deep"
                 >
                   {excludeFromBudget ? '✓' : ''}
                 </span>

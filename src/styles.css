@@ -51,6 +51,8 @@
   --card-solid: #ffffff;
   --card-frame: rgba(255, 255, 255, 0.18);
   --card-lift: 0 12px 32px rgba(6, 30, 28, 0.24);
+  /* Dims the page behind dialogs and sheets, tinted like the ground. */
+  --scrim: rgba(8, 38, 36, 0.5);
   /* Water on the ground (water.tsx): waves along the bottom and the wave
      divider. */
   --wave-back: rgba(6, 34, 30, 0.1);
@@ -137,6 +139,7 @@
   --card-solid: #132b2d;
   --card-frame: rgba(255, 255, 255, 0.07);
   --card-lift: 0 14px 36px rgba(0, 0, 0, 0.38);
+  --scrim: rgba(2, 12, 11, 0.62);
   --wave-back: rgba(0, 0, 0, 0.16);
   --wave-front: rgba(0, 0, 0, 0.2);
   --wave-crest: rgba(141, 229, 219, 0.1);
@@ -505,10 +508,9 @@ a {
 }
 
 .field-label {
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-weight: 700;
-  font-size: 0.72rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
   color: var(--sea-ink-soft);
 }
 

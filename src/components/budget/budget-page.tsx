@@ -1048,16 +1048,11 @@ function BudgetEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        sheet
-        className="max-h-[min(90vh,760px)] max-w-2xl rounded-3xl border-(--line) bg-(--surface-strong)"
-      >
-        <DialogHeader className="pr-8 text-left">
-          <p className="island-kicker">Edit plan · {cycle.label}</p>
-          <DialogTitle className="font-display mt-1 text-2xl font-bold tracking-tight text-sea-ink">
-            Make this cycle work for you
-          </DialogTitle>
-          <DialogDescription className="text-sea-ink-soft">
+      <DialogContent sheet className="max-h-[min(90vh,760px)]">
+        <DialogHeader>
+          <p className="field-label">Edit plan · {cycle.label}</p>
+          <DialogTitle>Make this cycle work for you</DialogTitle>
+          <DialogDescription>
             Set the spending limit and category plans. Savings is derived from
             each income source&apos;s rate. New cycles start from last
             cycle&apos;s actual spend so you can adjust from real numbers.

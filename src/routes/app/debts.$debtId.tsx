@@ -603,10 +603,7 @@ function DebtDetailPage() {
       </main>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent
-          sheet
-          className="rounded-3xl border-(--line) bg-(--surface-strong)"
-        >
+        <DialogContent sheet>
           <DialogHeader>
             <DialogTitle>Edit {debt.name}</DialogTitle>
             <DialogDescription>
