@@ -12,7 +12,7 @@ import { ensureCheckpointForCycle } from './checkpoints'
 import { assertNonnegativeFinite, getSettings } from './core'
 import { getCategories } from './categories'
 
-import type { Id } from '../_generated/dataModel'
+import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import type { ReadCtx } from './core'
 
@@ -38,6 +38,11 @@ export async function getLatestCycle(ctx: ReadCtx, userId: string) {
   return covering ?? (await startedCycles().first())
 }
 
+/** One-off income belongs to a single cycle; only recurring sources roll over. */
+export function isRecurringIncomeSource(source: Doc<'incomeSources'>) {
+  return source.oneOffCycleId === undefined
+}
+
 export async function getCycleIncomePlans(
   ctx: ReadCtx,
   userId: string,
@@ -49,6 +54,32 @@ export async function getCycleIncomePlans(
       q.eq('userId', userId).eq('cycleId', cycleId),
     )
     .collect()
+}
+
+/**
+ * Clears the cycle's recurring income plans so they can be rebuilt from the
+ * sources, leaving its one-off lines in place.
+ */
+export async function deleteRecurringCyclePlans(
+  ctx: MutationCtx,
+  userId: string,
+  cycleId: Id<'cycles'>,
+) {
+  const [plans, sources] = await Promise.all([
+    getCycleIncomePlans(ctx, userId, cycleId),
+    ctx.db
+      .query('incomeSources')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect(),
+  ])
+  const oneOffIds = new Set(
+    sources
+      .filter((source) => !isRecurringIncomeSource(source))
+      .map((source) => source._id),
+  )
+  for (const plan of plans) {
+    if (!oneOffIds.has(plan.sourceId)) await ctx.db.delete(plan._id)
+  }
 }
 
 export async function syncCycleIncomePlans(
@@ -64,7 +95,8 @@ export async function syncCycleIncomePlans(
       .collect(),
   ])
   const incomeSources = allIncomeSources.filter(
-    (source) => source.archivedAt === undefined,
+    (source) =>
+      source.archivedAt === undefined && isRecurringIncomeSource(source),
   )
   const existingSourceIds = new Set(existingPlans.map((plan) => plan.sourceId))
   for (const source of incomeSources) {
@@ -143,7 +175,8 @@ async function copyCyclePlans(
     if (
       !source ||
       source.userId !== userId ||
-      source.archivedAt !== undefined
+      source.archivedAt !== undefined ||
+      !isRecurringIncomeSource(source)
     ) {
       continue
     }
@@ -326,7 +359,8 @@ export async function validateCycleIncomePlans(
     if (
       !source ||
       source.userId !== userId ||
-      source.archivedAt !== undefined
+      source.archivedAt !== undefined ||
+      !isRecurringIncomeSource(source)
     ) {
       throw new Error('Income source not found')
     }

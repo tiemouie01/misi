@@ -31,6 +31,7 @@ import {
   currencyToMwk,
   formatK,
   formatUsd,
+  isSpendableAccount,
   mwkToCurrency,
 } from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
@@ -636,6 +637,8 @@ export function QuickAddSheet({
   const autoSaveRate = autoSaveRateForSource(
     mode === 'income' ? sourceId || undefined : undefined,
   )
+  // Income into an investment account adds no spendable cash to save from.
+  const proposesSave = !fromAccount || isSpendableAccount(fromAccount)
   const sheetRecents = visibleRecents(recents, categories)
   const selectedDebt = debts.find((debt) => debt.id === debtId)
   const pickerDebts = debts.filter(
@@ -1126,6 +1129,7 @@ export function QuickAddSheet({
             accounts={pickerAccounts}
             selected={accountId}
             onSelect={selectAccount}
+            includeAll={mode === 'income'}
           />
         )}
         {!isAutoSave && mode === 'claim' && (
@@ -1213,7 +1217,7 @@ export function QuickAddSheet({
               </div>
             </fieldset>
           )}
-        {!isAutoSave && mode === 'income' && !isEditing && (
+        {!isAutoSave && mode === 'income' && !isEditing && proposesSave && (
           <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-palm/10 px-3.5 py-3">
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">

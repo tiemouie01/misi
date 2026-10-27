@@ -106,6 +106,8 @@ export default defineSchema({
     isAnchor: v.boolean(),
     sortOrder: v.number(),
     archivedAt: v.optional(v.number()),
+    /** Set on one-off income: it belongs to this cycle only and never rolls over. */
+    oneOffCycleId: v.optional(v.id('cycles')),
   }).index('by_user', ['userId']),
   cycleIncomePlans: defineTable({
     userId: v.string(),

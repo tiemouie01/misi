@@ -14,7 +14,7 @@ import {
 } from '../shared/claim'
 import { resolveCyclePeriod } from '../shared/cycle-period'
 import { currencyToMwk, roundMoney } from '../shared/fx'
-import { landedAmountForSource, totalActualIncome } from '../shared/income'
+import { landedAmountForSource, summarizeCycleIncome } from '../shared/income'
 import {
   ONE_TAP_RECENTS_LIMIT,
   ONE_TAP_RECENTS_WINDOW_MS,
@@ -53,10 +53,12 @@ import {
 } from './model/core'
 import {
   assertCategoryPlansFitLimit,
+  deleteRecurringCyclePlans,
   ensureCurrentCycle,
   ensureCycleForDate,
   getCycleIncomePlans,
   getLatestCycle,
+  isRecurringIncomeSource,
   requireOwnedCycle,
   syncCycleIncomePlans,
   validateCategoryPlans,
@@ -71,7 +73,11 @@ import {
   requireOwnedDebt,
   validateDebtName,
 } from './model/debts'
-import { assertSavingsHasAmount, computeSavingsBalance } from './model/savings'
+import {
+  assertSavingsHasAmount,
+  computeSavingsBalance,
+  isSpendableAccount,
+} from './model/savings'
 import {
   applyTransactionBalanceTransition,
   assertHandledIncomeEdit,
@@ -90,6 +96,12 @@ import {
   updateAccount as updateAccountForUser,
 } from './model/accounts'
 import { updateSettings as updateSettingsForUser } from './model/settings'
+import {
+  addOneOffIncome as addOneOffIncomeForUser,
+  logInvestmentReturn as logInvestmentReturnForUser,
+  removeOneOffIncome as removeOneOffIncomeForUser,
+  updateOneOffIncome as updateOneOffIncomeForUser,
+} from './model/income'
 import {
   createAccount as createAccountForUser,
   onboardingAccount,
@@ -196,8 +208,13 @@ async function loadBootstrapData(
       .collect(),
   ])
 
+  // Recurring sources plus this cycle's one-off lines, so quick-add can link
+  // income to either.
   const incomeSources = incomeSourceDocs.filter(
-    (source) => source.archivedAt === undefined,
+    (source) =>
+      source.archivedAt === undefined &&
+      (isRecurringIncomeSource(source) ||
+        source.oneOffCycleId === currentCycle?._id),
   )
 
   const [debts, cycleData, savingsBalance] = await Promise.all([
@@ -233,7 +250,11 @@ async function loadBootstrapData(
   const [transactions, budgets, cycleIncomePlans] = cycleData
 
   accounts.sort((a, b) => a.sortOrder - b.sortOrder)
-  incomeSources.sort((a, b) => a.sortOrder - b.sortOrder)
+  incomeSources.sort(
+    (a, b) =>
+      Number(!isRecurringIncomeSource(a)) -
+        Number(!isRecurringIncomeSource(b)) || a.sortOrder - b.sortOrder,
+  )
   transactions.sort((a, b) => b.occurredAt - a.occurredAt)
   const oneTapRecents = oneTapRecentsFromLogs(recentLogDocs, {
     limit: ONE_TAP_RECENTS_LIMIT,
@@ -241,6 +262,13 @@ async function loadBootstrapData(
   })
   const handledTransactionIds = new Set(
     autoSaveEventDocs.map((event) => event.transactionId),
+  )
+  // Auto-save earmarks spendable cash. Income into an account outside free to
+  // spend (an investment return) adds none, so it never proposes a save.
+  const nonSpendableAccountIds = new Set(
+    accounts
+      .filter((account) => !isSpendableAccount(account))
+      .map((account) => account._id),
   )
 
   let pendingAutoSave: {
@@ -257,6 +285,12 @@ async function loadBootstrapData(
       if (pendingIncome.type !== 'income') continue
       if (pendingIncome.adjustment) continue
       if (handledTransactionIds.has(pendingIncome._id)) continue
+      if (
+        pendingIncome.accountId &&
+        nonSpendableAccountIds.has(pendingIncome.accountId)
+      ) {
+        continue
+      }
 
       const linkedSource = pendingIncome.sourceId
         ? incomeSourceDocs.find(
@@ -477,7 +511,10 @@ export const onboardingData = query({
         .query('incomeSources')
         .withIndex('by_user', (q) => q.eq('userId', user._id))
         .collect()
-    ).filter((source) => source.archivedAt === undefined)
+    ).filter(
+      (source) =>
+        source.archivedAt === undefined && isRecurringIncomeSource(source),
+    )
     const currentCycle = await getLatestCycle(ctx, user._id)
     const budgets = currentCycle
       ? await ctx.db
@@ -680,20 +717,16 @@ export const completeOnboarding = mutation({
       })
     }
 
-    const existingCycleIncomePlans = await getCycleIncomePlans(
-      ctx,
-      user._id,
-      cycle._id,
-    )
-    for (const plan of existingCycleIncomePlans) {
-      await ctx.db.delete(plan._id)
-    }
+    await deleteRecurringCyclePlans(ctx, user._id, cycle._id)
     const incomeSources = (
       await ctx.db
         .query('incomeSources')
         .withIndex('by_user', (q) => q.eq('userId', user._id))
         .collect()
-    ).filter((source) => source.archivedAt === undefined)
+    ).filter(
+      (source) =>
+        source.archivedAt === undefined && isRecurringIncomeSource(source),
+    )
     for (const source of incomeSources) {
       await ctx.db.insert('cycleIncomePlans', {
         userId: user._id,
@@ -731,10 +764,12 @@ export const updateIncomeSources = mutation({
     const user = await requireAuthUser(ctx)
     validateIncomeSources(args.incomeSources)
 
-    const existingSources = await ctx.db
-      .query('incomeSources')
-      .withIndex('by_user', (q) => q.eq('userId', user._id))
-      .collect()
+    const existingSources = (
+      await ctx.db
+        .query('incomeSources')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect()
+    ).filter(isRecurringIncomeSource)
     const existingById = new Map(
       existingSources.map((source) => [source._id, source]),
     )
@@ -793,15 +828,17 @@ export const updateIncomeSources = mutation({
     }
 
     const cycle = await ensureCurrentCycle(ctx, user._id)
-    const currentPlans = await getCycleIncomePlans(ctx, user._id, cycle._id)
-    for (const plan of currentPlans) await ctx.db.delete(plan._id)
+    await deleteRecurringCyclePlans(ctx, user._id, cycle._id)
     const activeSources = (
       await ctx.db
         .query('incomeSources')
         .withIndex('by_user', (q) => q.eq('userId', user._id))
         .collect()
     )
-      .filter((source) => source.archivedAt === undefined)
+      .filter(
+        (source) =>
+          source.archivedAt === undefined && isRecurringIncomeSource(source),
+      )
       .sort((a, b) => a.sortOrder - b.sortOrder)
     for (const source of activeSources) {
       await ctx.db.insert('cycleIncomePlans', {
@@ -876,14 +913,7 @@ export const saveCyclePlan = mutation({
     await ctx.db.patch(cycle._id, { spendingLimit: args.spendingLimit })
 
     if (args.incomePlans !== undefined) {
-      const existingIncomePlans = await getCycleIncomePlans(
-        ctx,
-        user._id,
-        cycle._id,
-      )
-      for (const plan of existingIncomePlans) {
-        await ctx.db.delete(plan._id)
-      }
+      await deleteRecurringCyclePlans(ctx, user._id, cycle._id)
       for (const plan of args.incomePlans) {
         const source = await ctx.db.get(plan.sourceId)
         if (
@@ -921,18 +951,68 @@ export const saveCyclePlan = mutation({
   },
 })
 
+const oneOffIncomeFields = {
+  name: v.string(),
+  expectedAmount: v.number(),
+  expectedDay: v.optional(v.number()),
+}
+
+export const addOneOffIncome = mutation({
+  args: { cycleId: v.id('cycles'), ...oneOffIncomeFields },
+  handler: async (ctx, { cycleId, ...input }) => {
+    const user = await requireAuthUser(ctx)
+    return await addOneOffIncomeForUser(ctx, user._id, cycleId, input)
+  },
+})
+
+export const updateOneOffIncome = mutation({
+  args: { sourceId: v.id('incomeSources'), ...oneOffIncomeFields },
+  handler: async (ctx, { sourceId, ...input }) => {
+    const user = await requireAuthUser(ctx)
+    await updateOneOffIncomeForUser(ctx, user._id, sourceId, input)
+    return null
+  },
+})
+
+export const removeOneOffIncome = mutation({
+  args: { sourceId: v.id('incomeSources') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    await removeOneOffIncomeForUser(ctx, user._id, args.sourceId)
+    return null
+  },
+})
+
 export const budgetOverview = query({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuthUser(ctx)
-    const [cycles, categories] = await Promise.all([
+    const [cycles, categories, accounts, incomeSources] = await Promise.all([
       ctx.db
         .query('cycles')
         .withIndex('by_user_and_start', (q) => q.eq('userId', user._id))
         .order('desc')
         .collect(),
       getCategories(ctx, user._id),
+      ctx.db
+        .query('accounts')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect(),
+      ctx.db
+        .query('incomeSources')
+        .withIndex('by_user', (q) => q.eq('userId', user._id))
+        .collect(),
     ])
+    const nonSpendableAccountIds = new Set<string>(
+      accounts
+        .filter((account) => !isSpendableAccount(account))
+        .map((account) => account._id),
+    )
+    const oneOffSourceIds = new Set<string>(
+      incomeSources
+        .filter((source) => !isRecurringIncomeSource(source))
+        .map((source) => source._id),
+    )
 
     const cycleViews = await Promise.all(
       cycles.map(async (cycle) => {
@@ -981,6 +1061,7 @@ export const budgetOverview = query({
           return {
             sourceId: plan.sourceId,
             sourceName: plan.sourceName,
+            oneOff: oneOffSourceIds.has(plan.sourceId),
             expectedDayStart: plan.expectedDayStart,
             expectedDayEnd: plan.expectedDayEnd,
             expectedAmount: plan.expectedAmount,
@@ -996,11 +1077,11 @@ export const budgetOverview = query({
           (sum, budget) => sum + budget.plannedAmount,
           0,
         )
-        const actualIncome = totalActualIncome(transactions)
-        const assignedIncome = incomePlanRows.reduce(
-          (sum, plan) => sum + plan.actualAmount,
-          0,
-        )
+        const income = summarizeCycleIncome({
+          transactions,
+          plans,
+          nonSpendableAccountIds,
+        })
         const actualSpending = totalBudgetSpending(transactions)
         const actualSavings = transactions.reduce((sum, transaction) => {
           if (transaction.type !== 'allocation') return sum
@@ -1012,10 +1093,6 @@ export const budgetOverview = query({
           }
           return sum
         }, 0)
-        const plannedIncome = incomePlanRows.reduce(
-          (sum, plan) => sum + plan.expectedAmount,
-          0,
-        )
         const savingsTarget = incomePlanRows.reduce(
           (sum, plan) => sum + plan.expectedAmount * plan.savingsRate,
           0,
@@ -1027,16 +1104,19 @@ export const budgetOverview = query({
           totalPlanned,
           allocatedAmount: totalPlanned,
           unallocatedAmount: cycle.spendingLimit - totalPlanned,
-          plannedIncome,
-          actualIncome,
-          unassignedIncome: actualIncome - assignedIncome,
+          plannedIncome: income.plannedIncome,
+          expectedIncome: income.expectedIncome,
+          actualIncome: income.actualIncome,
+          unassignedIncome: income.unassignedIncome,
+          investmentIncome: income.investmentIncome,
           actualSpending,
           actualSavings,
           savingsTarget,
           savingsVariance: actualSavings - savingsTarget,
           spendingVariance: cycle.spendingLimit - actualSpending,
           remainingAmount: cycle.spendingLimit - actualSpending,
-          cashSurplusOrDeficit: actualIncome - actualSpending - actualSavings,
+          cashSurplusOrDeficit:
+            income.actualIncome - actualSpending - actualSavings,
           categoryRows,
           incomePlans: incomePlanRows,
         }
@@ -1718,6 +1798,18 @@ export const setAccountSpendable = mutation({
       includeInSpendable: args.includeInSpendable,
     })
     return account._id
+  },
+})
+
+export const logInvestmentReturn = mutation({
+  args: {
+    accountId: v.id('accounts'),
+    actual: v.number(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    return await logInvestmentReturnForUser(ctx, user._id, args)
   },
 })
 

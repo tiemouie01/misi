@@ -27,6 +27,8 @@ interface ReconcileCardProps {
   lastClosed: string
   onActualChange: (accountId: string, actual: number) => void
   onAbsorb: (accountId: string) => void
+  /** Records an investment account's gain as income for the cycle. */
+  onLogReturn: (accountId: string) => void
   onLogMissing: (initial: QuickAddInitial) => void
   animationDelay: string
   usdRate: number
@@ -69,6 +71,7 @@ export function ReconcileCard({
   lastClosed,
   onActualChange,
   onAbsorb,
+  onLogReturn,
   onLogMissing,
   animationDelay,
   usdRate,
@@ -76,10 +79,9 @@ export function ReconcileCard({
   embedded = false,
 }: ReconcileCardProps) {
   const [expanded, setExpanded] = useState(startExpanded)
-  const visibleBalances = balances.filter((balance) => {
-    const account = accounts.find((item) => item.id === balance.accountId)
-    return account ? isSpendableAccount(account) : false
-  })
+  const visibleBalances = balances.filter((balance) =>
+    accounts.some((item) => item.id === balance.accountId),
+  )
   const gaps = visibleBalances.filter(
     (balance) => balance.actual !== balance.expected,
   )
@@ -154,6 +156,7 @@ export function ReconcileCard({
               )
               if (!account) return null
               const drift = balance.actual - balance.expected
+              const spendable = isSpendableAccount(account)
               return (
                 <div
                   key={balance.accountId}
@@ -184,32 +187,59 @@ export function ReconcileCard({
                       }
                     />
                   </div>
+                  {drift > 0 && !spendable && (
+                    <p className="mt-3 border-t border-(--line) pt-3 text-[0.8rem] text-sea-ink-soft">
+                      A return counts as income this cycle, but stays out of
+                      free to spend until you move it.
+                    </p>
+                  )}
                   {drift !== 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2 border-t border-(--line) pt-3">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() =>
-                          onLogMissing({
-                            mode: drift > 0 ? 'income' : 'expense',
-                            amount: Math.abs(drift),
-                            amountCurrency: account.currency,
-                            fxRate:
-                              account.currency === 'USD' ? usdRate : undefined,
-                            accountId: balance.accountId,
-                            categoryId:
-                              drift < 0
-                                ? firstExpenseCategoryKey(categories)
-                                : undefined,
-                            reconcile: true,
-                          })
-                        }
-                      >
-                        {drift > 0
-                          ? 'Log missing income'
-                          : 'Log missing expense'}
-                      </Button>
+                    <div
+                      className={cn(
+                        'flex flex-wrap gap-2',
+                        drift > 0 && !spendable
+                          ? 'mt-2'
+                          : 'mt-3 border-t border-(--line) pt-3',
+                      )}
+                    >
+                      {drift > 0 && !spendable && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onLogReturn(balance.accountId)}
+                        >
+                          Log as investment return
+                        </Button>
+                      )}
+                      {spendable && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            onLogMissing({
+                              mode: drift > 0 ? 'income' : 'expense',
+                              amount: Math.abs(drift),
+                              amountCurrency: account.currency,
+                              fxRate:
+                                account.currency === 'USD'
+                                  ? usdRate
+                                  : undefined,
+                              accountId: balance.accountId,
+                              categoryId:
+                                drift < 0
+                                  ? firstExpenseCategoryKey(categories)
+                                  : undefined,
+                              reconcile: true,
+                            })
+                          }
+                        >
+                          {drift > 0
+                            ? 'Log missing income'
+                            : 'Log missing expense'}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="destructive"
