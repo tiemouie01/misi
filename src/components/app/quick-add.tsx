@@ -148,16 +148,26 @@ function appendAmountInput(current: string, value: string) {
   return next.slice(0, MAX_AMOUNT_WHOLE_DIGITS)
 }
 
+/** Null when the MWK amount is worth less than a cent at this rate. */
+function usdLegAmount(mwkAmount: number, usdRate: number) {
+  try {
+    return mwkToCurrency(mwkAmount, 'USD', usdRate)
+  } catch {
+    return null
+  }
+}
+
 function formatTransferLeg(
   account: Account,
   mwkAmount: number,
   usdRate: number,
   sign: '+' | '−',
 ) {
-  const native =
-    account.currency === 'USD'
-      ? formatUsd(mwkToCurrency(mwkAmount, 'USD', usdRate))
-      : formatK(mwkAmount)
+  let native = formatK(mwkAmount)
+  if (account.currency === 'USD') {
+    const usd = usdLegAmount(mwkAmount, usdRate)
+    native = usd === null ? '<$0.01' : formatUsd(usd)
+  }
   return `${account.name} ${sign}${native}`
 }
 
@@ -657,11 +667,19 @@ export function QuickAddSheet({
         )
       : null
   const claimWouldGoNegative = nextRemaining !== null && nextRemaining < 0
+  // The server rejects transfers that round to $0.00 on the USD side.
+  const transferTooSmallForUsd =
+    mode === 'transfer' &&
+    toAccount?.currency === 'USD' &&
+    amountMwk > 0 &&
+    conversionRate > 0 &&
+    usdLegAmount(amountMwk, conversionRate) === null
   const canSave =
     amount > 0 &&
     amountMwk > 0 &&
     (amountCurrency !== 'USD' || conversionRate > 0) &&
     !claimWouldGoNegative &&
+    !transferTooSmallForUsd &&
     (isAutoSave ||
       (mode === 'claim'
         ? Boolean(debtId) && (!claimNeedsAccount || Boolean(accountId))
