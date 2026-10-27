@@ -71,61 +71,11 @@ export function MoneyCard({
         Where your money is
       </h2>
 
-      <ul className="mt-2 divide-y divide-(--line)">
-        {activeAccounts.map((account) => {
-          const Icon = KIND_ICON[account.kind]
-          const color = accountKindColor(account)
-          const spendableAccount = isSpendableAccount(account)
-          return (
-            <li key={account.id} className="flex items-center gap-3 px-1 py-3">
-              <span
-                className="grid size-9 shrink-0 place-items-center rounded-xl"
-                style={{
-                  background: `color-mix(in oklab, ${color} 14%, transparent)`,
-                  color,
-                }}
-              >
-                <Icon className="size-[1.125rem]" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-sea-ink">
-                  {account.name}
-                </span>
-                {!spendableAccount && (
-                  <span className="block text-[0.8rem] text-sea-ink-soft">
-                    Not counted for spending
-                  </span>
-                )}
-              </span>
-              <span className="text-right">
-                <span className="block font-bold text-sea-ink tabular-nums">
-                  {formatAccountAmount(account)}
-                </span>
-                {account.currency === 'USD' && (
-                  <span className="block text-[0.8rem] text-sea-ink-soft tabular-nums">
-                    ≈ {formatK(accountMwkValue(account, usdRate))}
-                  </span>
-                )}
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-      <Button
-        type="button"
-        variant="ghost"
-        className="mb-2 justify-start self-start px-2 text-lagoon-deep"
-        onClick={() => setAddOpen(true)}
-      >
-        <Plus />
-        Add account
-      </Button>
-
       {/* Spendable money split in two: what's free and what's kept aside.
-          The -mx-2/px-3 inset lines the rows up with the accounts above. */}
+          The -mx-2/px-3 inset lines the rows up with the accounts below. */}
       <div
         className={cn(
-          '-mx-2 mt-1 divide-y divide-(--line) rounded-2xl px-3',
+          '-mx-2 mt-3 divide-y divide-(--line) rounded-2xl px-3',
           usingSavings ? 'bg-coral/10' : 'bg-lagoon-deep/6',
         )}
       >
@@ -176,6 +126,56 @@ export function MoneyCard({
           </span>
         </div>
       </div>
+
+      <ul className="mt-2 divide-y divide-(--line)">
+        {activeAccounts.map((account) => {
+          const Icon = KIND_ICON[account.kind]
+          const color = accountKindColor(account)
+          const spendableAccount = isSpendableAccount(account)
+          return (
+            <li key={account.id} className="flex items-center gap-3 px-1 py-3">
+              <span
+                className="grid size-9 shrink-0 place-items-center rounded-xl"
+                style={{
+                  background: `color-mix(in oklab, ${color} 14%, transparent)`,
+                  color,
+                }}
+              >
+                <Icon className="size-[1.125rem]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-sea-ink">
+                  {account.name}
+                </span>
+                {!spendableAccount && (
+                  <span className="block text-[0.8rem] text-sea-ink-soft">
+                    Not counted for spending
+                  </span>
+                )}
+              </span>
+              <span className="text-right">
+                <span className="block font-bold text-sea-ink tabular-nums">
+                  {formatAccountAmount(account)}
+                </span>
+                {account.currency === 'USD' && (
+                  <span className="block text-[0.8rem] text-sea-ink-soft tabular-nums">
+                    ≈ {formatK(accountMwkValue(account, usdRate))}
+                  </span>
+                )}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <Button
+        type="button"
+        variant="ghost"
+        className="justify-start self-start px-2 text-lagoon-deep"
+        onClick={() => setAddOpen(true)}
+      >
+        <Plus />
+        Add account
+      </Button>
 
       <Link
         to="/app"

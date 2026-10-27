@@ -6,10 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import {
-  incomeSourceStatus,
-  landedAmountForSource,
-} from '../../../shared/income'
 import { greeting } from '#/lib/greeting'
 import { AppProviders } from '#/components/app/app-providers'
 import { DebtsCard } from '#/components/app/debts-card'
@@ -18,6 +14,7 @@ import { useQuickAdd } from '#/components/app/quick-add-provider'
 import { SummaryTiles, spendingPace } from '#/components/app/summary-tiles'
 import { TodoCard } from '#/components/app/todo-card'
 import { TransactionsCard } from '#/components/app/transactions-card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { WaveDivider } from '#/components/water'
 import {
   accountMwkValue,
@@ -33,7 +30,6 @@ import { errorMessage } from '#/lib/error-message'
 import type { FunctionReturnType } from 'convex/server'
 import type { Doc } from '../../../convex/_generated/dataModel'
 import type { NewAccountInput } from '#/components/app/account-dialogs'
-import type { TodoIncome } from '#/components/app/todo-card'
 import type { Account, Txn } from '#/lib/app-data'
 import type { Category } from '#/lib/categories'
 
@@ -203,6 +199,9 @@ function AppDashboard({
   const moveSavingsMutation = useMutation(api.misi.moveSavings)
   const createAccountMutation = useMutation(api.misi.createAccount)
   const [autoSaveBusy, setAutoSaveBusy] = useState(false)
+  // Below `xl` the home page is one column, so activity and money take turns.
+  // Money comes first: what's free to spend is the first thing people check.
+  const [mobileView, setMobileView] = useState('money')
   const hydrated = useHydrated()
   const { openSheet, requestDelete } = useQuickAdd()
 
@@ -289,24 +288,6 @@ function AppDashboard({
   const spendable = spendableTotalMwk(accounts, data.settings.usdRate)
   const savingsBalance =
     data.savingsBalance ?? data.settings.savingsOpeningBalance
-
-  const pendingIncome = useMemo<TodoIncome[]>(
-    () =>
-      data.cycleIncomePlans.flatMap((plan) => {
-        const landed = landedAmountForSource(data.transactions, plan.sourceId)
-        const status = incomeSourceStatus(landed, plan.expectedAmount)
-        if (status === 'landed' || plan.expectedAmount <= 0) return []
-        return [
-          {
-            id: plan.sourceId,
-            name: plan.sourceName,
-            amount: Math.max(0, plan.expectedAmount - landed),
-            partial: status === 'partial',
-          },
-        ]
-      }),
-    [data.cycleIncomePlans, data.transactions],
-  )
 
   const pendingAutoSave = data.pendingAutoSave ?? null
 
@@ -425,47 +406,69 @@ function AppDashboard({
 
       <WaveDivider className="mt-3 sm:mt-4" />
 
-      {/* One column until `xl` (to-do first, then activity); from there the
-          activity list takes the wide left column and the rest stack on the
-          right. The flexible last row keeps the right-hand cards together
-          however long the activity list grows. */}
-      <div className="mt-3 grid gap-4 sm:mt-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:grid-rows-[auto_auto_1fr] xl:items-start">
+      {/* One column until `xl`, where a switch picks activity or money; from
+          there the switch hides, the activity list takes the wide left column
+          and the rest stack on the right. The panels use `display: contents`
+          so their cards sit directly in the grid, and stay mounted (just
+          hidden) so the activity feed keeps its pages. The flexible last row
+          keeps the right-hand cards together however long the activity list
+          grows. */}
+      <Tabs
+        value={mobileView}
+        onValueChange={setMobileView}
+        className="mt-3 grid gap-4 sm:mt-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:grid-rows-[auto_auto_1fr] xl:items-start"
+      >
         <TodoCard
           className="xl:col-start-2"
           autoSave={pendingAutoSave}
           autoSaveBusy={autoSaveBusy}
-          pendingIncome={pendingIncome}
           onConfirmAutoSave={(amount) => void confirmAutoSave(amount)}
           onDismissAutoSave={() => void dismissAutoSave()}
-          onIncomeArrived={(income) =>
-            openSheet({
-              mode: 'income',
-              sourceId: income.id,
-              amount: income.amount,
-            })
-          }
         />
-        <TransactionsCard
-          className="xl:col-start-1 xl:row-span-3 xl:row-start-1"
-          transactions={feedTransactions}
-          accounts={accounts}
-          categories={categories}
-          status={feed.status}
-          onLoadMore={() => feed.loadMore(FEED_PAGE_SIZE)}
-          onEdit={editTransaction}
-          onDelete={requestDelete}
-        />
-        <MoneyCard
-          className="xl:col-start-2"
-          accounts={accounts}
-          usdRate={data.settings.usdRate}
-          spendable={spendable}
-          savingsBalance={savingsBalance}
-          onMoveSavings={moveSavings}
-          onCreateAccount={createAccount}
-        />
-        <DebtsCard className="xl:col-start-2" debts={debts} />
-      </div>
+        <TabsList
+          aria-label="Home views"
+          className="h-11 max-sm:w-full xl:hidden"
+        >
+          <TabsTrigger value="activity" className="px-4">
+            Activity
+          </TabsTrigger>
+          <TabsTrigger value="money" className="px-4">
+            Money
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent
+          value="activity"
+          forceMount
+          className="contents data-[state=inactive]:max-xl:hidden"
+        >
+          <TransactionsCard
+            className="xl:col-start-1 xl:row-span-3 xl:row-start-1"
+            transactions={feedTransactions}
+            accounts={accounts}
+            categories={categories}
+            status={feed.status}
+            onLoadMore={() => feed.loadMore(FEED_PAGE_SIZE)}
+            onEdit={editTransaction}
+            onDelete={requestDelete}
+          />
+        </TabsContent>
+        <TabsContent
+          value="money"
+          forceMount
+          className="contents data-[state=inactive]:max-xl:hidden"
+        >
+          <MoneyCard
+            className="xl:col-start-2"
+            accounts={accounts}
+            usdRate={data.settings.usdRate}
+            spendable={spendable}
+            savingsBalance={savingsBalance}
+            onMoveSavings={moveSavings}
+            onCreateAccount={createAccount}
+          />
+          <DebtsCard className="xl:col-start-2" debts={debts} />
+        </TabsContent>
+      </Tabs>
     </main>
   )
 }

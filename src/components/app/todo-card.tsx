@@ -1,5 +1,4 @@
-import { Link } from '@tanstack/react-router'
-import { ArrowDownToLine, Check, PiggyBank } from 'lucide-react'
+import { Check, PiggyBank } from 'lucide-react'
 import { useState } from 'react'
 
 import { Badge } from '#/components/ui/badge'
@@ -17,21 +16,11 @@ export interface TodoAutoSave {
   savingsRate: number
 }
 
-export interface TodoIncome {
-  id: string
-  name: string
-  /** What is still expected this month (expected minus anything landed). */
-  amount: number
-  partial: boolean
-}
-
 interface TodoCardProps {
   autoSave: TodoAutoSave | null
   autoSaveBusy: boolean
-  pendingIncome: TodoIncome[]
   onConfirmAutoSave: (amount: number) => void
   onDismissAutoSave: () => void
-  onIncomeArrived: (income: TodoIncome) => void
   className?: string
 }
 
@@ -165,58 +154,31 @@ function AutoSaveItem({
   )
 }
 
-/** Things Misi needs the user to answer. Hidden when there are none. */
+/** A savings move Misi needs the user to answer once income lands. Hidden
+ * when there is none. */
 export function TodoCard({
   autoSave,
   autoSaveBusy,
-  pendingIncome,
   onConfirmAutoSave,
   onDismissAutoSave,
-  onIncomeArrived,
   className,
 }: TodoCardProps) {
-  const count = (autoSave ? 1 : 0) + pendingIncome.length
-  if (count === 0) return null
+  if (!autoSave) return null
 
   return (
     <Card variant="panel" className={cn('gap-4 p-4 sm:p-5', className)}>
       <div className="flex items-center gap-2 px-1">
         <h2 className="text-lg font-bold text-sea-ink">To do</h2>
-        <Badge className="min-w-6 justify-center rounded-full px-1.5">
-          {count}
-        </Badge>
+        <Badge className="min-w-6 justify-center rounded-full px-1.5">1</Badge>
       </div>
       <ul className="space-y-3">
-        {autoSave && (
-          <AutoSaveItem
-            key={autoSave.transactionId}
-            autoSave={autoSave}
-            busy={autoSaveBusy}
-            onConfirm={onConfirmAutoSave}
-            onDismiss={onDismissAutoSave}
-          />
-        )}
-        {pendingIncome.map((income) => (
-          <TodoItem
-            key={income.id}
-            icon={ArrowDownToLine}
-            title={
-              income.partial
-                ? `Has the rest of your ${income.name} arrived?`
-                : `Has your ${income.name} arrived?`
-            }
-            description={`You're expecting ${formatK(income.amount)} this month.`}
-          >
-            <Button type="button" onClick={() => onIncomeArrived(income)}>
-              Yes, record it
-            </Button>
-            <Button asChild variant="ghost">
-              <Link to="/app" search={{ task: 'income-sources' }}>
-                Change expected income
-              </Link>
-            </Button>
-          </TodoItem>
-        ))}
+        <AutoSaveItem
+          key={autoSave.transactionId}
+          autoSave={autoSave}
+          busy={autoSaveBusy}
+          onConfirm={onConfirmAutoSave}
+          onDismiss={onDismissAutoSave}
+        />
       </ul>
     </Card>
   )
