@@ -34,6 +34,7 @@ import {
   mwkToCurrency,
 } from '#/lib/app-data'
 import { firstExpenseCategoryKey, resolveCategory } from '#/lib/categories'
+import { cn } from '#/lib/utils'
 import {
   claimActionLabel,
   claimAllowsFromSavings,
@@ -134,6 +135,12 @@ const KEYPAD_KEYS = [
   'backspace',
   '+',
 ]
+
+const OPERATOR_KEYS = new Set(['/', '*', '-', '+'])
+
+// Borderless soft-teal keys so the pad sits quietly on the framed sheet.
+const KEYPAD_KEY_CLASS =
+  'font-mono h-auto min-w-0 rounded-2xl bg-lagoon-deep/8 px-0 py-3.5 text-lg font-semibold text-sea-ink hover:bg-lagoon-deep/14 active:scale-95'
 
 const KEY_LABELS: Partial<Record<string, { symbol: string; name: string }>> = {
   '.': { symbol: '.', name: 'Decimal point' },
@@ -1041,8 +1048,8 @@ export function QuickAddSheet({
                 key={key}
                 type="button"
                 aria-label="Delete digit (hold to clear)"
-                variant="secondary"
-                className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold select-none active:scale-95"
+                variant="ghost"
+                className={cn(KEYPAD_KEY_CLASS, 'select-none')}
                 onPointerDown={startBackspaceHold}
                 onPointerUp={cancelBackspaceHold}
                 onPointerLeave={cancelBackspaceHold}
@@ -1056,9 +1063,13 @@ export function QuickAddSheet({
               <Button
                 key={key}
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 aria-label={KEY_LABELS[key]?.name}
-                className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
+                className={cn(
+                  KEYPAD_KEY_CLASS,
+                  OPERATOR_KEYS.has(key) &&
+                    'bg-lagoon-deep/16 text-lagoon-deep hover:bg-lagoon-deep/22',
+                )}
                 onClick={() => appendDigits(key)}
               >
                 {KEY_LABELS[key]?.symbol ?? key}
