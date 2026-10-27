@@ -5,7 +5,7 @@ import {
   PiggyBank,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import { AccountPicker } from '#/components/app/account-picker'
 import { CategoryPicker } from '#/components/app/category-picker'
@@ -43,6 +43,14 @@ import {
   remainingAfterReplacement,
 } from '../../../shared/claim'
 import { oneTapRecentKey } from '../../../shared/one-tap-recents'
+import {
+  MAX_CALCULATOR_AMOUNT,
+  appendCalculatorKey,
+  evaluateExpression,
+  formatExpression,
+  hasOperator,
+  isCalculatorOperator,
+} from '../../../shared/calculator'
 
 import type {
   Account,
@@ -107,45 +115,37 @@ function formatTransactionDate(occurredAt: number) {
   return transactionDateFormat.format(new Date(occurredAt))
 }
 
-const MAX_AMOUNT_WHOLE_DIGITS = 9
-const MAX_AMOUNT_FRACTION_DIGITS = 2
+// Digits in phone order with the operators down the right-hand side.
+const KEYPAD_KEYS = [
+  '1',
+  '2',
+  '3',
+  '/',
+  '4',
+  '5',
+  '6',
+  '*',
+  '7',
+  '8',
+  '9',
+  '-',
+  '.',
+  '0',
+  'backspace',
+  '+',
+]
+
+const KEY_LABELS: Partial<Record<string, { symbol: string; name: string }>> = {
+  '.': { symbol: '.', name: 'Decimal point' },
+  '/': { symbol: '÷', name: 'Divide' },
+  '*': { symbol: '×', name: 'Multiply' },
+  '-': { symbol: '−', name: 'Subtract' },
+  '+': { symbol: '+', name: 'Add' },
+}
 
 function amountToDigits(amount: number) {
   if (!Number.isFinite(amount) || amount <= 0) return ''
   return String(Math.round(amount * 100) / 100)
-}
-
-function parseAmountDigits(digits: string) {
-  if (!digits || digits === '.') return 0
-  const amount = Number(digits)
-  if (!Number.isFinite(amount)) return 0
-  return Math.round(amount * 100) / 100
-}
-
-function appendAmountInput(current: string, value: string) {
-  if (value === '.' || value === ',') {
-    if (current.includes('.')) return current
-    return current === '' ? '0.' : `${current}.`
-  }
-
-  if (!/^\d+$/.test(value)) return current
-
-  if (current.includes('.')) {
-    const [whole, fraction = ''] = current.split('.')
-    if (fraction.length >= MAX_AMOUNT_FRACTION_DIGITS) return current
-    const nextFraction = `${fraction}${value}`.slice(
-      0,
-      MAX_AMOUNT_FRACTION_DIGITS,
-    )
-    return `${whole}.${nextFraction}`
-  }
-
-  if (current === '0') {
-    return value.replace(/^0+/, '') || '0'
-  }
-
-  const next = `${current}${value}`.replace(/^0+(\d)/, '$1')
-  return next.slice(0, MAX_AMOUNT_WHOLE_DIGITS)
 }
 
 /** Null when the MWK amount is worth less than a cent at this rate. */
@@ -176,17 +176,7 @@ function formatAmountDigitsDisplay(
   currency: Account['currency'],
 ) {
   const prefix = currency === 'USD' ? '$ ' : 'K '
-  if (!digits) return `${prefix}0`
-
-  const hasDecimal = digits.includes('.')
-  const [wholePart, fractionPart = ''] = digits.split('.')
-  const whole = Number(wholePart || '0')
-  const formattedWhole = Number.isFinite(whole)
-    ? whole.toLocaleString('en-US')
-    : '0'
-
-  if (!hasDecimal) return `${prefix}${formattedWhole}`
-  return `${prefix}${formattedWhole}.${fractionPart}`
+  return `${prefix}${formatExpression(digits) || '0'}`
 }
 
 function formatEnteredAmount(value: number, currency: Account['currency']) {
@@ -623,7 +613,14 @@ export function QuickAddSheet({
       ? 'MWK'
       : (fromAccount?.currency ?? 'MWK')
   const conversionRate = initial.fxRate ?? usdRate
-  const amount = parseAmountDigits(digits)
+  // The keypad holds a sum like "1200+350*2"; everything downstream uses its
+  // result. Negative, unworkable (÷ 0) or oversized results can't be saved.
+  const calculated = evaluateExpression(digits)
+  const amountIsValid =
+    calculated !== null &&
+    calculated >= 0 &&
+    calculated <= MAX_CALCULATOR_AMOUNT
+  const amount = amountIsValid ? calculated : 0
   let amountMwk = amount
   if (amount > 0 && amountCurrency === 'USD' && conversionRate > 0) {
     try {
@@ -693,8 +690,9 @@ export function QuickAddSheet({
     const next = accounts.find((account) => account.id === nextAccountId)
     if (!previous || !next || previous.currency === next.currency) return
     setDigits((current) => {
-      const parsed = parseAmountDigits(current)
-      if (parsed <= 0 || conversionRate <= 0) return current
+      const parsed = evaluateExpression(current) ?? 0
+      if (parsed <= 0 || parsed > MAX_CALCULATOR_AMOUNT) return current
+      if (conversionRate <= 0) return current
       try {
         const mwk = currencyToMwk(parsed, previous.currency, conversionRate)
         return amountToDigits(mwkToCurrency(mwk, next.currency, conversionRate))
@@ -710,7 +708,43 @@ export function QuickAddSheet({
   }
 
   function appendDigits(value: string) {
-    setDigits((current) => appendAmountInput(current, value))
+    setDigits((current) => appendCalculatorKey(current, value))
+  }
+
+  /** Collapses a sum into its result, if that result is a usable amount. */
+  function commitExpression() {
+    setDigits((current) => {
+      if (!hasOperator(current)) return current
+      const result = evaluateExpression(current)
+      return result === null || result < 0 || result > MAX_CALCULATOR_AMOUNT
+        ? current
+        : amountToDigits(result)
+    })
+  }
+
+  const clearHold = useRef<{ timer?: number; cleared: boolean }>({
+    cleared: false,
+  })
+
+  function startBackspaceHold() {
+    clearHold.current.cleared = false
+    clearHold.current.timer = window.setTimeout(() => {
+      clearHold.current.cleared = true
+      setDigits('')
+    }, 500)
+  }
+
+  function cancelBackspaceHold() {
+    window.clearTimeout(clearHold.current.timer)
+  }
+
+  function backspace() {
+    // A long press already cleared everything; skip the click that follows.
+    if (clearHold.current.cleared) {
+      clearHold.current.cleared = false
+      return
+    }
+    setDigits((current) => current.slice(0, -1))
   }
 
   function save() {
@@ -789,12 +823,22 @@ export function QuickAddSheet({
     } else if (event.key === '.' || event.key === ',') {
       event.preventDefault()
       appendDigits('.')
+    } else if (isCalculatorOperator(event.key)) {
+      event.preventDefault()
+      appendDigits(event.key)
     } else if (event.key === 'Backspace') {
       event.preventDefault()
       setDigits((current) => current.slice(0, -1))
+    } else if (event.key === 'Delete') {
+      event.preventDefault()
+      setDigits('')
+    } else if (event.key === '=') {
+      event.preventDefault()
+      commitExpression()
     } else if (event.key === 'Enter') {
       event.preventDefault()
-      save()
+      if (hasOperator(digits)) commitExpression()
+      else save()
     }
   })
 
@@ -804,6 +848,15 @@ export function QuickAddSheet({
   }, [])
 
   const amountDisplay = formatAmountDigitsDisplay(digits, amountCurrency)
+  const isExpression = hasOperator(digits)
+  const expressionPreview =
+    calculated === null
+      ? "Can't divide by 0"
+      : calculated > MAX_CALCULATOR_AMOUNT
+        ? 'Too large'
+        : calculated < 0
+          ? `= −${formatEnteredAmount(-calculated, amountCurrency)}`
+          : `= ${formatEnteredAmount(calculated, amountCurrency)}`
   const saveLabel = isEditing
     ? 'Save changes'
     : mode === 'expense'
@@ -948,10 +1001,22 @@ export function QuickAddSheet({
           <p
             aria-live="polite"
             aria-atomic="true"
-            className={`font-mono mt-1 max-w-full truncate text-[2.6rem] font-bold tracking-tight tabular-nums ${digits ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
+            className={`font-mono mt-1 max-w-full font-bold tracking-tight tabular-nums ${isExpression ? 'text-2xl leading-tight break-words' : 'truncate text-[2.6rem]'} ${digits ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
           >
             {amountDisplay}
           </p>
+          {isExpression && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!amountIsValid}
+              className={`font-mono mt-1 text-lg font-bold tabular-nums disabled:opacity-100 ${amountIsValid ? 'text-lagoon-deep' : 'text-coral-deep'}`}
+              onClick={commitExpression}
+            >
+              {expressionPreview}
+            </Button>
+          )}
           {mode === 'transfer' &&
           fromAccount &&
           toAccount &&
@@ -973,30 +1038,37 @@ export function QuickAddSheet({
             </Badge>
           )}
         </div>
-        <div className="mt-4 grid min-w-0 grid-cols-3 gap-2">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0'].map(
-            (key) => (
+        <div className="mt-4 grid min-w-0 grid-cols-4 gap-2">
+          {KEYPAD_KEYS.map((key) =>
+            key === 'backspace' ? (
+              <Button
+                key={key}
+                type="button"
+                aria-label="Delete digit (hold to clear)"
+                variant="secondary"
+                className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold select-none active:scale-95"
+                onPointerDown={startBackspaceHold}
+                onPointerUp={cancelBackspaceHold}
+                onPointerLeave={cancelBackspaceHold}
+                onPointerCancel={cancelBackspaceHold}
+                onContextMenu={(event) => event.preventDefault()}
+                onClick={backspace}
+              >
+                <Delete className="size-5" />
+              </Button>
+            ) : (
               <Button
                 key={key}
                 type="button"
                 variant="secondary"
-                aria-label={key === '.' ? 'Decimal point' : undefined}
+                aria-label={KEY_LABELS[key]?.name}
                 className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
                 onClick={() => appendDigits(key)}
               >
-                {key}
+                {KEY_LABELS[key]?.symbol ?? key}
               </Button>
             ),
           )}
-          <Button
-            type="button"
-            aria-label="Delete digit"
-            variant="secondary"
-            className="font-mono h-auto min-w-0 rounded-2xl px-0 py-3.5 text-lg font-semibold active:scale-95"
-            onClick={() => setDigits((current) => current.slice(0, -1))}
-          >
-            <Delete className="size-5" />
-          </Button>
         </div>
         {!isAutoSave && mode === 'expense' && (
           <>
