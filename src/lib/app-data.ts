@@ -1,3 +1,5 @@
+import { formatK } from '../../shared/money-format'
+
 export interface Account {
   id: string
   name: string
@@ -293,19 +295,12 @@ export const seedReconcile: ReconcileBalance[] = [
   { accountId: 'cash', expected: 38500, actual: 38500 },
 ]
 
-const kwachaFormat = new Intl.NumberFormat('en-US', {
-  maximumFractionDigits: 2,
-})
-
 const usdFormat = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 })
 
-export function formatK(value: number) {
-  const absolute = kwachaFormat.format(Math.abs(value))
-  return `${value < 0 ? '-' : ''}K${absolute}`
-}
+export { formatK, formatKCompact } from '../../shared/money-format'
 
 export function formatUsd(value: number) {
   const absolute = usdFormat.format(Math.abs(value))
