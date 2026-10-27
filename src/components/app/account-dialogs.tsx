@@ -92,10 +92,7 @@ export function MoveMoneyDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent
-        sheet
-        className="rounded-3xl border-(--line) bg-(--surface-strong) sm:max-w-md"
-      >
+      <DialogContent sheet className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Move money</DialogTitle>
           <DialogDescription>
@@ -255,10 +252,7 @@ export function AddAccountDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent
-        sheet
-        className="rounded-3xl border-(--line) bg-(--surface-strong) sm:max-w-md"
-      >
+      <DialogContent sheet className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add account</DialogTitle>
           <DialogDescription>

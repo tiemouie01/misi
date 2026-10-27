@@ -162,11 +162,7 @@ function SidebarUserMenu() {
           <ChevronsUpDown className="size-4 text-sea-ink-soft sidebar-collapsed:hidden" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        className="w-64 rounded-2xl border-(--line) bg-(--surface-strong) p-1.5 text-sea-ink backdrop-blur-md"
-      >
+      <PopoverContent side="top" align="start" className="w-64 p-1.5">
         <div className="px-2.5 py-2">
           <p className="truncate text-sm font-bold">{name}</p>
           {user?.email && (

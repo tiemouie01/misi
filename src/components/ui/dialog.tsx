@@ -7,6 +7,14 @@ import { cn } from '#/lib/utils'
 
 import type { ComponentProps } from 'react'
 
+/** The dim, ground-tinted backdrop behind dialogs and alert dialogs. */
+export const dialogOverlayClassName =
+  'fixed inset-0 z-50 bg-(--scrim) backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0'
+
+/** A centered dialog surface: the framed, solid card the pages use. */
+export const dialogSurfaceClassName =
+  'fixed top-1/2 left-1/2 z-50 grid w-full min-w-0 grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-3xl border-6 border-(--card-frame) bg-(--card-solid) bg-clip-padding p-6 text-sea-ink shadow-(--card-lift) outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95'
+
 function Dialog({ ...props }: ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
@@ -36,12 +44,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
-      className={cn(
-        'fixed inset-0 z-50 bg-sea-ink/45 backdrop-blur-sm',
-        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
-        'data-[state=open]:animate-in data-[state=open]:fade-in-0',
-        className,
-      )}
+      className={cn(dialogOverlayClassName, className)}
       {...props}
     />
   )
@@ -65,13 +68,12 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full min-w-0 grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg outline-none',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
-          'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          dialogSurfaceClassName,
           'sm:max-w-lg',
           sheet && [
-            'p-(--dialog-p) pb-(--dialog-pb) [--dialog-p:1.25rem] [--dialog-pb:max(var(--dialog-p),env(safe-area-inset-bottom))] sm:[--dialog-p:1.75rem]',
-            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-h-[92dvh] max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-3xl max-sm:rounded-b-none',
+            'p-(--dialog-p) pb-(--dialog-pb) [--dialog-p:1.25rem] [--dialog-pb:max(var(--dialog-p),env(safe-area-inset-bottom))] sm:[--dialog-p:1.5rem]',
+            // On phones the frame shows only along the top edge.
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-h-[92dvh] max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-3xl max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0',
             'max-sm:data-[state=closed]:slide-out-to-bottom max-sm:data-[state=open]:slide-in-from-bottom',
           ],
           className,
@@ -92,7 +94,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 grid size-10 place-items-center sm:size-9 rounded-full border border-(--chip-line) bg-(--chip-bg) text-sea-ink transition hover:border-lagoon-deep focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="absolute top-4 right-4 grid size-10 place-items-center rounded-full bg-lagoon-deep/10 text-sea-ink-soft transition hover:bg-lagoon-deep/16 hover:text-sea-ink focus-visible:ring-2 focus-visible:ring-lagoon/55 focus-visible:outline-none sm:size-9"
           >
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
@@ -107,7 +109,7 @@ function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
+      className={cn('flex flex-col gap-1.5 pr-10 text-left', className)}
       {...props}
     />
   )
@@ -127,7 +129,7 @@ function DialogFooter({
       className={cn(
         'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
         sticky &&
-          'sticky -bottom-(--dialog-pb) z-10 -mx-(--dialog-p) -mb-(--dialog-pb) border-t border-(--line) bg-(--surface-strong) px-(--dialog-p) pt-3 pb-(--dialog-pb)',
+          'sticky -bottom-(--dialog-pb) z-10 -mx-(--dialog-p) -mb-(--dialog-pb) border-t border-(--line) bg-(--card-solid) px-(--dialog-p) pt-3 pb-(--dialog-pb)',
         className,
       )}
       {...props}
@@ -142,7 +144,10 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-none font-semibold', className)}
+      className={cn(
+        'text-xl leading-tight font-bold tracking-tight text-sea-ink',
+        className,
+      )}
       {...props}
     />
   )
@@ -155,7 +160,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-sm text-sea-ink-soft', className)}
       {...props}
     />
   )

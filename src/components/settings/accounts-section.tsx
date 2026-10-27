@@ -408,10 +408,7 @@ function EditAccountDialog({
         if (!open && !saving) onClose()
       }}
     >
-      <DialogContent
-        sheet
-        className="rounded-3xl border-(--line) bg-(--surface-strong) sm:max-w-md"
-      >
+      <DialogContent sheet className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit account</DialogTitle>
           <DialogDescription>

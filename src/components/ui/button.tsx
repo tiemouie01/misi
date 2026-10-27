@@ -17,6 +17,8 @@ const buttonVariants = cva(
           'border border-(--chip-line) bg-(--chip-bg) text-sea-ink shadow-sm hover:border-lagoon-deep hover:bg-(--link-bg-hover) hover:text-sea-ink',
         outline:
           'border border-(--chip-line) bg-transparent text-sea-ink hover:border-lagoon-deep hover:bg-(--chip-bg) hover:text-sea-ink',
+        /* A selectable pill in a picker; pair with `aria-pressed`. */
+        chip: 'border border-(--chip-line) bg-(--chip-bg) text-sea-ink hover:border-lagoon-deep hover:bg-(--link-bg-hover) hover:text-sea-ink aria-pressed:border-lagoon-deep aria-pressed:bg-lagoon-deep/12 aria-pressed:text-sea-ink',
         ghost:
           'text-sea-ink-soft shadow-none hover:bg-(--chip-bg) hover:text-sea-ink',
         destructive:
@@ -26,6 +28,8 @@ const buttonVariants = cva(
       size: {
         default: 'h-10 px-5 py-2',
         sm: 'h-8 gap-1.5 px-3 text-xs',
+        /* A touch-sized pill on phones, compact from `sm`. */
+        chip: 'h-10 gap-1.5 px-3 text-xs sm:h-8',
         lg: 'h-12 px-7 text-base',
         icon: 'size-10 p-0',
         'icon-sm': 'size-8 p-0',
