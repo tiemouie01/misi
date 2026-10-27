@@ -3,7 +3,7 @@ import { CircleCheck, TriangleAlert } from 'lucide-react'
 
 import { Card } from '#/components/ui/card'
 import { Progress } from '#/components/ui/progress'
-import { formatK } from '#/lib/app-data'
+import { formatK, formatKCompact } from '#/lib/app-data'
 import { cn } from '#/lib/utils'
 
 export type SpendingPace = 'none' | 'on-track' | 'slow' | 'fast' | 'over'
@@ -59,6 +59,40 @@ function PaceChip({ pace }: { pace: SpendingPace }) {
   )
 }
 
+/** A compact amount for tight tiles; the exact figure stays on hover and for
+    screen readers. */
+function CompactK({ value }: { value: number }) {
+  const exact = formatK(value)
+  const compact = formatKCompact(value)
+  if (compact === exact) return <>{exact}</>
+  return (
+    <span title={exact}>
+      <span aria-hidden>{compact}</span>
+      <span className="sr-only">{exact}</span>
+    </span>
+  )
+}
+
+function netWorthBreakdown({
+  totalInAccounts,
+  accountCount,
+  youOwe,
+  owedToYou,
+}: {
+  totalInAccounts: number
+  accountCount: number
+  youOwe: number
+  owedToYou: number
+}) {
+  if (youOwe <= 0 && owedToYou <= 0) {
+    return `Across ${accountCount} ${accountCount === 1 ? 'account' : 'accounts'}`
+  }
+  const parts = [`${formatKCompact(totalInAccounts)} in accounts`]
+  if (youOwe > 0) parts.push(`you owe ${formatKCompact(youOwe)}`)
+  if (owedToYou > 0) parts.push(`owed to you ${formatKCompact(owedToYou)}`)
+  return parts.join(' · ')
+}
+
 interface SummaryTilesProps {
   spendingLeft: number
   spendingLimit: number
@@ -87,6 +121,7 @@ export function SummaryTiles({
   owedToYou,
 }: SummaryTilesProps) {
   const hasPlan = spendingLimit > 0
+  const netWorth = totalInAccounts - youOwe + owedToYou
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
@@ -142,7 +177,7 @@ export function SummaryTiles({
           You can spend about
         </h2>
         <p className="text-[clamp(1.125rem,15cqi,1.5rem)] leading-tight font-extrabold sm:text-[clamp(1.5rem,15cqi,2rem)]">
-          {formatK(perDay)}{' '}
+          <CompactK value={perDay} />{' '}
           <span className="text-sm font-bold text-sea-ink-soft sm:text-base">
             a day
           </span>
@@ -158,17 +193,23 @@ export function SummaryTiles({
 
       <Card variant="panel" className="@container gap-1.5 p-4 sm:gap-2 sm:p-5">
         <h2 className="text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
-          Total in your accounts
+          Net worth
         </h2>
-        <p className="text-[clamp(1.125rem,15cqi,1.5rem)] leading-tight font-extrabold sm:text-[clamp(1.5rem,15cqi,2rem)]">
-          {formatK(totalInAccounts)}
+        <p
+          className={cn(
+            'text-[clamp(1.125rem,15cqi,1.5rem)] leading-tight font-extrabold sm:text-[clamp(1.5rem,15cqi,2rem)]',
+            netWorth < 0 && 'text-coral-deep',
+          )}
+        >
+          <CompactK value={netWorth} />
         </p>
         <p className="text-[0.8rem] text-sea-ink-soft sm:text-sm">
-          {youOwe > 0
-            ? `You owe ${formatK(youOwe)}`
-            : owedToYou > 0
-              ? `Owed to you ${formatK(owedToYou)}`
-              : `In ${accountCount} ${accountCount === 1 ? 'account' : 'accounts'}`}
+          {netWorthBreakdown({
+            totalInAccounts,
+            accountCount,
+            youOwe,
+            owedToYou,
+          })}
         </p>
       </Card>
     </div>
