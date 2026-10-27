@@ -1253,8 +1253,8 @@ function BudgetEditDialog({
                   Income plans
                 </h3>
                 <p className="mt-1 text-xs text-sea-ink-soft">
-                  Expected amounts and savings rates are managed with your
-                  income sources.
+                  Regular paydays are managed with your income sources. One-offs
+                  are edited under Money coming in.
                 </p>
               </div>
               {onManageIncomeSources ? (
