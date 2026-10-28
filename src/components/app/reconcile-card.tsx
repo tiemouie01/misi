@@ -57,7 +57,7 @@ function DriftChip({
     )
   }
   return (
-    <Badge variant="destructive" className="font-mono tabular-nums">
+    <Badge variant="destructive" className="tabular-nums">
       {formatNativeAmount(drift, currency)}
     </Badge>
   )
@@ -169,7 +169,7 @@ export function ReconcileCard({
                     <DriftChip drift={drift} currency={account.currency} />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="font-mono text-[0.75rem] text-sea-ink-soft tabular-nums">
+                    <span className="text-[0.75rem] text-sea-ink-soft tabular-nums">
                       Expected{' '}
                       {formatNativeAmount(balance.expected, account.currency)}
                     </span>
@@ -177,7 +177,7 @@ export function ReconcileCard({
                       type="number"
                       step={account.currency === 'USD' ? '0.01' : '1'}
                       aria-label={`${account.name} actual balance`}
-                      className="font-mono h-10 w-28 sm:h-9 rounded-lg px-2.5 py-1.5 text-right tabular-nums"
+                      className="h-10 w-28 sm:h-9 rounded-lg px-2.5 py-1.5 text-right tabular-nums"
                       value={balance.actual}
                       onChange={(event) =>
                         onActualChange(
@@ -258,10 +258,8 @@ export function ReconcileCard({
             <div className="mt-4 rounded-xl bg-coral/8 px-4 py-3.5">
               <p className="text-sm font-bold text-sea-ink">
                 {gaps.length} {gaps.length === 1 ? 'gap' : 'gaps'} —{' '}
-                <span className="font-mono tabular-nums">
-                  {formatK(gapTotalMwk)}
-                </span>{' '}
-                MWK equivalent. Fix each account above.
+                <span className="tabular-nums">{formatK(gapTotalMwk)}</span> MWK
+                equivalent. Fix each account above.
               </p>
             </div>
           )}
@@ -299,7 +297,7 @@ export function ReconcileCard({
                   <span className="min-w-0 flex-1 truncate text-sm font-bold text-sea-ink">
                     {account.name}
                   </span>
-                  <span className="font-mono shrink-0 text-right text-[0.8rem] whitespace-nowrap text-sea-ink-soft tabular-nums">
+                  <span className="shrink-0 text-right text-[0.8rem] whitespace-nowrap text-sea-ink-soft tabular-nums">
                     {formatNativeAmount(balance.expected, account.currency)}
                   </span>
                   <DriftChip drift={drift} currency={account.currency} />

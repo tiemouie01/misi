@@ -141,7 +141,7 @@ const OPERATOR_KEYS = new Set(['/', '*', '-', '+'])
 
 // Borderless soft-teal keys so the pad sits quietly on the framed sheet.
 const KEYPAD_KEY_CLASS =
-  'font-mono h-auto min-w-0 rounded-2xl bg-lagoon-deep/8 px-0 py-3.5 text-lg font-semibold text-sea-ink hover:bg-lagoon-deep/14 active:scale-95'
+  'h-auto min-w-0 rounded-2xl bg-lagoon-deep/8 px-0 py-3.5 text-lg font-semibold text-sea-ink hover:bg-lagoon-deep/14 active:scale-95'
 
 const KEY_LABELS: Partial<Record<string, { symbol: string; name: string }>> = {
   '.': { symbol: '.', name: 'Decimal point' },
@@ -296,9 +296,7 @@ function RecentChips({
           >
             <Icon className="size-4" style={{ color: category.color }} />
             <span className="truncate">{recent.payee}</span>
-            <span className="font-mono text-sea-ink-soft tabular-nums">
-              {amount}
-            </span>
+            <span className="text-sea-ink-soft tabular-nums">{amount}</span>
           </Button>
         )
       })}
@@ -1007,7 +1005,7 @@ export function QuickAddSheet({
           <p
             aria-live="polite"
             aria-atomic="true"
-            className={`font-mono mt-1 max-w-full font-bold tracking-tight tabular-nums ${isExpression ? 'text-2xl leading-tight break-words' : 'truncate text-[2.6rem]'} ${digits ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
+            className={`mt-1 max-w-full font-extrabold tracking-tight tabular-nums ${isExpression ? 'text-2xl leading-tight break-words' : 'truncate text-[2.6rem]'} ${digits ? 'text-sea-ink' : 'text-sea-ink-soft/50'}`}
           >
             {amountDisplay}
           </p>
@@ -1017,7 +1015,7 @@ export function QuickAddSheet({
               variant="ghost"
               size="sm"
               disabled={!amountIsValid}
-              className={`font-mono mt-1 text-lg font-bold tabular-nums disabled:opacity-100 ${amountIsValid ? 'text-lagoon-deep' : 'text-coral-deep'}`}
+              className={`mt-1 text-lg font-bold tabular-nums disabled:opacity-100 ${amountIsValid ? 'text-lagoon-deep' : 'text-coral-deep'}`}
               onClick={commitExpression}
             >
               {expressionPreview}
@@ -1222,7 +1220,7 @@ export function QuickAddSheet({
             <PiggyBank className="size-4 shrink-0 text-palm" />
             <p className="text-[0.82rem] font-semibold text-sea-ink">
               Auto-save {Math.round(autoSaveRate * 100)}% — Misi will propose{' '}
-              <span className="font-mono tabular-nums">
+              <span className="tabular-nums">
                 {formatK(Math.round(amountMwk * autoSaveRate))}
               </span>{' '}
               → Savings.

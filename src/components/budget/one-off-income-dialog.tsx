@@ -116,7 +116,7 @@ export function OneOffIncomeDialog({
               <Input
                 id="one-off-income-amount"
                 inputMode="numeric"
-                className="font-mono mt-2 tabular-nums"
+                className="mt-2 tabular-nums"
                 placeholder="0"
                 value={amount}
                 onChange={(event) =>
@@ -129,7 +129,7 @@ export function OneOffIncomeDialog({
               <Input
                 id="one-off-income-day"
                 inputMode="numeric"
-                className="font-mono mt-2 tabular-nums"
+                className="mt-2 tabular-nums"
                 placeholder="Any"
                 aria-invalid={!dayValid}
                 value={day}

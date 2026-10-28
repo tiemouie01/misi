@@ -182,7 +182,6 @@
 @theme inline {
   --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Fraunces', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --color-sea-ink: var(--sea-ink);
   --color-sea-ink-soft: var(--sea-ink-soft);
   --color-lagoon: var(--lagoon);

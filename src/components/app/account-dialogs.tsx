@@ -116,7 +116,7 @@ export function MoveMoneyDialog({
           <Input
             id="move-savings-amount"
             inputMode="decimal"
-            className="font-mono mt-2 tabular-nums"
+            className="mt-2 tabular-nums"
             placeholder="0"
             value={digits}
             onChange={(event) =>
@@ -135,22 +135,20 @@ export function MoveMoneyDialog({
             {direction === 'toSpending' ? (
               <>
                 Available:{' '}
-                <span className="font-mono font-semibold text-sea-ink tabular-nums">
+                <span className="font-semibold text-sea-ink tabular-nums">
                   {formatK(Math.max(0, savingsBalance))}
                 </span>
               </>
             ) : cutsIntoSavings && amount > 0 ? (
               <>
                 Spending will be{' '}
-                <span className="font-mono tabular-nums">
-                  {formatK(nextSpending)}
-                </span>{' '}
-                — cutting into savings.
+                <span className="tabular-nums">{formatK(nextSpending)}</span> —
+                cutting into savings.
               </>
             ) : spendingEnvelope < 0 ? (
               <>
                 Spending is{' '}
-                <span className="font-mono tabular-nums">
+                <span className="tabular-nums">
                   {formatK(spendingEnvelope)}
                 </span>{' '}
                 — already cutting into savings.
@@ -158,7 +156,7 @@ export function MoveMoneyDialog({
             ) : (
               <>
                 In spending:{' '}
-                <span className="font-mono font-semibold text-sea-ink tabular-nums">
+                <span className="font-semibold text-sea-ink tabular-nums">
                   {formatK(spendingEnvelope)}
                 </span>
               </>

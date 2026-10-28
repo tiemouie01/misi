@@ -758,7 +758,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           <p className="text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
             Planned
           </p>
-          <p className="mt-1 font-mono text-sm font-bold text-sea-ink tabular-nums">
+          <p className="mt-1 text-sm font-bold text-sea-ink tabular-nums">
             {formatK(categoryTotal)}
           </p>
         </div>
@@ -768,7 +768,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           </p>
           <p
             className={cn(
-              'mt-1 font-mono text-sm font-bold tabular-nums',
+              'mt-1 text-sm font-bold tabular-nums',
               overallocated > 0 ? 'text-coral-deep' : 'text-palm',
             )}
           >
@@ -779,7 +779,7 @@ export function BudgetsStep({ draft, setDraft, error }: StepProps) {
           <p className="text-[0.7rem] font-bold tracking-wide text-sea-ink-soft uppercase">
             Limit
           </p>
-          <p className="mt-1 font-mono text-sm font-bold text-sea-ink tabular-nums">
+          <p className="mt-1 text-sm font-bold text-sea-ink tabular-nums">
             {formatK(spendingLimit)}
           </p>
         </div>
@@ -944,7 +944,7 @@ export function ReviewStep({ draft, goToStep }: StepProps) {
                 className="flex items-baseline justify-between gap-3"
               >
                 <dt className="text-[0.85rem] text-sea-ink-soft">{label}</dt>
-                <dd className="text-right font-mono text-[0.85rem] font-semibold text-sea-ink tabular-nums">
+                <dd className="text-right text-[0.85rem] font-semibold text-sea-ink tabular-nums">
                   {value}
                 </dd>
               </div>

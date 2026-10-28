@@ -1155,7 +1155,7 @@ function BudgetEditDialog({
                 <p className="text-xs font-bold text-sea-ink-soft">
                   Derived savings target
                 </p>
-                <p className="mt-1 font-mono text-lg font-bold text-palm tabular-nums">
+                <p className="mt-1 text-lg font-bold text-palm tabular-nums">
                   {formatBudgetMoney(
                     plannedSavingsTotal(cycle.incomeSources),
                     currency,

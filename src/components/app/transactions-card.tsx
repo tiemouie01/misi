@@ -207,7 +207,7 @@ function rowCopy(
 }
 
 const rowGridClassName =
-  'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 @xl:grid-cols-[auto_minmax(0,1fr)_minmax(0,13rem)_auto] @xl:gap-x-4'
+  'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 @xl:grid-cols-[auto_minmax(0,1fr)_minmax(0,13rem)_7.5rem] @xl:gap-x-4'
 
 function TransactionRow({
   transaction,
