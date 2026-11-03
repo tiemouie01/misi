@@ -96,6 +96,10 @@ export function SpendingSplit({
               </li>
             ))}
           </ul>
+          <p className="text-[0.75rem] text-sea-ink-soft">
+            Shares of what you planned and what you’ve used, so they leave out
+            money that’s not planned yet.
+          </p>
         </>
       ) : (
         <p className="text-[0.8rem] text-sea-ink-soft">

@@ -49,7 +49,8 @@ export function SpendPaceChart({
   const yMax = Math.max(plan, spent, projected ?? 0) * 1.08
   const x = (day: number) => ((day + 1) / totalDays) * 100
   const y = (amount: number) => 100 - (amount / yMax) * 100
-  const paceAt = (day: number) => (plan * (day + 1)) / totalDays
+  // Whole kwacha: an even-pace share like K92,903.23 is false precision.
+  const paceAt = (day: number) => Math.round((plan * (day + 1)) / totalDays)
   const color = TONE_COLOR[tone]
 
   const points = [
@@ -98,8 +99,17 @@ export function SpendPaceChart({
         aria-label="Spending pace chart. Use the arrow keys to step through days."
         className="relative h-20 touch-pan-y rounded-sm outline-offset-4 sm:h-24"
         onPointerMove={pick}
-        onPointerDown={pick}
-        onPointerLeave={() => setActive(null)}
+        onPointerDown={(event) => {
+          // Safari doesn't focus on tap, and focus is what lets a tap elsewhere
+          // (blur) clear the picked day.
+          event.currentTarget.focus({ preventScroll: true })
+          pick(event)
+        }}
+        // A mouse leaving ends a hover. A finger lifting fires leave too, but a
+        // tapped day should stay put until focus moves elsewhere.
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') setActive(null)
+        }}
         onKeyDown={step}
         onBlur={() => setActive(null)}
       >

@@ -1,7 +1,7 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect, useHydrated } from '@tanstack/react-router'
-import { useMutation, usePaginatedQuery } from 'convex/react'
+import { useConvexAuth, useMutation, usePaginatedQuery } from 'convex/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -169,10 +169,13 @@ function AppDashboard({
   )
 
   // The feed pages through all history; until the first page lands, show the
-  // current cycle from bootstrap so the card never flashes empty.
+  // current cycle from bootstrap so the card never flashes empty. On a reload
+  // the Convex client restores its session after first render, so wait for it
+  // rather than let the feed query fail as signed out.
+  const { isAuthenticated } = useConvexAuth()
   const feed = usePaginatedQuery(
     api.misi.listTransactions,
-    {},
+    isAuthenticated ? {} : 'skip',
     { initialNumItems: FEED_PAGE_SIZE },
   )
   const feedTransactions = useMemo<Txn[]>(
