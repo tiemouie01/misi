@@ -200,8 +200,8 @@ function AppDashboard({
   const createAccountMutation = useMutation(api.misi.createAccount)
   const [autoSaveBusy, setAutoSaveBusy] = useState(false)
   // Below `xl` the home page is one column, so activity and money take turns.
-  // Money comes first: what's free to spend is the first thing people check.
-  const [mobileView, setMobileView] = useState('money')
+  // Activity opens first; money is one tap away.
+  const [mobileView, setMobileView] = useState('activity')
   const hydrated = useHydrated()
   const { openSheet, requestDelete } = useQuickAdd()
 
