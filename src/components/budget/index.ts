@@ -7,6 +7,7 @@ export {
 export type {
   BudgetCategoryPlan,
   BudgetCategoryPlanUpdate,
+  BudgetCategoryTransactionsSlot,
   BudgetCategoryStatus,
   BudgetCycle,
   BudgetGroup,

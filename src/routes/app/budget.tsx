@@ -9,6 +9,7 @@ import { api } from '../../../convex/_generated/api'
 import { incomeSourceStatus } from '../../../shared/income'
 import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
+import { CategoryTransactions } from '#/components/budget/category-transactions'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { errorMessage } from '#/lib/error-message'
 
@@ -291,6 +292,9 @@ function BudgetRoute() {
             onSavePlan={savePlan}
             onSaveOneOffIncome={saveOneOffIncome}
             onRemoveOneOffIncome={deleteOneOffIncome}
+            renderCategoryTransactions={(slot) => (
+              <CategoryTransactions {...slot} now={now} />
+            )}
           />
         )}
       </main>
