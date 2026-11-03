@@ -10,6 +10,7 @@ import { cycleSpend } from '../../../shared/cycle-spend'
 import { greeting } from '#/lib/greeting'
 import { AppProviders } from '#/components/app/app-providers'
 import { DebtsCard } from '#/components/app/debts-card'
+import { HomeTrends } from '#/components/app/home-trends'
 import { MoneyCard } from '#/components/app/money-card'
 import { useQuickAdd } from '#/components/app/quick-add-provider'
 import { SummaryTiles, spendingPace } from '#/components/app/summary-tiles'
@@ -135,7 +136,8 @@ function AppDashboard({
   const moveSavingsMutation = useMutation(api.misi.moveSavings)
   const createAccountMutation = useMutation(api.misi.createAccount)
   const [autoSaveBusy, setAutoSaveBusy] = useState(false)
-  // Below `xl` the home page is one column, so activity and money take turns.
+  // Below `xl` the home page is one column, so activity, money and trends
+  // take turns.
   // Activity opens first; money is one tap away.
   const [mobileView, setMobileView] = useState('activity')
   const hydrated = useHydrated()
@@ -358,6 +360,9 @@ function AppDashboard({
           <TabsTrigger value="money" className="px-4">
             Money
           </TabsTrigger>
+          <TabsTrigger value="trends" className="px-4">
+            Trends
+          </TabsTrigger>
         </TabsList>
         <TabsContent
           value="activity"
@@ -390,6 +395,11 @@ function AppDashboard({
             onCreateAccount={createAccount}
           />
           <DebtsCard className="xl:col-start-2" debts={debts} />
+        </TabsContent>
+        {/* Phones only: from `xl` the page shows everything at once and the
+            pace chip opens the chart. */}
+        <TabsContent value="trends" className="xl:hidden">
+          <HomeTrends categories={data.categories} now={now} />
         </TabsContent>
       </Tabs>
     </main>

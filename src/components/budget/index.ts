@@ -1,5 +1,6 @@
 export {
   BudgetPage,
+  BudgetTrends,
   formatBudgetMoney,
   formatBudgetPercent,
 } from './budget-page'

@@ -6,27 +6,36 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
-import { incomeSourceStatus } from '../../../shared/income'
 import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
 import { CategoryTransactions } from '#/components/budget/category-transactions'
-import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
+import { CycleSpendTrend } from '#/components/budget/cycle-spend-trend'
 import { errorMessage } from '#/lib/error-message'
 import { setIncomeArrivedOptimistically } from '#/lib/optimistic-income'
+import { shortDate, toBudgetCycles } from '#/lib/budget-cycles'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type {
-  BudgetCycle,
   BudgetHistoryRow,
   BudgetOneOffIncomeUpdate,
   BudgetPlanUpdate,
+  BudgetTab,
 } from '#/components/budget'
 
-const DAY_MS = 86_400_000
 const bootstrapQuery = convexQuery(api.misi.bootstrap, {})
 const budgetOverviewQuery = convexQuery(api.misi.budgetOverview, {})
 
+/** Tabs other than "This cycle" live in the URL so they can be linked to. */
+const LINKED_VIEWS = ['trends', 'history'] as const
+
+type LinkedView = (typeof LINKED_VIEWS)[number]
+
 export const Route = createFileRoute('/app/budget')({
+  validateSearch: (search): { view?: LinkedView } => ({
+    view: LINKED_VIEWS.includes(search.view as LinkedView)
+      ? (search.view as LinkedView)
+      : undefined,
+  }),
   loader: async ({ context }) => {
     const [bootstrap] = await Promise.all([
       context.queryClient.ensureQueryData(bootstrapQuery),
@@ -40,29 +49,9 @@ export const Route = createFileRoute('/app/budget')({
   component: BudgetRoute,
 })
 
-const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'Africa/Blantyre',
-})
-
-function shortDate(timestamp: number) {
-  return shortDateFormat.format(new Date(timestamp))
-}
-
-function expectedWindow(start: number, end: number) {
-  if (start === end) return `Expected on day ${start}`
-  return `Expected days ${start}–${end}`
-}
-
-/** One-offs store "any day" as the whole month, days 1–31. */
-function oneOffExpectedDay(start: number, end: number) {
-  return start === end ? start : undefined
-}
-
 function BudgetRoute() {
   const { now } = Route.useLoaderData()
+  const { view: linkedView } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const queryClient = useQueryClient()
   const { data: bootstrap } = useSuspenseQuery(bootstrapQuery)
@@ -112,85 +101,8 @@ function BudgetRoute() {
     [bootstrap?.categories],
   )
 
-  const cycles = useMemo<BudgetCycle[]>(
-    () =>
-      overview.cycles.map((view) => {
-        const totalDays = Math.max(
-          1,
-          Math.round((view.cycle.endsAt + 1 - view.cycle.startsAt) / DAY_MS),
-        )
-        const daysElapsed = Math.min(
-          totalDays,
-          Math.max(0, Math.floor((now - view.cycle.startsAt) / DAY_MS) + 1),
-        )
-
-        return {
-          id: view.cycle._id,
-          label: view.cycle.label,
-          rangeLabel: `${shortDate(view.cycle.startsAt)} – ${shortDate(view.cycle.endsAt)}`,
-          expectedIncome: view.expectedIncome,
-          actualIncome: view.actualIncome,
-          unassignedIncome: view.unassignedIncome,
-          investmentIncome: view.investmentIncome,
-          actualSavings: view.actualSavings,
-          actualSpending: view.actualSpending,
-          isClosed: view.cycle.endsAt < now,
-          spendingLimit: view.spendingLimit,
-          previousActualSpending: view.previousActualSpending,
-          daysElapsed,
-          totalDays,
-          categories: view.categoryRows
-            .filter((row) => !row.archived)
-            .map((row) => {
-              const category = categoriesByKey.get(row.categoryId)
-              return {
-                id: row.categoryId,
-                name: row.categoryName,
-                group: row.budgetGroup,
-                planned: row.plannedAmount,
-                spent: row.actualAmount,
-                previousSpent: row.previousActualAmount,
-                icon: category ? resolveCategoryIcon(category.icon) : undefined,
-                color: category
-                  ? resolveCategoryColor(category.color)
-                  : undefined,
-              }
-            }),
-          incomeSources: view.incomePlans.map((source) => {
-            const expectedDay = source.oneOff
-              ? oneOffExpectedDay(
-                  source.expectedDayStart,
-                  source.expectedDayEnd,
-                )
-              : undefined
-            return {
-              id: source.sourceId,
-              name: source.sourceName,
-              expectedAmount: source.expectedAmount,
-              expectedAmountMax: source.expectedAmountMax,
-              actualAmount: source.actualAmount,
-              landedAmount: source.landedAmount,
-              markedArrived: source.markedArrived,
-              savingsRate: source.savingsRate,
-              status: incomeSourceStatus(
-                source.actualAmount,
-                source.expectedAmount,
-                source.markedArrived,
-              ),
-              note: source.oneOff
-                ? expectedDay === undefined
-                  ? 'One-off, this cycle only'
-                  : `One-off · expected on day ${expectedDay}`
-                : expectedWindow(
-                    source.expectedDayStart,
-                    source.expectedDayEnd,
-                  ),
-              oneOff: source.oneOff,
-              expectedDay,
-            }
-          }),
-        }
-      }),
+  const cycles = useMemo(
+    () => toBudgetCycles(overview.cycles, categoriesByKey, now),
     [categoriesByKey, now, overview.cycles],
   )
 
@@ -304,6 +216,17 @@ function BudgetRoute() {
             history={history}
             currentCycleId={selectedCycleId ?? cycles.at(0)?.id}
             onCycleChange={setSelectedCycleId}
+            defaultTab={linkedView ?? 'current'}
+            onTabChange={(tab: BudgetTab) =>
+              navigate({
+                to: '.',
+                search: (prev) => ({
+                  ...prev,
+                  view: tab === 'current' ? undefined : tab,
+                }),
+                replace: true,
+              })
+            }
             onManageIncomeSources={() =>
               navigate({
                 to: '.',
@@ -314,6 +237,13 @@ function BudgetRoute() {
             onSaveOneOffIncome={saveOneOffIncome}
             onRemoveOneOffIncome={deleteOneOffIncome}
             onSetIncomeArrived={markIncomeArrived}
+            renderSpendChart={(cycle) => (
+              <CycleSpendTrend
+                cycleId={cycle.id}
+                plan={cycle.spendingLimit}
+                now={now}
+              />
+            )}
             renderCategoryTransactions={(slot) => (
               <CategoryTransactions {...slot} now={now} />
             )}

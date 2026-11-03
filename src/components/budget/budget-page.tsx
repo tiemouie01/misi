@@ -1,5 +1,6 @@
 import {
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   Banknote,
   CalendarDays,
@@ -418,9 +419,11 @@ function CardHeading({
 function AllocationCard({
   cycle,
   currency,
+  onShowTrends,
 }: {
   cycle: BudgetCycle
   currency: string
+  onShowTrends: () => void
 }) {
   const expectedIncome = positiveAmount(cycle.expectedIncome)
   const needs = groupTotal(cycle.categories, 'needs')
@@ -529,12 +532,51 @@ function AllocationCard({
           {formatBudgetMoney(spendingLimit, currency)} spending limit.
         </p>
       ) : null}
-      <SpendingSplit
-        cycle={cycle}
-        planned={{ needs, wants, savings }}
-        formatMoney={(value) => formatBudgetMoney(value, currency)}
-      />
+      <button
+        type="button"
+        onClick={onShowTrends}
+        className="inline-flex items-center gap-1.5 justify-self-start px-1 text-sm font-bold text-lagoon-deep hover:underline focus-visible:underline focus-visible:outline-none"
+      >
+        See how you’ve split it
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </button>
     </Card>
+  )
+}
+
+/** The cycle's spending over time, then where it went against the plan. */
+export function BudgetTrends({
+  cycle,
+  currency,
+  spendChart,
+}: {
+  cycle: BudgetCycle
+  currency: string
+  spendChart?: ReactNode
+}) {
+  return (
+    <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:items-start">
+      {spendChart ? (
+        <Card variant="panel" className="min-w-0 gap-4 p-4 sm:p-5">
+          <CardHeading title="Spending this cycle" />
+          {spendChart}
+        </Card>
+      ) : null}
+      <Card variant="panel" className="min-w-0 gap-4 p-4 sm:p-5">
+        <CardHeading
+          title={cycle.isClosed ? 'Where it went' : 'Where it’s going'}
+        />
+        <SpendingSplit
+          cycle={cycle}
+          planned={{
+            needs: groupTotal(cycle.categories, 'needs'),
+            wants: groupTotal(cycle.categories, 'wants'),
+            savings: plannedSavingsTotal(cycle.incomeSources),
+          }}
+          formatMoney={(value) => formatBudgetMoney(value, currency)}
+        />
+      </Card>
+    </div>
   )
 }
 
@@ -1575,6 +1617,7 @@ export function BudgetPage({
   onSaveOneOffIncome,
   onRemoveOneOffIncome,
   onSetIncomeArrived,
+  renderSpendChart,
   renderCategoryTransactions,
 }: BudgetPageProps) {
   const selectedCycle =
@@ -1621,7 +1664,9 @@ export function BudgetPage({
   }
 
   const handleTabChange = (value: string) => {
-    if (value !== 'current' && value !== 'history') return
+    if (value !== 'current' && value !== 'trends' && value !== 'history') {
+      return
+    }
     const nextTab = value
     setActiveTab(nextTab)
     onTabChange?.(nextTab)
@@ -1723,6 +1768,9 @@ export function BudgetPage({
           <TabsTrigger value="current" className="px-4">
             This cycle
           </TabsTrigger>
+          <TabsTrigger value="trends" className="px-4">
+            Trends
+          </TabsTrigger>
           <TabsTrigger value="history" className="px-4">
             Past cycles
           </TabsTrigger>
@@ -1742,7 +1790,11 @@ export function BudgetPage({
             }
           />
           <div className="grid gap-4 sm:gap-6">
-            <AllocationCard cycle={selectedCycle} currency={currency} />
+            <AllocationCard
+              cycle={selectedCycle}
+              currency={currency}
+              onShowTrends={() => handleTabChange('trends')}
+            />
             <IncomeSourcesCard
               cycle={selectedCycle}
               currency={currency}
@@ -1765,6 +1817,13 @@ export function BudgetPage({
               }
             />
           </div>
+        </TabsContent>
+        <TabsContent value="trends">
+          <BudgetTrends
+            cycle={selectedCycle}
+            currency={currency}
+            spendChart={renderSpendChart?.(selectedCycle)}
+          />
         </TabsContent>
         <TabsContent value="history">
           <HistoryCard rows={history} currency={currency} />

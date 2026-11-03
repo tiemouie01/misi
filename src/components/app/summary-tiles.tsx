@@ -1,13 +1,12 @@
 import { Link } from '@tanstack/react-router'
-import { CircleCheck, TriangleAlert } from 'lucide-react'
+import { ChevronRight, CircleCheck, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
 
-import { DailySpendBars } from '#/components/charts/daily-spend-bars'
-import { SpendPaceChart } from '#/components/charts/spend-pace-chart'
+import { SpendingSheet } from '#/components/app/spending-sheet'
 import { Card } from '#/components/ui/card'
 import { Progress } from '#/components/ui/progress'
 import { formatK, formatKCompact } from '#/lib/app-data'
 import { cn } from '#/lib/utils'
-import { recentDays } from '../../../shared/cycle-spend'
 
 import type { CycleSpend } from '../../../shared/cycle-spend'
 
@@ -41,15 +40,32 @@ const PACE_COPY: Record<Exclude<SpendingPace, 'none'>, string> = {
   over: 'Over your plan',
 }
 
-function PaceChip({ pace }: { pace: SpendingPace }) {
+/** The pace status; with `onOpen` it's also the way into the chart. */
+function PaceChip({
+  pace,
+  onOpen,
+}: {
+  pace: SpendingPace
+  onOpen?: () => void
+}) {
   if (pace === 'none') return null
   const warn = pace === 'fast' || pace === 'over'
   const Icon = warn ? TriangleAlert : CircleCheck
+  const Chip = onOpen ? 'button' : 'span'
   return (
-    <span
+    <Chip
+      {...(onOpen
+        ? {
+            type: 'button' as const,
+            onClick: onOpen,
+            'aria-haspopup': 'dialog' as const,
+          }
+        : {})}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.8rem] font-bold text-sea-ink',
         pace === 'over' ? 'bg-coral/30' : warn ? 'bg-sun/30' : 'bg-lagoon/22',
+        onOpen &&
+          'transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-lagoon/55 focus-visible:outline-none',
       )}
     >
       <Icon
@@ -60,7 +76,10 @@ function PaceChip({ pace }: { pace: SpendingPace }) {
         strokeWidth={2.4}
       />
       {PACE_COPY[pace]}
-    </span>
+      {onOpen ? (
+        <ChevronRight className="-mr-1 size-3.5 opacity-70" strokeWidth={2.4} />
+      ) : null}
+    </Chip>
   )
 }
 
@@ -105,7 +124,8 @@ interface SummaryTilesProps {
   perDay: number
   daysRemaining: number
   paydayLabel: string
-  /** This cycle's day-by-day spending; the charts show only when given. */
+  /** This cycle's day-by-day spending; when given, the pace chip and the
+      per-day tile open its chart. */
   spend?: CycleSpend
   pace: SpendingPace
   totalInAccounts: number
@@ -130,6 +150,8 @@ export function SummaryTiles({
 }: SummaryTilesProps) {
   const hasPlan = spendingLimit > 0
   const netWorth = totalInAccounts - youOwe + owedToYou
+  const [chartOpen, setChartOpen] = useState(false)
+  const openChart = spend && hasPlan ? () => setChartOpen(true) : undefined
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
@@ -159,18 +181,8 @@ export function SummaryTiles({
               <p className="text-sm text-sea-ink-soft tabular-nums">
                 {formatK(totalSpent)} spent · Plan: {formatK(spendingLimit)}
               </p>
-              <PaceChip pace={pace} />
+              <PaceChip pace={pace} onOpen={openChart} />
             </div>
-            {spend ? (
-              <SpendPaceChart
-                className="mt-1"
-                spend={spend}
-                plan={spendingLimit}
-                tone={
-                  pace === 'over' ? 'over' : pace === 'fast' ? 'fast' : 'calm'
-                }
-              />
-            ) : null}
           </>
         ) : (
           <>
@@ -190,10 +202,31 @@ export function SummaryTiles({
         )}
       </section>
 
-      <Card variant="panel" className="@container gap-1.5 p-4 sm:gap-2 sm:p-5">
-        <h2 className="text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
+      <Card
+        variant="panel"
+        className={cn(
+          '@container relative gap-1.5 p-4 sm:gap-2 sm:p-5',
+          openChart && 'transition hover:brightness-[0.98]',
+        )}
+      >
+        <h2 className="pr-5 text-sm font-semibold text-sea-ink-soft sm:text-[0.95rem]">
           You can spend about
         </h2>
+        {openChart ? (
+          // The whole tile is the target; the chevron says it opens something.
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-label="See this cycle's spending"
+            onClick={openChart}
+            className="absolute inset-0 rounded-[inherit] focus-visible:ring-2 focus-visible:ring-lagoon/55 focus-visible:outline-none"
+          >
+            <ChevronRight
+              aria-hidden
+              className="absolute top-4 right-3.5 size-4 text-sea-ink-soft sm:top-5 sm:right-4"
+            />
+          </button>
+        ) : null}
         <p className="text-[clamp(1.125rem,15cqi,1.5rem)] leading-tight font-extrabold sm:text-[clamp(1.5rem,15cqi,2rem)]">
           <CompactK value={perDay} />{' '}
           <span className="text-sm font-bold text-sea-ink-soft sm:text-base">
@@ -207,14 +240,6 @@ export function SummaryTiles({
               ? 'for the last day'
               : 'Payday is today'}
         </p>
-        {spend && hasPlan ? (
-          <DailySpendBars
-            className="mt-auto pt-1"
-            days={recentDays(spend.daily, 7)}
-            todayStartsAt={spend.startsAt + spend.today * 86_400_000}
-            perDay={perDay}
-          />
-        ) : null}
       </Card>
 
       <Card variant="panel" className="@container gap-1.5 p-4 sm:gap-2 sm:p-5">
@@ -238,6 +263,16 @@ export function SummaryTiles({
           })}
         </p>
       </Card>
+
+      {spend && hasPlan ? (
+        <SpendingSheet
+          open={chartOpen}
+          onOpenChange={setChartOpen}
+          spend={spend}
+          plan={spendingLimit}
+          tone={pace === 'over' ? 'over' : pace === 'fast' ? 'fast' : 'calm'}
+        />
+      ) : null}
     </div>
   )
 }

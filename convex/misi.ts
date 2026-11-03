@@ -1217,6 +1217,28 @@ export const categoryTransactions = query({
   },
 })
 
+/** A cycle's budget spending by time, for its trends chart. */
+export const cycleSpending = query({
+  args: { cycleId: v.id('cycles') },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const cycle = await requireOwnedCycle(ctx, user._id, args.cycleId)
+    const transactions = await ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_cycle', (q) =>
+        q.eq('userId', user._id).eq('cycleId', cycle._id),
+      )
+      .collect()
+    return {
+      startsAt: cycle.startsAt,
+      endsAt: cycle.endsAt,
+      expenses: transactions
+        .filter(isBudgetExpense)
+        .map(({ amount, occurredAt }) => ({ amount, occurredAt })),
+    }
+  },
+})
+
 export const addTransaction = mutation({
   args: {
     type: userTransactionType,

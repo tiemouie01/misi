@@ -1,12 +1,9 @@
 /**
- * Day-by-day spending within a budget cycle, for the home page's charts. Days
+ * Day-by-day spending within a budget cycle, for the spending chart. Days
  * count whole `DAY_MS` steps from the cycle start, the same way the home page
  * counts "day N of the cycle", so the charts and the numbers always agree.
  */
 const DAY_MS = 86_400_000
-
-/** Too few days to project from: one big early bill would dominate. */
-const MIN_PROJECTION_DAYS = 3
 
 export type CycleSpendInput = {
   startsAt: number
@@ -25,9 +22,6 @@ export type CycleSpend = {
   daily: number[]
   /** Running total at the end of each day from the first through today. */
   cumulative: number[]
-  /** Where the total lands on payday if the average so far holds; null while
-      there are too few days to say. */
-  projected: number | null
 }
 
 export function cycleSpend({
@@ -50,20 +44,6 @@ export function cycleSpend({
 
   let running = 0
   const cumulative = daily.map((amount) => (running += amount))
-  const daysElapsed = today + 1
-  const projected =
-    daysElapsed >= MIN_PROJECTION_DAYS && daysElapsed < totalDays
-      ? (running / daysElapsed) * totalDays
-      : null
 
-  return { startsAt, totalDays, today, daily, cumulative, projected }
-}
-
-/** The last `count` days through today, oldest first; days before the cycle
-    began are null so the strip keeps a steady width. */
-export function recentDays(daily: readonly number[], count: number) {
-  return Array.from({ length: count }, (_, index) => {
-    const day = daily.length - count + index
-    return day >= 0 ? daily[day] : null
-  })
+  return { startsAt, totalDays, today, daily, cumulative }
 }

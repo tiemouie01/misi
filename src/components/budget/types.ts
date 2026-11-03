@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 export type BudgetGroup = 'needs' | 'wants'
 
-export type BudgetTab = 'current' | 'history'
+export type BudgetTab = 'current' | 'trends' | 'history'
 
 export type BudgetCategoryStatus =
   'on-track' | 'watch' | 'over-budget' | 'not-started'
@@ -125,6 +125,8 @@ export interface BudgetPageProps {
     sourceId: string,
     arrived: boolean,
   ) => void
+  /** Renders a cycle's spending chart for the Trends tab. */
+  renderSpendChart?: (cycle: BudgetCycle) => ReactNode
   /** Renders a category's transactions; when set, category rows open a sheet. */
   renderCategoryTransactions?: (
     slot: BudgetCategoryTransactionsSlot,
