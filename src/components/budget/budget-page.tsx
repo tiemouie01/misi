@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   CircleAlert,
+  Circle,
   CircleCheck,
   Pencil,
   Plus,
@@ -702,11 +703,13 @@ function CategoryPlanCard({
   )
 }
 
+/** Linked income decides the status; a hand tick only fills the gap. */
 function getIncomeSourceStatus(source: BudgetIncomeSourcePlan) {
   const planned = positiveAmount(source.expectedAmount)
-  const actual = positiveAmount(source.actualAmount)
-  const status = incomeSourceStatus(actual, planned)
+  const landed = positiveAmount(source.landedAmount ?? source.actualAmount)
+  const status = incomeSourceStatus(landed, planned)
   if (status === 'landed') return 'Arrived'
+  if (source.markedArrived) return 'Marked arrived'
   if (status === 'partial') return 'Part arrived'
   return 'Waiting'
 }
@@ -717,12 +720,14 @@ function IncomeSourcesCard({
   onManage,
   onAddOneOff,
   onEditOneOff,
+  onSetArrived,
 }: {
   cycle: BudgetCycle
   currency: string
   onManage?: () => void
   onAddOneOff?: () => void
   onEditOneOff?: (source: BudgetIncomeSourcePlan) => void
+  onSetArrived?: (source: BudgetIncomeSourcePlan, arrived: boolean) => void
 }) {
   const sources = cycle.incomeSources ?? []
   const planned = positiveAmount(cycle.expectedIncome)
@@ -839,6 +844,21 @@ function IncomeSourcesCard({
                   ? clampPercent((sourceActual / sourcePlan) * 100)
                   : 0
               const status = getIncomeSourceStatus(source)
+              const marked = status === 'Marked arrived'
+              const canTick =
+                onSetArrived !== undefined &&
+                !cycle.isClosed &&
+                status !== 'Arrived'
+              const statusContent = (
+                <>
+                  {status === 'Arrived' || marked ? (
+                    <Check aria-hidden="true" />
+                  ) : canTick ? (
+                    <Circle aria-hidden="true" />
+                  ) : null}
+                  {status}
+                </>
+              )
               return (
                 <li
                   key={source.id}
@@ -869,23 +889,46 @@ function IncomeSourcesCard({
                       </p>
                       <Badge
                         variant={
-                          status === 'Arrived'
+                          status === 'Arrived' || marked
                             ? 'success'
                             : status === 'Part arrived'
                               ? 'default'
                               : 'secondary'
                         }
-                        className="shrink-0"
+                        className={cn(
+                          'shrink-0',
+                          canTick &&
+                            'relative cursor-pointer after:absolute after:-inset-2.5 hover:border-palm/30 hover:text-palm',
+                        )}
+                        asChild={canTick}
                       >
-                        {status === 'Arrived' ? (
-                          <Check aria-hidden="true" />
-                        ) : null}
-                        {status}
+                        {canTick ? (
+                          <button
+                            type="button"
+                            aria-pressed={marked}
+                            aria-label={
+                              marked
+                                ? `${source.name} marked arrived. Tap to undo`
+                                : `Mark ${source.name} as arrived`
+                            }
+                            title={
+                              marked
+                                ? 'Ticked off by you. Tap to undo'
+                                : 'Tap to mark as arrived'
+                            }
+                            onClick={() => onSetArrived(source, !marked)}
+                          >
+                            {statusContent}
+                          </button>
+                        ) : (
+                          statusContent
+                        )}
                       </Badge>
                     </div>
                     <p className="mt-1 text-[0.8rem] text-sea-ink-soft tabular-nums sm:text-sm">
                       {formatBudgetMoney(sourceActual, currency)} of{' '}
                       {formatBudgetMoney(sourcePlan, currency)}
+                      {marked ? ' · ticked off, no income logged' : null}
                     </p>
                     <Progress
                       value={sourceProgress}
@@ -1393,6 +1436,7 @@ export function BudgetPage({
   onSavePlan,
   onSaveOneOffIncome,
   onRemoveOneOffIncome,
+  onSetIncomeArrived,
 }: BudgetPageProps) {
   const selectedCycle =
     cycles.find((cycle) => cycle.id === currentCycleId) ?? cycles.at(0)
@@ -1562,6 +1606,12 @@ export function BudgetPage({
               onEditOneOff={
                 onSaveOneOffIncome
                   ? (income) => setOneOffDialog({ open: true, income })
+                  : undefined
+              }
+              onSetArrived={
+                onSetIncomeArrived
+                  ? (income, arrived) =>
+                      onSetIncomeArrived(selectedCycle.id, income.id, arrived)
                   : undefined
               }
             />

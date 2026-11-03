@@ -29,10 +29,36 @@ export function totalActualIncome(
   }, 0)
 }
 
+export interface IncomePlanRef {
+  sourceId: string
+  expectedAmount: number
+  /** Set when the user ticked the line off as arrived without linking income. */
+  markedArrivedAt?: number
+}
+
+/**
+ * What a plan line counts as arrived: the income linked to it, raised to the
+ * full expected amount once it is ticked off by hand. Linked income above the
+ * plan still counts, and a tick never adds on top of what already landed.
+ */
+export function arrivedAmountForPlan(
+  transactions: readonly IncomeTransactionRef[],
+  plan: IncomePlanRef,
+) {
+  return arrivedAmount(landedAmountForSource(transactions, plan.sourceId), plan)
+}
+
+function arrivedAmount(landedAmount: number, plan: IncomePlanRef) {
+  if (plan.markedArrivedAt === undefined) return landedAmount
+  return Math.max(landedAmount, plan.expectedAmount)
+}
+
 export function incomeSourceStatus(
   landedAmount: number,
   expectedAmount: number,
+  markedArrived = false,
 ): 'landed' | 'partial' | 'pending' {
+  if (markedArrived) return 'landed'
   if (landedAmount >= expectedAmount && expectedAmount > 0) return 'landed'
   if (landedAmount > 0) return 'partial'
   return 'pending'
@@ -48,12 +74,15 @@ export interface CycleIncomeTransaction extends IncomeTransactionRef {
  * so it never trails what actually came in. Income that lands on a line is
  * already inside that line's plan, so it is never counted twice.
  *
+ * A line ticked off by hand counts as arrived in full, topping actual income
+ * up by whatever its linked income has not covered yet.
+ *
  * `investmentIncome` is the unplanned part that went into accounts outside
  * free to spend (investment returns): it is income, but not spendable yet.
  */
 export function summarizeCycleIncome(input: {
   transactions: readonly CycleIncomeTransaction[]
-  plans: readonly { sourceId: string; expectedAmount: number }[]
+  plans: readonly IncomePlanRef[]
   nonSpendableAccountIds: ReadonlySet<string>
 }) {
   const plannedSourceIds = new Set(input.plans.map((plan) => plan.sourceId))
@@ -64,10 +93,15 @@ export function summarizeCycleIncome(input: {
   let actualIncome = 0
   let unassignedIncome = 0
   let investmentIncome = 0
+  const landedBySource = new Map<string, number>()
   for (const transaction of input.transactions) {
     if (transaction.type !== 'income' || transaction.adjustment) continue
     actualIncome += transaction.amount
     if (transaction.sourceId && plannedSourceIds.has(transaction.sourceId)) {
+      landedBySource.set(
+        transaction.sourceId,
+        (landedBySource.get(transaction.sourceId) ?? 0) + transaction.amount,
+      )
       continue
     }
     unassignedIncome += transaction.amount
@@ -77,6 +111,10 @@ export function summarizeCycleIncome(input: {
     ) {
       investmentIncome += transaction.amount
     }
+  }
+  for (const plan of input.plans) {
+    const landed = landedBySource.get(plan.sourceId) ?? 0
+    actualIncome += arrivedAmount(landed, plan) - landed
   }
   return {
     plannedIncome,

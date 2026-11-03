@@ -14,7 +14,11 @@ import {
 } from '../shared/claim'
 import { resolveCyclePeriod } from '../shared/cycle-period'
 import { currencyToMwk, roundMoney } from '../shared/fx'
-import { landedAmountForSource, summarizeCycleIncome } from '../shared/income'
+import {
+  arrivedAmountForPlan,
+  landedAmountForSource,
+  summarizeCycleIncome,
+} from '../shared/income'
 import {
   ONE_TAP_RECENTS_LIMIT,
   ONE_TAP_RECENTS_WINDOW_MS,
@@ -100,6 +104,7 @@ import {
   addOneOffIncome as addOneOffIncomeForUser,
   logInvestmentReturn as logInvestmentReturnForUser,
   removeOneOffIncome as removeOneOffIncomeForUser,
+  setIncomeMarkedArrived,
   updateOneOffIncome as updateOneOffIncomeForUser,
 } from './model/income'
 import {
@@ -717,7 +722,11 @@ export const completeOnboarding = mutation({
       })
     }
 
-    await deleteRecurringCyclePlans(ctx, user._id, cycle._id)
+    const markedArrivedAt = await deleteRecurringCyclePlans(
+      ctx,
+      user._id,
+      cycle._id,
+    )
     const incomeSources = (
       await ctx.db
         .query('incomeSources')
@@ -739,6 +748,7 @@ export const completeOnboarding = mutation({
         expectedAmountMax: source.expectedAmountMax,
         savingsRate: source.savingsRate,
         isAnchor: source.isAnchor,
+        markedArrivedAt: markedArrivedAt.get(source._id),
       })
     }
     return { cycleId: cycle._id }
@@ -828,7 +838,11 @@ export const updateIncomeSources = mutation({
     }
 
     const cycle = await ensureCurrentCycle(ctx, user._id)
-    await deleteRecurringCyclePlans(ctx, user._id, cycle._id)
+    const markedArrivedAt = await deleteRecurringCyclePlans(
+      ctx,
+      user._id,
+      cycle._id,
+    )
     const activeSources = (
       await ctx.db
         .query('incomeSources')
@@ -852,6 +866,7 @@ export const updateIncomeSources = mutation({
         expectedAmountMax: source.expectedAmountMax,
         savingsRate: source.savingsRate,
         isAnchor: source.isAnchor,
+        markedArrivedAt: markedArrivedAt.get(source._id),
       })
     }
   },
@@ -913,7 +928,11 @@ export const saveCyclePlan = mutation({
     await ctx.db.patch(cycle._id, { spendingLimit: args.spendingLimit })
 
     if (args.incomePlans !== undefined) {
-      await deleteRecurringCyclePlans(ctx, user._id, cycle._id)
+      const markedArrivedAt = await deleteRecurringCyclePlans(
+        ctx,
+        user._id,
+        cycle._id,
+      )
       for (const plan of args.incomePlans) {
         const source = await ctx.db.get(plan.sourceId)
         if (
@@ -934,6 +953,7 @@ export const saveCyclePlan = mutation({
           expectedAmountMax: plan.expectedAmountMax,
           savingsRate: plan.savingsRate,
           isAnchor: source.isAnchor,
+          markedArrivedAt: markedArrivedAt.get(plan.sourceId),
         })
       }
     } else {
@@ -979,6 +999,25 @@ export const removeOneOffIncome = mutation({
   handler: async (ctx, args) => {
     const user = await requireAuthUser(ctx)
     await removeOneOffIncomeForUser(ctx, user._id, args.sourceId)
+    return null
+  },
+})
+
+export const setIncomeArrived = mutation({
+  args: {
+    cycleId: v.id('cycles'),
+    sourceId: v.id('incomeSources'),
+    arrived: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    await setIncomeMarkedArrived(
+      ctx,
+      user._id,
+      args.cycleId,
+      args.sourceId,
+      args.arrived,
+    )
     return null
   },
 })
@@ -1054,10 +1093,11 @@ export const budgetOverview = query({
           })
 
         const incomePlanRows = plans.map((plan) => {
-          const actualAmount = landedAmountForSource(
+          const landedAmount = landedAmountForSource(
             transactions,
             plan.sourceId,
           )
+          const actualAmount = arrivedAmountForPlan(transactions, plan)
           return {
             sourceId: plan.sourceId,
             sourceName: plan.sourceName,
@@ -1069,6 +1109,8 @@ export const budgetOverview = query({
             savingsRate: plan.savingsRate,
             isAnchor: plan.isAnchor,
             actualAmount,
+            landedAmount,
+            markedArrived: plan.markedArrivedAt !== undefined,
             variance: actualAmount - plan.expectedAmount,
           }
         })

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  arrivedAmountForPlan,
   incomeSourceStatus,
   landedAmountForSource,
   summarizeCycleIncome,
@@ -124,4 +125,40 @@ test('investment returns count as income but are reported apart', () => {
   assert.equal(summary.actualIncome, 50_000)
   assert.equal(summary.expectedIncome, 1_050_000)
   assert.equal(summary.investmentIncome, 30_000)
+})
+
+test('a line ticked off by hand counts as arrived in full', () => {
+  const marked = { ...salaryPlan, markedArrivedAt: 1 }
+
+  assert.equal(arrivedAmountForPlan([], marked), 1_000_000)
+  assert.equal(arrivedAmountForPlan([], salaryPlan), 0)
+  assert.equal(incomeSourceStatus(0, 1_000_000, true), 'landed')
+  assert.equal(incomeSourceStatus(0, 0, true), 'landed')
+})
+
+test('a tick never adds on top of income that already landed', () => {
+  const marked = { ...salaryPlan, markedArrivedAt: 1 }
+  const part = [{ type: 'income', amount: 400_000, sourceId: 'salary' }]
+  const over = [{ type: 'income', amount: 1_100_000, sourceId: 'salary' }]
+
+  assert.equal(arrivedAmountForPlan(part, marked), 1_000_000)
+  assert.equal(arrivedAmountForPlan(over, marked), 1_100_000)
+})
+
+test('ticked lines top up actual income without changing expected income', () => {
+  const summary = summarizeCycleIncome({
+    transactions: [
+      { type: 'income', amount: 400_000, sourceId: 'salary' },
+      { type: 'income', amount: 50_000 },
+    ],
+    plans: [
+      { ...salaryPlan, markedArrivedAt: 1 },
+      { ...bonusPlan, markedArrivedAt: 1 },
+    ],
+    nonSpendableAccountIds: noInvestments,
+  })
+
+  assert.equal(summary.actualIncome, 1_250_000)
+  assert.equal(summary.expectedIncome, 1_250_000)
+  assert.equal(summary.unassignedIncome, 50_000)
 })

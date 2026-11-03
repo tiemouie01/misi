@@ -24,6 +24,10 @@ export interface BudgetIncomeSourcePlan {
   expectedAmount: number
   expectedAmountMax?: number
   actualAmount: number
+  /** Income linked to the line; actualAmount also counts a hand tick. */
+  landedAmount?: number
+  /** Ticked off as arrived by hand, with no income linked. */
+  markedArrived?: boolean
   savingsRate: number
   status?: 'landed' | 'pending' | 'partial'
   note?: string
@@ -106,4 +110,10 @@ export interface BudgetPageProps {
   onSavePlan?: (update: BudgetPlanUpdate) => void | Promise<void>
   onSaveOneOffIncome?: (update: BudgetOneOffIncomeUpdate) => Promise<void>
   onRemoveOneOffIncome?: (id: string) => Promise<void>
+  /** Ticks a line off as arrived without logging income, or undoes it. */
+  onSetIncomeArrived?: (
+    cycleId: string,
+    sourceId: string,
+    arrived: boolean,
+  ) => void
 }

@@ -120,6 +120,11 @@ export default defineSchema({
     expectedAmountMax: v.optional(v.number()),
     savingsRate: v.number(),
     isAnchor: v.boolean(),
+    /**
+     * Ticked off as arrived by hand, with no income linked. A confirmation
+     * only: it creates no transaction and leaves balances alone.
+     */
+    markedArrivedAt: v.optional(v.number()),
   })
     .index('by_user_and_cycle', ['userId', 'cycleId'])
     .index('by_user_and_cycle_and_source', ['userId', 'cycleId', 'sourceId'])

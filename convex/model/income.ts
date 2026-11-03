@@ -219,3 +219,27 @@ export async function logInvestmentReturn(
   await ctx.db.patch(account._id, { balance: args.actual })
   return transactionId
 }
+
+/**
+ * Ticks a cycle's income line off as arrived (or undoes it) without linking
+ * income. It is a confirmation only: no transaction, no balance change.
+ */
+export async function setIncomeMarkedArrived(
+  ctx: MutationCtx,
+  userId: string,
+  cycleId: Id<'cycles'>,
+  sourceId: Id<'incomeSources'>,
+  arrived: boolean,
+) {
+  const cycle = await requireOpenCycle(ctx, userId, cycleId)
+  const plan = await ctx.db
+    .query('cycleIncomePlans')
+    .withIndex('by_user_and_cycle_and_source', (q) =>
+      q.eq('userId', userId).eq('cycleId', cycle._id).eq('sourceId', sourceId),
+    )
+    .first()
+  if (!plan) throw new Error('Income line not found')
+  await ctx.db.patch(plan._id, {
+    markedArrivedAt: arrived ? (plan.markedArrivedAt ?? Date.now()) : undefined,
+  })
+}

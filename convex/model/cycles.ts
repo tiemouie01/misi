@@ -58,7 +58,8 @@ export async function getCycleIncomePlans(
 
 /**
  * Clears the cycle's recurring income plans so they can be rebuilt from the
- * sources, leaving its one-off lines in place.
+ * sources, leaving its one-off lines in place. Returns when each cleared line
+ * was ticked off as arrived, so the rebuilt line can keep it.
  */
 export async function deleteRecurringCyclePlans(
   ctx: MutationCtx,
@@ -77,9 +78,16 @@ export async function deleteRecurringCyclePlans(
       .filter((source) => !isRecurringIncomeSource(source))
       .map((source) => source._id),
   )
+  // Rebuilt lines keep their hand-ticked arrival for this cycle.
+  const markedArrivedAt = new Map<Id<'incomeSources'>, number>()
   for (const plan of plans) {
-    if (!oneOffIds.has(plan.sourceId)) await ctx.db.delete(plan._id)
+    if (oneOffIds.has(plan.sourceId)) continue
+    if (plan.markedArrivedAt !== undefined) {
+      markedArrivedAt.set(plan.sourceId, plan.markedArrivedAt)
+    }
+    await ctx.db.delete(plan._id)
   }
+  return markedArrivedAt
 }
 
 export async function syncCycleIncomePlans(

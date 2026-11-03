@@ -11,6 +11,7 @@ import { AppProviders } from '#/components/app/app-providers'
 import { BudgetPage } from '#/components/budget'
 import { resolveCategoryColor, resolveCategoryIcon } from '#/lib/categories'
 import { errorMessage } from '#/lib/error-message'
+import { setIncomeArrivedOptimistically } from '#/lib/optimistic-income'
 
 import type { Id } from '../../../convex/_generated/dataModel'
 import type {
@@ -69,6 +70,9 @@ function BudgetRoute() {
   const addOneOffIncome = useMutation(api.misi.addOneOffIncome)
   const updateOneOffIncome = useMutation(api.misi.updateOneOffIncome)
   const removeOneOffIncome = useMutation(api.misi.removeOneOffIncome)
+  const setIncomeArrived = useMutation(
+    api.misi.setIncomeArrived,
+  ).withOptimisticUpdate(setIncomeArrivedOptimistically)
   const ensureSeedData = useMutation(api.misi.ensureSeedData)
   const [selectedCycleId, setSelectedCycleId] = useState<string>()
   const [rolloverError, setRolloverError] = useState<string | null>(null)
@@ -164,10 +168,13 @@ function BudgetRoute() {
               expectedAmount: source.expectedAmount,
               expectedAmountMax: source.expectedAmountMax,
               actualAmount: source.actualAmount,
+              landedAmount: source.landedAmount,
+              markedArrived: source.markedArrived,
               savingsRate: source.savingsRate,
               status: incomeSourceStatus(
                 source.actualAmount,
                 source.expectedAmount,
+                source.markedArrived,
               ),
               note: source.oneOff
                 ? expectedDay === undefined
@@ -269,6 +276,20 @@ function BudgetRoute() {
     toast.success('One-off income removed')
   }
 
+  function markIncomeArrived(
+    cycleId: string,
+    sourceId: string,
+    arrived: boolean,
+  ) {
+    setIncomeArrived({
+      cycleId: cycleId as Id<'cycles'>,
+      sourceId: sourceId as Id<'incomeSources'>,
+      arrived,
+    }).catch((error) => {
+      toast.error(errorMessage(error, 'Unable to update this income'))
+    })
+  }
+
   return (
     <AppProviders>
       <main className="page-wrap py-6 sm:py-8">
@@ -291,6 +312,7 @@ function BudgetRoute() {
             onSavePlan={savePlan}
             onSaveOneOffIncome={saveOneOffIncome}
             onRemoveOneOffIncome={deleteOneOffIncome}
+            onSetIncomeArrived={markIncomeArrived}
           />
         )}
       </main>
