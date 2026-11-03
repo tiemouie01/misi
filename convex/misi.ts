@@ -6,7 +6,11 @@
 import { paginationOptsValidator } from 'convex/server'
 import { ConvexError, v } from 'convex/values'
 
-import { spentByCategory, totalBudgetSpending } from '../shared/budget-rollover'
+import {
+  isBudgetExpense,
+  spentByCategory,
+  totalBudgetSpending,
+} from '../shared/budget-rollover'
 import {
   assertDebtOpeningBalanceMutable,
   computeClaimRemaining,
@@ -1189,6 +1193,27 @@ export const budgetOverview = query({
         }
       }),
     }
+  },
+})
+
+/** The spending counted toward one category's budget in a cycle, newest first. */
+export const categoryTransactions = query({
+  args: { cycleId: v.id('cycles'), categoryId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireAuthUser(ctx)
+    const transactions = await ctx.db
+      .query('transactions')
+      .withIndex('by_user_and_cycle', (q) =>
+        q.eq('userId', user._id).eq('cycleId', args.cycleId),
+      )
+      .collect()
+    return transactions
+      .filter(
+        (transaction) =>
+          isBudgetExpense(transaction) &&
+          transaction.categoryId === args.categoryId,
+      )
+      .sort((a, b) => b.occurredAt - a.occurredAt)
   },
 })
 

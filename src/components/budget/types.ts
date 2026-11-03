@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 export type BudgetGroup = 'needs' | 'wants'
 
@@ -97,6 +98,14 @@ export interface BudgetOneOffIncomeUpdate {
   expectedDay?: number
 }
 
+/** What the category sheet hands the transaction list it shows. */
+export interface BudgetCategoryTransactionsSlot {
+  cycleId: string
+  categoryId: string
+  /** Closes the sheet, e.g. before opening an edit flow over it. */
+  close: () => void
+}
+
 export interface BudgetPageProps {
   cycles: readonly BudgetCycle[]
   history?: readonly BudgetHistoryRow[]
@@ -116,4 +125,8 @@ export interface BudgetPageProps {
     sourceId: string,
     arrived: boolean,
   ) => void
+  /** Renders a category's transactions; when set, category rows open a sheet. */
+  renderCategoryTransactions?: (
+    slot: BudgetCategoryTransactionsSlot,
+  ) => ReactNode
 }

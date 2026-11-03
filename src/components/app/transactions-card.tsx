@@ -294,6 +294,64 @@ function TransactionRow({
   )
 }
 
+function groupByDay(transactions: Txn[]) {
+  return transactions.reduce<Array<{ day: string; txns: Txn[] }>>(
+    (result, transaction) => {
+      const group = result.find((item) => item.day === transaction.day)
+      if (group) group.txns.push(transaction)
+      else result.push({ day: transaction.day, txns: [transaction] })
+      return result
+    },
+    [],
+  )
+}
+
+/** Day-grouped transaction rows. Place inside an `@container` so the rows
+ * pick their narrow or wide layout. */
+export function TransactionDayGroups({
+  transactions,
+  accounts,
+  categories,
+  onEdit,
+  onDelete,
+}: {
+  transactions: Txn[]
+  accounts: Account[]
+  categories: Category[]
+  onEdit: (transaction: Txn) => void
+  onDelete: (transaction: Txn) => void
+}) {
+  return groupByDay(transactions).map((group) => {
+    const spent = group.txns
+      .filter((transaction) => transaction.type === 'expense')
+      .reduce((sum, transaction) => sum + transaction.amount, 0)
+    return (
+      <section key={group.day} className="mt-4 @xl:mt-5">
+        <div className="flex items-baseline justify-between gap-3 px-2">
+          <h3 className="text-sm font-bold text-sea-ink">{group.day}</h3>
+          {spent > 0 && (
+            <span className="text-[0.8rem] text-sea-ink-soft tabular-nums">
+              {formatK(spent)} spent
+            </span>
+          )}
+        </div>
+        <ul className="mt-1.5 space-y-0.5">
+          {group.txns.map((transaction) => (
+            <TransactionRow
+              key={transaction.id}
+              transaction={transaction}
+              accounts={accounts}
+              categories={categories}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          ))}
+        </ul>
+      </section>
+    )
+  })
+}
+
 export function TransactionsCard({
   transactions,
   accounts,
@@ -304,16 +362,6 @@ export function TransactionsCard({
   onDelete,
   className,
 }: TransactionsCardProps) {
-  const groups = transactions.reduce<Array<{ day: string; txns: Txn[] }>>(
-    (result, transaction) => {
-      const group = result.find((item) => item.day === transaction.day)
-      if (group) group.txns.push(transaction)
-      else result.push({ day: transaction.day, txns: [transaction] })
-      return result
-    },
-    [],
-  )
-
   return (
     <Card
       variant="panel"
@@ -321,7 +369,7 @@ export function TransactionsCard({
     >
       <h2 className="px-2 text-lg font-bold text-sea-ink">Recent activity</h2>
 
-      {groups.length === 0 ? (
+      {transactions.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
           <span className="grid size-12 place-items-center rounded-2xl bg-lagoon-deep/10 text-lagoon-deep">
             <ReceiptText className="size-6" />
@@ -345,37 +393,13 @@ export function TransactionsCard({
             <span>Account</span>
             <span className="text-right">Amount</span>
           </div>
-          {groups.map((group) => {
-            const spent = group.txns
-              .filter((transaction) => transaction.type === 'expense')
-              .reduce((sum, transaction) => sum + transaction.amount, 0)
-            return (
-              <section key={group.day} className="mt-4 @xl:mt-5">
-                <div className="flex items-baseline justify-between gap-3 px-2">
-                  <h3 className="text-sm font-bold text-sea-ink">
-                    {group.day}
-                  </h3>
-                  {spent > 0 && (
-                    <span className="text-[0.8rem] text-sea-ink-soft tabular-nums">
-                      {formatK(spent)} spent
-                    </span>
-                  )}
-                </div>
-                <ul className="mt-1.5 space-y-0.5">
-                  {group.txns.map((transaction) => (
-                    <TransactionRow
-                      key={transaction.id}
-                      transaction={transaction}
-                      accounts={accounts}
-                      categories={categories}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                    />
-                  ))}
-                </ul>
-              </section>
-            )
-          })}
+          <TransactionDayGroups
+            transactions={transactions}
+            accounts={accounts}
+            categories={categories}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
           {(status === 'CanLoadMore' || status === 'LoadingMore') && (
             <Button
               type="button"

@@ -532,7 +532,60 @@ function AllocationCard({
   )
 }
 
-function CategoryRow({
+function categoryColor(category: BudgetCategoryPlan) {
+  return category.color ?? GROUP_META[category.group].color
+}
+
+function CategoryIcon({
+  category,
+  className,
+}: {
+  category: BudgetCategoryPlan
+  className?: string
+}) {
+  const Icon = category.icon ?? ReceiptText
+  const color = categoryColor(category)
+  return (
+    <span
+      className={cn(
+        'grid size-9 shrink-0 place-items-center rounded-xl',
+        className,
+      )}
+      style={{
+        color,
+        background: `color-mix(in oklab, ${color} 14%, transparent)`,
+      }}
+      aria-hidden="true"
+    >
+      <Icon className="size-[1.125rem]" />
+    </span>
+  )
+}
+
+function CategoryStatusBadge({ insight }: { insight: CategoryInsight }) {
+  const StatusIcon =
+    insight.status === 'on-track'
+      ? CircleCheck
+      : insight.status === 'not-started'
+        ? Target
+        : CircleAlert
+  return (
+    <Badge
+      variant={statusBadgeVariant(insight.status)}
+      className={cn(
+        'shrink-0',
+        insight.status === 'watch' && 'border-sun/35 bg-sun/12 text-sun',
+      )}
+      aria-label={`${insight.statusLabel}. ${insight.forecast}`}
+    >
+      <StatusIcon className="size-3" aria-hidden="true" />
+      {insight.statusLabel}
+    </Badge>
+  )
+}
+
+/** The spent-of-planned bar and amounts, shared by the row and its sheet. */
+function CategorySpend({
   category,
   insight,
   currency,
@@ -541,115 +594,189 @@ function CategoryRow({
   insight: CategoryInsight
   currency: string
 }) {
-  const Icon = category.icon ?? ReceiptText
-  const color = category.color ?? GROUP_META[category.group].color
-  const progressValue = clampPercent(insight.spentPercent)
-  const statusIndicator =
-    insight.status === 'on-track' ? (
-      <CircleCheck aria-hidden="true" />
-    ) : insight.status === 'not-started' ? (
-      <Target aria-hidden="true" />
-    ) : (
-      <CircleAlert aria-hidden="true" />
-    )
+  const color = categoryColor(category)
+  return (
+    <>
+      <span
+        className="mt-2 block h-2 overflow-hidden rounded-full bg-(--line)"
+        role="progressbar"
+        aria-label={`${category.name} spent`}
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, category.planned)}
+        aria-valuenow={Math.min(
+          positiveAmount(category.spent),
+          positiveAmount(category.planned),
+        )}
+        aria-valuetext={`${formatBudgetMoney(category.spent, currency)} of ${formatBudgetMoney(category.planned, currency)} spent`}
+      >
+        <span
+          className="block h-full rounded-full transition-[width] duration-300"
+          style={{
+            width: `${clampPercent(insight.spentPercent)}%`,
+            backgroundColor:
+              insight.status === 'over-budget'
+                ? 'var(--coral-deep)'
+                : insight.status === 'watch'
+                  ? 'var(--sun)'
+                  : color,
+          }}
+        />
+      </span>
+      <span className="mt-2 flex items-baseline justify-between gap-3 text-[0.8rem] text-sea-ink-soft tabular-nums sm:text-sm">
+        <span>
+          {formatBudgetMoney(category.spent, currency)} of{' '}
+          {formatBudgetMoney(category.planned, currency)}
+          <span className="max-sm:hidden">
+            {' '}
+            · {formatBudgetPercent(insight.incomePercent)} of income
+          </span>
+        </span>
+        <span
+          className={cn(
+            'text-right font-bold',
+            insight.remaining < 0 ? 'text-coral-deep' : 'text-sea-ink',
+          )}
+        >
+          {formatBudgetMoney(Math.abs(insight.remaining), currency)}{' '}
+          {insight.remaining < 0 ? 'over' : 'left'}
+        </span>
+      </span>
+    </>
+  )
+}
+
+function CategoryForecast({
+  insight,
+  className,
+}: {
+  insight: CategoryInsight
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        'mt-1.5 items-center gap-1.5 text-[0.8rem] text-sea-ink-soft',
+        className,
+      )}
+    >
+      {insight.status === 'over-budget' ? (
+        <ArrowUpRight className="size-3.5 text-coral-deep" aria-hidden="true" />
+      ) : insight.status === 'watch' ? (
+        <CircleAlert className="size-3.5 text-sun" aria-hidden="true" />
+      ) : (
+        <TrendingUp className="size-3.5 text-palm" aria-hidden="true" />
+      )}
+      {insight.forecast}
+    </span>
+  )
+}
+
+function CategoryRow({
+  category,
+  insight,
+  currency,
+  onOpen,
+}: {
+  category: BudgetCategoryPlan
+  insight: CategoryInsight
+  currency: string
+  onOpen?: () => void
+}) {
+  const content = (
+    <>
+      <CategoryIcon category={category} />
+      <span className="block min-w-0 flex-1">
+        <span className="flex items-center justify-between gap-2">
+          <span className="truncate font-semibold text-sea-ink">
+            {category.name}
+          </span>
+          <CategoryStatusBadge insight={insight} />
+        </span>
+        <CategorySpend
+          category={category}
+          insight={insight}
+          currency={currency}
+        />
+        <CategoryForecast insight={insight} className="hidden sm:flex" />
+      </span>
+    </>
+  )
+
+  if (!onOpen) {
+    return <li className="flex items-start gap-3 px-1 py-3">{content}</li>
+  }
 
   return (
-    <li className="flex items-start gap-3 px-1 py-3">
-      <span
-        className="grid size-9 shrink-0 place-items-center rounded-xl"
-        style={{
-          color,
-          background: `color-mix(in oklab, ${color} 14%, transparent)`,
-        }}
-        aria-hidden="true"
+    <li className="py-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label={`${category.name}: ${formatBudgetMoney(category.spent, currency)} of ${formatBudgetMoney(category.planned, currency)} spent, ${insight.statusLabel.toLowerCase()}. Show transactions`}
+        className="h-auto w-full items-start justify-start gap-3 rounded-2xl px-1 py-2.5 text-left text-base font-normal whitespace-normal sm:px-2"
+        onClick={onOpen}
       >
-        <Icon className="size-[1.125rem]" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="truncate font-semibold text-sea-ink">
-            {category.name}
-          </h4>
-          <Badge
-            variant={statusBadgeVariant(insight.status)}
-            className={cn(
-              'shrink-0',
-              insight.status === 'watch' && 'border-sun/35 bg-sun/12 text-sun',
-            )}
-            aria-label={`${insight.statusLabel}. ${insight.forecast}`}
-          >
-            {statusIndicator}
-            {insight.statusLabel}
-          </Badge>
-        </div>
-        <div
-          className="mt-2 h-2 overflow-hidden rounded-full bg-(--line)"
-          role="progressbar"
-          aria-label={`${category.name} spent`}
-          aria-valuemin={0}
-          aria-valuemax={Math.max(0, category.planned)}
-          aria-valuenow={Math.min(
-            positiveAmount(category.spent),
-            positiveAmount(category.planned),
-          )}
-          aria-valuetext={`${formatBudgetMoney(category.spent, currency)} of ${formatBudgetMoney(category.planned, currency)} spent`}
-        >
-          <div
-            className="h-full rounded-full transition-[width] duration-300"
-            style={{
-              width: `${progressValue}%`,
-              backgroundColor:
-                insight.status === 'over-budget'
-                  ? 'var(--coral-deep)'
-                  : insight.status === 'watch'
-                    ? 'var(--sun)'
-                    : color,
-            }}
-          />
-        </div>
-        <div className="mt-2 flex items-baseline justify-between gap-3 text-[0.8rem] text-sea-ink-soft tabular-nums sm:text-sm">
-          <span>
-            {formatBudgetMoney(category.spent, currency)} of{' '}
-            {formatBudgetMoney(category.planned, currency)}
-            <span className="max-sm:hidden">
-              {' '}
-              · {formatBudgetPercent(insight.incomePercent)} of income
-            </span>
-          </span>
-          <span
-            className={cn(
-              'text-right font-bold',
-              insight.remaining < 0 ? 'text-coral-deep' : 'text-sea-ink',
-            )}
-          >
-            {formatBudgetMoney(Math.abs(insight.remaining), currency)}{' '}
-            {insight.remaining < 0 ? 'over' : 'left'}
-          </span>
-        </div>
-        <p className="mt-1.5 hidden items-center gap-1.5 text-[0.8rem] text-sea-ink-soft sm:flex">
-          {insight.status === 'over-budget' ? (
-            <ArrowUpRight
-              className="size-3.5 text-coral-deep"
-              aria-hidden="true"
-            />
-          ) : insight.status === 'watch' ? (
-            <CircleAlert className="size-3.5 text-sun" aria-hidden="true" />
-          ) : (
-            <TrendingUp className="size-3.5 text-palm" aria-hidden="true" />
-          )}
-          {insight.forecast}
-        </p>
-      </div>
+        {content}
+      </Button>
     </li>
+  )
+}
+
+/** A category's spending this cycle: the row's summary over its transactions. */
+function CategoryTransactionsDialog({
+  category,
+  insight,
+  cycle,
+  currency,
+  onOpenChange,
+  children,
+}: {
+  category: BudgetCategoryPlan
+  insight: CategoryInsight
+  cycle: BudgetCycle
+  currency: string
+  onOpenChange: (open: boolean) => void
+  children: ReactNode
+}) {
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent sheet className="sm:max-w-lg">
+        <DialogHeader className="flex-row items-center gap-3">
+          <CategoryIcon category={category} className="size-10" />
+          <div className="min-w-0">
+            <DialogTitle className="truncate">{category.name}</DialogTitle>
+            <DialogDescription>
+              {GROUP_META[category.group].label} · {cycle.label}
+            </DialogDescription>
+          </div>
+        </DialogHeader>
+        <div className="rounded-2xl bg-lagoon-deep/6 px-4 py-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-sea-ink">
+              Spent this cycle
+            </span>
+            <CategoryStatusBadge insight={insight} />
+          </div>
+          <CategorySpend
+            category={category}
+            insight={insight}
+            currency={currency}
+          />
+          <CategoryForecast insight={insight} className="flex" />
+        </div>
+        <div className="@container -mx-2 min-w-0">{children}</div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 function CategoryPlanCard({
   cycle,
   currency,
+  onOpenCategory,
 }: {
   cycle: BudgetCycle
   currency: string
+  onOpenCategory?: (categoryId: string) => void
 }) {
   const expectedIncome = positiveAmount(cycle.expectedIncome)
   const grouped = GROUPS.map((group) => ({
@@ -689,6 +816,11 @@ function CategoryPlanCard({
                   category={category}
                   insight={getCategoryInsight(category, cycle, expectedIncome)}
                   currency={currency}
+                  onOpen={
+                    onOpenCategory
+                      ? () => onOpenCategory(category.id)
+                      : undefined
+                  }
                 />
               ))}
             </ul>
@@ -1437,6 +1569,7 @@ export function BudgetPage({
   onSaveOneOffIncome,
   onRemoveOneOffIncome,
   onSetIncomeArrived,
+  renderCategoryTransactions,
 }: BudgetPageProps) {
   const selectedCycle =
     cycles.find((cycle) => cycle.id === currentCycleId) ?? cycles.at(0)
@@ -1447,6 +1580,7 @@ export function BudgetPage({
     open: boolean
     income?: BudgetIncomeSourcePlan
   }>({ open: false })
+  const [openCategoryId, setOpenCategoryId] = useState<string>()
 
   if (!selectedCycle) {
     return (
@@ -1460,6 +1594,9 @@ export function BudgetPage({
   const actualIncome = positiveAmount(selectedCycle.actualIncome)
   const investmentIncome = positiveAmount(selectedCycle.investmentIncome)
   const editingOneOff = oneOffDialog.income
+  const openCategory = selectedCycle.categories.find(
+    (category) => category.id === openCategoryId,
+  )
   const plannedSavings = plannedSavingsTotal(selectedCycle.incomeSources)
   const actualSavings = positiveAmount(selectedCycle.actualSavings)
   const spendingLimit = positiveAmount(selectedCycle.spendingLimit)
@@ -1591,7 +1728,13 @@ export function BudgetPage({
           value="current"
           className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:items-start"
         >
-          <CategoryPlanCard cycle={selectedCycle} currency={currency} />
+          <CategoryPlanCard
+            cycle={selectedCycle}
+            currency={currency}
+            onOpenCategory={
+              renderCategoryTransactions ? setOpenCategoryId : undefined
+            }
+          />
           <div className="grid gap-4 sm:gap-6">
             <AllocationCard cycle={selectedCycle} currency={currency} />
             <IncomeSourcesCard
@@ -1633,6 +1776,27 @@ export function BudgetPage({
         onManageIncomeSources={onManageIncomeSources}
         onSave={handleSavePlan}
       />
+      {renderCategoryTransactions && openCategory ? (
+        <CategoryTransactionsDialog
+          category={openCategory}
+          insight={getCategoryInsight(
+            openCategory,
+            selectedCycle,
+            expectedIncome,
+          )}
+          cycle={selectedCycle}
+          currency={currency}
+          onOpenChange={(open) => {
+            if (!open) setOpenCategoryId(undefined)
+          }}
+        >
+          {renderCategoryTransactions({
+            cycleId: selectedCycle.id,
+            categoryId: openCategory.id,
+            close: () => setOpenCategoryId(undefined),
+          })}
+        </CategoryTransactionsDialog>
+      ) : null}
       {onSaveOneOffIncome && oneOffDialog.open ? (
         <OneOffIncomeDialog
           open
