@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
+import { cycleSpend } from '../../../shared/cycle-spend'
 import { greeting } from '#/lib/greeting'
 import { AppProviders } from '#/components/app/app-providers'
 import { DebtsCard } from '#/components/app/debts-card'
@@ -193,13 +194,20 @@ function AppDashboard({
   )
   const daysRemaining = Math.max(0, Math.ceil((cycle.endsAt - now) / DAY_MS))
 
-  const totalSpent = data.transactions
-    .filter(
-      (transaction) =>
-        transaction.type === 'expense' &&
-        transaction.excludeFromBudget !== true,
-    )
-    .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const budgetExpenses = data.transactions.filter(
+    (transaction) =>
+      transaction.type === 'expense' && transaction.excludeFromBudget !== true,
+  )
+  const totalSpent = budgetExpenses.reduce(
+    (sum, transaction) => sum + transaction.amount,
+    0,
+  )
+  const spend = cycleSpend({
+    startsAt: cycle.startsAt,
+    endsAt: cycle.endsAt,
+    now,
+    expenses: budgetExpenses,
+  })
   const spendingLeft = cycle.spendingLimit - totalSpent
   const perDay =
     daysRemaining > 0
@@ -302,6 +310,7 @@ function AppDashboard({
           perDay={perDay}
           daysRemaining={daysRemaining}
           paydayLabel={shortDate(cycle.endsAt + 1)}
+          spend={spend}
           pace={spendingPace({
             spendingLimit: cycle.spendingLimit,
             totalSpent,

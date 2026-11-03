@@ -1,10 +1,15 @@
 import { Link } from '@tanstack/react-router'
 import { CircleCheck, TriangleAlert } from 'lucide-react'
 
+import { DailySpendBars } from '#/components/charts/daily-spend-bars'
+import { SpendPaceChart } from '#/components/charts/spend-pace-chart'
 import { Card } from '#/components/ui/card'
 import { Progress } from '#/components/ui/progress'
 import { formatK, formatKCompact } from '#/lib/app-data'
 import { cn } from '#/lib/utils'
+import { recentDays } from '../../../shared/cycle-spend'
+
+import type { CycleSpend } from '../../../shared/cycle-spend'
 
 export type SpendingPace = 'none' | 'on-track' | 'slow' | 'fast' | 'over'
 
@@ -100,6 +105,8 @@ interface SummaryTilesProps {
   perDay: number
   daysRemaining: number
   paydayLabel: string
+  /** This cycle's day-by-day spending; the charts show only when given. */
+  spend?: CycleSpend
   pace: SpendingPace
   totalInAccounts: number
   accountCount: number
@@ -114,6 +121,7 @@ export function SummaryTiles({
   perDay,
   daysRemaining,
   paydayLabel,
+  spend,
   pace,
   totalInAccounts,
   accountCount,
@@ -153,6 +161,16 @@ export function SummaryTiles({
               </p>
               <PaceChip pace={pace} />
             </div>
+            {spend ? (
+              <SpendPaceChart
+                className="mt-1"
+                spend={spend}
+                plan={spendingLimit}
+                tone={
+                  pace === 'over' ? 'over' : pace === 'fast' ? 'fast' : 'calm'
+                }
+              />
+            ) : null}
           </>
         ) : (
           <>
@@ -189,6 +207,14 @@ export function SummaryTiles({
               ? 'for the last day'
               : 'Payday is today'}
         </p>
+        {spend && hasPlan ? (
+          <DailySpendBars
+            className="mt-auto pt-1"
+            days={recentDays(spend.daily, 7)}
+            todayStartsAt={spend.startsAt + spend.today * 86_400_000}
+            perDay={perDay}
+          />
+        ) : null}
       </Card>
 
       <Card variant="panel" className="@container gap-1.5 p-4 sm:gap-2 sm:p-5">
