@@ -45,6 +45,7 @@ import {
 } from '../../../shared/budget-rollover'
 import { incomeSourceStatus } from '../../../shared/income'
 import { OneOffIncomeDialog } from './one-off-income-dialog'
+import { SpendingSplit } from './spending-split'
 
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type {
@@ -527,6 +528,11 @@ function AllocationCard({
           {formatBudgetMoney(spendingLimit, currency)} spending limit.
         </p>
       ) : null}
+      <SpendingSplit
+        cycle={cycle}
+        planned={{ needs, wants, savings }}
+        formatMoney={(value) => formatBudgetMoney(value, currency)}
+      />
     </Card>
   )
 }
