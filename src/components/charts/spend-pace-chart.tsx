@@ -102,7 +102,10 @@ export function SpendPaceChart({
         onPointerDown={(event) => {
           // Safari doesn't focus on tap, and focus is what lets a tap elsewhere
           // (blur) clear the picked day.
-          event.currentTarget.focus({ preventScroll: true })
+          event.currentTarget.focus({
+            preventScroll: true,
+            focusVisible: false,
+          })
           pick(event)
         }}
         // A mouse leaving ends a hover. A finger lifting fires leave too, but a
