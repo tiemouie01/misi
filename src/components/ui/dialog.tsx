@@ -7,9 +7,11 @@ import { cn } from '#/lib/utils'
 
 import type { ComponentProps } from 'react'
 
-/** The dim, ground-tinted backdrop behind dialogs and alert dialogs. */
+/** The dim, ground-tinted backdrop behind dialogs and alert dialogs.
+ * Skip full-viewport backdrop blur so opening dialogs or leaving them open
+ * stays on the cheap compositor path without extra full-screen GPU passes. */
 export const dialogOverlayClassName =
-  'fixed inset-0 z-50 bg-(--scrim) backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0'
+  'fixed inset-0 z-50 bg-(--scrim) data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0'
 
 /** A centered dialog surface: the framed, solid card the pages use. */
 export const dialogSurfaceClassName =

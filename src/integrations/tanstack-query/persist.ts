@@ -12,6 +12,7 @@ const persister =
     : createAsyncStoragePersister({
         storage: window.localStorage,
         key: 'misi-query-cache',
+        throttleTime: 2500,
       })
 
 let stopPersisting: (() => void) | null = null

@@ -32,14 +32,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          '--normal-bg': 'var(--surface-strong)',
+          '--normal-bg': 'var(--card-solid)',
           '--normal-text': 'var(--sea-ink)',
           '--normal-border': 'var(--line)',
-          '--success-bg': 'var(--surface-strong)',
+          '--success-bg': 'var(--card-solid)',
           '--success-text': 'var(--sea-ink)',
           '--success-border': 'var(--line)',
           '--error-bg':
-            'color-mix(in oklab, var(--coral) 10%, var(--surface-strong))',
+            'color-mix(in oklab, var(--coral) 10%, var(--card-solid))',
           '--error-text': 'var(--coral-deep)',
           '--error-border':
             'color-mix(in oklab, var(--coral) 25%, transparent)',
@@ -49,7 +49,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            'rounded-2xl border border-(--line) bg-(--surface-strong) text-sea-ink shadow-lg backdrop-blur-md',
+            'rounded-2xl border border-(--line) bg-(--card-solid) text-sea-ink shadow-lg',
           title: 'text-sm font-semibold text-sea-ink',
           description: 'text-sm text-sea-ink-soft',
           success: 'text-sea-ink',
