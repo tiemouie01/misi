@@ -848,8 +848,12 @@ export function QuickAddSheet({
   })
 
   useEffect(() => {
+    const hold = clearHold.current
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      window.clearTimeout(hold.timer)
+    }
   }, [])
 
   const amountDisplay = formatAmountDigitsDisplay(digits, amountCurrency)

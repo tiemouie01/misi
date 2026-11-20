@@ -1,6 +1,13 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { createContext, use, useEffect, useMemo, useState } from 'react'
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
@@ -110,6 +117,19 @@ function ReadyQuickAddProvider({
     [data.categories],
   )
 
+  const debts = useMemo(() => data.debts.map(mapDebt), [data.debts])
+
+  const incomeSources = useMemo(
+    () =>
+      data.incomeSources.map((source) => ({
+        id: source._id,
+        name: source.name,
+        savingsRate: source.savingsRate,
+        isAnchor: source.isAnchor,
+      })),
+    [data.incomeSources],
+  )
+
   const {
     expense: defaultExpenseAccountId,
     transferFrom: defaultTransferFromAccountId,
@@ -132,10 +152,13 @@ function ReadyQuickAddProvider({
     defaultExpenseAccountId,
   })
 
-  function open(initial: QuickAddInitial, transaction?: Txn) {
-    setEditing(transaction ?? null)
-    openSheet(initial)
-  }
+  const open = useCallback(
+    (initial: QuickAddInitial, transaction?: Txn) => {
+      setEditing(transaction ?? null)
+      openSheet(initial)
+    },
+    [openSheet],
+  )
 
   useEffect(() => {
     if (sheet.open) return
@@ -151,11 +174,19 @@ function ReadyQuickAddProvider({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [sheet.open, openSheet])
 
-  function requestDelete(transaction: Txn) {
-    if (!canDeleteTransaction(transaction)) return
-    closeSheet()
-    setPendingDelete(transaction)
-  }
+  const requestDelete = useCallback(
+    (transaction: Txn) => {
+      if (!canDeleteTransaction(transaction)) return
+      closeSheet()
+      setPendingDelete(transaction)
+    },
+    [closeSheet],
+  )
+
+  const contextValue = useMemo<QuickAddContextValue>(
+    () => ({ openSheet: open, requestDelete }),
+    [open, requestDelete],
+  )
 
   async function confirmDelete() {
     if (!pendingDelete || deleting) return
@@ -164,7 +195,7 @@ function ReadyQuickAddProvider({
       const deleted = await deleteTransaction(pendingDelete.id)
       if (deleted) {
         setPendingDelete(null)
-        toast.success('Transaction deleted')
+        toast.success('Transaction deleted', { id: 'transaction-saved' })
       }
     } finally {
       setDeleting(false)
@@ -172,20 +203,15 @@ function ReadyQuickAddProvider({
   }
 
   return (
-    <QuickAddContext value={{ openSheet: open, requestDelete }}>
+    <QuickAddContext value={contextValue}>
       {children}
       {sheet.open && (
         <QuickAddSheet
           initial={sheet.initial}
           categories={categories}
           accounts={accounts}
-          debts={data.debts.map(mapDebt)}
-          incomeSources={data.incomeSources.map((source) => ({
-            id: source._id,
-            name: source.name,
-            savingsRate: source.savingsRate,
-            isAnchor: source.isAnchor,
-          }))}
+          debts={debts}
+          incomeSources={incomeSources}
           recents={data.oneTapRecents}
           categoryUsage={data.categoryUsage}
           defaultExpenseAccountId={defaultExpenseAccountId}

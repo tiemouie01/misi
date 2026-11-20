@@ -16,13 +16,14 @@ function wavePath(
 }
 
 const BAND_H = 220
-const BACK = wavePath(40, 12, 720, 2880, BAND_H)
-const CREST = wavePath(40, 12, 720, 2880)
-const FRONT = wavePath(110, 20, 1440, 2880, BAND_H)
+const BACK = wavePath(40, 12, 720, 1440, BAND_H)
+const CREST = wavePath(40, 12, 720, 1440)
+const FRONT = wavePath(110, 20, 1440, 1440, BAND_H)
 const DIVIDER = wavePath(13, 5, 720, 1440)
 
-/** Two slow waves along the bottom of the screen, behind everything on the
- * teal ground. Each SVG is twice the screen's width and drifts by half. */
+/** Two layered still waves along the bottom of the screen, behind everything on
+ * the teal ground. Kept static so idle pages and open dialogs never spin up the
+ * compositor or GPU. */
 export function WaterWaves() {
   return (
     <div
@@ -30,9 +31,9 @@ export function WaterWaves() {
       className="pointer-events-none fixed inset-x-0 bottom-0 -z-1 h-[220px] overflow-hidden"
     >
       <svg
-        viewBox={`0 0 2880 ${BAND_H}`}
+        viewBox={`0 0 1440 ${BAND_H}`}
         preserveAspectRatio="none"
-        className="water-drift-slow absolute bottom-0 left-0 h-full w-[200%] will-change-transform"
+        className="absolute inset-0 h-full w-full"
       >
         <path d={BACK} className="fill-(--wave-back)" />
         <path
@@ -40,12 +41,6 @@ export function WaterWaves() {
           className="fill-none stroke-(--wave-crest)"
           strokeWidth={2}
         />
-      </svg>
-      <svg
-        viewBox={`0 0 2880 ${BAND_H}`}
-        preserveAspectRatio="none"
-        className="water-drift absolute bottom-0 left-0 h-full w-[200%] will-change-transform"
-      >
         <path d={FRONT} className="fill-(--wave-front)" />
       </svg>
     </div>

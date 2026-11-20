@@ -1,5 +1,5 @@
 import { useMutation } from 'convex/react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '../../convex/_generated/api'
@@ -84,7 +84,12 @@ export function useQuickAddSheet({
     [],
   )
 
-  function openSheet(initial: QuickAddInitial) {
+  const resolveAccountIdRef = useRef(resolveAccountId)
+  useEffect(() => {
+    resolveAccountIdRef.current = resolveAccountId
+  }, [resolveAccountId])
+
+  const openSheet = useCallback((initial: QuickAddInitial) => {
     const isEditing = initial.transactionId !== undefined
     sheetOpenRef.current = true
     setError(null)
@@ -94,20 +99,20 @@ export function useQuickAddSheet({
         ...initial,
         occurredAt: initial.occurredAt ?? Date.now(),
         accountId: initial.accountId
-          ? resolveAccountId(initial.accountId, isEditing)
+          ? resolveAccountIdRef.current(initial.accountId, isEditing)
           : undefined,
         toAccountId: initial.toAccountId
-          ? resolveAccountId(initial.toAccountId, isEditing)
+          ? resolveAccountIdRef.current(initial.toAccountId, isEditing)
           : undefined,
       },
     })
-  }
+  }, [])
 
-  function closeSheet() {
+  const closeSheet = useCallback(() => {
     sheetOpenRef.current = false
     setError(null)
     setSheet((current) => ({ ...current, open: false }))
-  }
+  }, [])
 
   async function saveTransaction(payload: QuickAddPayload) {
     // Convex resolves a mutation only once every subscribed query (bootstrap,
@@ -155,7 +160,7 @@ export function useQuickAddSheet({
             occurredAt: payload.occurredAt,
           })
         }
-        toast.success('Transaction updated')
+        toast.success('Transaction updated', { id: 'transaction-saved' })
       } else if (payload.type !== 'allocation') {
         await addTransaction({
           type: payload.type,
@@ -176,7 +181,7 @@ export function useQuickAddSheet({
           fromSavings: payload.fromSavings,
           occurredAt: payload.occurredAt,
         })
-        toast.success('Transaction logged')
+        toast.success('Transaction logged', { id: 'transaction-saved' })
       } else {
         throw new Error(
           'Envelope moves are created from Spendable, not Quick add',

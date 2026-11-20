@@ -6,12 +6,11 @@ import { cn } from '#/lib/utils'
 
 import type { ComponentProps } from 'react'
 
-/** The water bar's right edge: a wave three bar-heights tall, so bobbing it
- * by one bar height loops. */
-const WATER_EDGE = 'M0 0 H5 Q10 5 5 10 T5 20 T5 30 T5 40 T5 50 T5 60 H0 Z'
+/** The water bar's right edge: a still curved meniscus matching the bar height. */
+const WATER_EDGE = 'M0 0 H5 Q10 5 5 10 T5 20 H0 Z'
 
-/** `water` draws the fill as water: a glint along the top and a wavy edge
- * that bobs. Its colour is `--water` (lagoon unless the caller sets it). */
+/** `water` draws the fill as water: a glint along the top and a wavy edge.
+ * Its colour is `--water` (lagoon unless the caller sets it). */
 function Progress({
   className,
   value,
@@ -54,9 +53,9 @@ function Progress({
             <span className="absolute top-[3px] right-0.5 left-[7px] h-0.5 rounded-full bg-white/50" />
             <svg
               aria-hidden
-              viewBox="0 0 10 60"
+              viewBox="0 0 10 20"
               preserveAspectRatio="none"
-              className="water-bob absolute -top-full -right-[9px] h-[300%] w-2.5 fill-(--water)"
+              className="absolute top-0 -right-[9px] h-full w-2.5 fill-(--water)"
             >
               <path d={WATER_EDGE} />
             </svg>
